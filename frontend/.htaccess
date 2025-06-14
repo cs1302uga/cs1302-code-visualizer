@@ -1,0 +1,6 @@
+# hide this file
+# also things like jv-config.json~ and #jv-config.json#
+<FilesMatch "jv-config\.json">
+Order Allow,Deny
+Deny from all
+</FilesMatch>
