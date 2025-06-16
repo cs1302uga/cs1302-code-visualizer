@@ -87,6 +87,8 @@ function executePythonCode(pythonSourceCode,
   let dataFromBackend = JSON.parse(query.get("data"));
 
   var trace = dataFromBackend.trace;
+  // cut off any jvm cleanup after main returns
+  trace.length = trace.findIndex((t) => t.event === "return" && t.func_name === "main");
 
   // don't enter visualize mode if there are killer errors:
   if (!trace ||
@@ -109,6 +111,11 @@ function executePythonCode(pythonSourceCode,
     }
   }
   else {
+    // skip to last trace state
+    frontendOptionsObj.jumpToEnd = true;
+    // don't show code on the side
+    frontendOptionsObj.hideCode = true;
+
     // fail-soft to prevent running off of the end of trace
     if (frontendOptionsObj.startingInstruction >= trace.length) {
       frontendOptionsObj.startingInstruction = 0;
