@@ -2528,23 +2528,10 @@ ExecutionVisualizer.prototype.renderDataStructures = function(curEntry, curTople
 
       // pretty-print lambdas and display other weird characters
       // (might contain '<' or '>' for weird names like <genexpr>)
-      var funcName = htmlspecialchars(frame.func_name).replace('&lt;lambda&gt;', '\u03bb')
-            .replace('\n', '<br/>');
+      var [funcName] = htmlspecialchars(frame.func_name).replace('&lt;lambda&gt;', '\u03bb')
+            .replace('\n', '<br/>').split(":");
 
-      var headerLabel = funcName;
-
-      // only display if you're someone's parent
-      if (frame.is_parent) {
-        headerLabel = 'f' + frame.frame_id + ': ' + headerLabel;
-      }
-
-      // optional (btw, this isn't a CSS id)
-      if (frame.parent_frame_id_list.length > 0) {
-        var parentFrameID = frame.parent_frame_id_list[0];
-        headerLabel = headerLabel + ' [parent=f' + parentFrameID + ']';
-      }
-
-      return headerLabel;
+      return funcName;
     });
 
   sfdEnter
