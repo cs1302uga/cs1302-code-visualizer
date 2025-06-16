@@ -79,65 +79,59 @@ function executePythonCode(pythonSourceCode,
                            frontendOptionsObj,
                            outputDiv,
                            handleSuccessFunc, handleUncaughtExceptionFunc) {
-    if (!backendScript) {
-      alert('Server configuration error: No backend script');
-      return;
+  let query = new URLSearchParams(window.location.search);
+  if (!query.has("data")) {
+    alert("Expected JSON trace to be passed through the 'data' query parameter.");
+    return;
+  }
+  let dataFromBackend = JSON.parse(query.get("data"));
+
+  var trace = dataFromBackend.trace;
+
+  // don't enter visualize mode if there are killer errors:
+  if (!trace ||
+      (trace.length == 0) ||
+      (trace[trace.length - 1].event == 'uncaught_exception')) {
+
+    handleUncaughtExceptionFunc(trace);
+
+    if (trace.length == 1) {
+      alert(trace[0].exception_msg);
     }
+    else if (trace[trace.length - 1].exception_msg) {
+      alert(trace[trace.length - 1].exception_msg);
+    }
+    else {
+      alert("Unknown error. Reload to try again," +
+            "or report a bug to philip@pgbovine.net\n\n" +
+            "(Click the 'Generate URL' button to include a " +
+            "unique URL in your email bug report.)");
+    }
+  }
+  else {
+    // fail-soft to prevent running off of the end of trace
+    if (frontendOptionsObj.startingInstruction >= trace.length) {
+      frontendOptionsObj.startingInstruction = 0;
+    }
+    myVisualizer = new ExecutionVisualizer(outputDiv, dataFromBackend, frontendOptionsObj);
 
-    $.get(backendScript,
-          {data:$.bbq.getState('data')},
-/*
-           raw_input_json: rawInputLst.length > 0 ? JSON.stringify(rawInputLst) : '',
-*/
-          function(dataFromBackend) {
-            var trace = dataFromBackend.trace;
+    // set keyboard bindings
+    // VERY IMPORTANT to clear and reset this every time or
+    // else the handlers might be bound multiple times
+    $(document).unbind('keydown');
+    $(document).keydown(function(k) {
+      if (k.keyCode == 37) { // left arrow
+        if (myVisualizer.stepBack()) {
+          k.preventDefault(); // don't horizontally scroll the display
+        }
+      }
+      else if (k.keyCode == 39) { // right arrow
+        if (myVisualizer.stepForward()) {
+          k.preventDefault(); // don't horizontally scroll the display
+        }
+      }
+    });
 
-            // don't enter visualize mode if there are killer errors:
-            if (!trace ||
-                (trace.length == 0) ||
-                (trace[trace.length - 1].event == 'uncaught_exception')) {
-
-              handleUncaughtExceptionFunc(trace);
-
-              if (trace.length == 1) {
-                alert(trace[0].exception_msg);
-              }
-              else if (trace[trace.length - 1].exception_msg) {
-                alert(trace[trace.length - 1].exception_msg);
-              }
-              else {
-                alert("Unknown error. Reload to try again," +
-                      "or report a bug to philip@pgbovine.net\n\n" +
-                      "(Click the 'Generate URL' button to include a " + 
-                      "unique URL in your email bug report.)");
-              }
-            }
-            else {
-              // fail-soft to prevent running off of the end of trace
-              if (frontendOptionsObj.startingInstruction >= trace.length) {
-                frontendOptionsObj.startingInstruction = 0;
-              }
-              myVisualizer = new ExecutionVisualizer(outputDiv, dataFromBackend, frontendOptionsObj);
-
-              // set keyboard bindings
-              // VERY IMPORTANT to clear and reset this every time or
-              // else the handlers might be bound multiple times
-              $(document).unbind('keydown');
-              $(document).keydown(function(k) {
-                if (k.keyCode == 37) { // left arrow
-                  if (myVisualizer.stepBack()) {
-                    k.preventDefault(); // don't horizontally scroll the display
-                  }
-                }
-                else if (k.keyCode == 39) { // right arrow
-                  if (myVisualizer.stepForward()) {
-                    k.preventDefault(); // don't horizontally scroll the display
-                  }
-                }
-              });
-
-              handleSuccessFunc();
-            }
-          },
-          "json");
+    handleSuccessFunc();
+  }
 }
