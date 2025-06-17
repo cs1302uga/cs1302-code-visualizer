@@ -1,3 +1,9 @@
-Must have Java 8 installed. Expects the `JAVA_HOME` env var to point to the install directory of Java 8. You can download a version from [here](https://adoptium.net/temurin/releases/?os=any&arch=any&version=8) if necessary.
+# cs1302-book-visualizer
 
-https://api.adoptium.net/q/swagger-ui/#/Binary/getBinary
+## Usage
+
+This project visualizes the final state of the Java world just before the main method returns. Write the code you want visualized and save it to a file (e.g. `In.java`). Then, run the visualizer chain (program -> trace -> screengrab -> png).
+
+```console
+$ cat In.java | ./trace_generator.py | ./browser_driver.py > out.png
+```
