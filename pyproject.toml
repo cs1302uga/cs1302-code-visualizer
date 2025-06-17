@@ -1,5 +1,5 @@
 [project]
-name = "visualize"
+name = "cs1302-code-visualizer"
 version = "0.1.0"
 description = "Visualize Java program memory state and output a screenshot."
 readme = "README.md"
