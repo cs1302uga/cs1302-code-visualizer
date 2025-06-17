@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+
+import fileinput
 import jdk
 import shutil
 import tempfile
@@ -64,7 +67,7 @@ def generate_trace(
                 [
                     java_home / "bin" / "java",
                     "-cp",
-                    f"""{backend_dir}:{this_files_dir / ".backend_classes"}:{backend_dir / "cp"}:{backend_dir / "cp" / "javax.json-1.0.jar"}:{java_home / "lib" / "tools.jar"}""",
+                    f"""{this_files_dir / ".backend_classes"}:{backend_dir / "cp" / "javax.json-1.0.jar"}:{java_home / "lib" / "tools.jar"}""",
                     "traceprinter.InMemory",
                 ],
                 input=tracegen_input,
@@ -86,7 +89,7 @@ def generate_trace(
 # if (!trace ||
 #     (trace.length == 0) ||
 #     (trace[trace.length - 1].event == 'uncaught_exception')) {
-# 
+#
 #   if (trace.length == 1) {
 #     var errorLineNo = trace[0].line - 1; /* CodeMirror lines are zero-indexed */
 #     if (errorLineNo !== undefined) {
@@ -99,9 +102,9 @@ def generate_trace(
 #         pyInputCodeMirror.removeLineClass(marked, null, 'errorLine'); // reset line back to normal
 #         pyInputCodeMirror.off('change', hook); // cancel
 #       }} (marked);
-#       pyInputCodeMirror.on('change', hook); 
+#       pyInputCodeMirror.on('change', hook);
 #     }
-# 
+#
 #     alert(trace[0].exception_msg);
 #   }
 #   else if (trace[trace.length - 1].exception_msg) {
@@ -110,7 +113,7 @@ def generate_trace(
 #   else {
 #     alert("Whoa, unknown error! Reload to try again, or report a bug to daveagp@gmail.com\n\n(Click the 'Generate URL' button to include a unique URL in your email bug report.)");
 #   }
-# 
+#
 #   $('#executeBtn').html("Visualize execution");
 #   $('#executeBtn').attr('disabled', false);
 # }
@@ -165,20 +168,18 @@ def main():
         java_home = parser.parse_args().jdk8_home
 
     compile_backend(java_home)
+
+    # get java file from stdin
+    java_input = "".join(fileinput.input())
+
     trace = generate_trace(
         java_home,
-        """
-        public class Test {
-            public static void main(String[] args) {
-                int x = 1;
-                x += x;
-            }
-        }
-       """,
+        java_input,
         args.trace_timeout,
     )
     validate_trace(trace)
     print(trace)
+
 
 if __name__ == "__main__":
     main()
