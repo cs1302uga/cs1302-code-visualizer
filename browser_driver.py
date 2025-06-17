@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 from pathlib import Path
 from urllib.parse import quote
 from selenium import webdriver
@@ -24,8 +25,10 @@ def main():
     driver.get(frontend_path + frontend_query)
     # zoom borks screenshot, see https://stackoverflow.com/questions/39600245/how-to-capture-website-screenshot-in-high-resolution
     # driver.execute_script("document.body.style.zoom='150%'")
-    driver.find_element(By.ID, "dataViz").screenshot("/home/ggliv/test.png")
+    screenshot = driver.find_element(By.ID, "dataViz").screenshot_as_png
     driver.quit()
+    # dump png to stdout, should be redirected to destination
+    sys.stdout.buffer.write(screenshot)
 
 
 if __name__ == "__main__":
