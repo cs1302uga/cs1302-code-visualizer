@@ -13,7 +13,7 @@ this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
 
 
 def main():
-    stdin_data = "".join(fileinput.input())
+    stdin_data = "".join(fileinput.input("-"))
 
     frontend_path = (this_files_dir / "frontend" / "iframe-embed.html").as_uri()
     frontend_query = f"?data={quote(stdin_data)}"
