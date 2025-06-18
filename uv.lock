@@ -47,8 +47,6 @@ wheels = [
 ]
 
 [[package]]
-<<<<<<< Updated upstream
-=======
 name = "cs1302-code-visualizer"
 version = "0.1.0"
 source = { virtual = "." }
@@ -68,7 +66,6 @@ requires-dist = [
 ]
 
 [[package]]
->>>>>>> Stashed changes
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -323,23 +320,6 @@ wheels = [
 [package.optional-dependencies]
 socks = [
     { name = "pysocks" },
-]
-
-[[package]]
-name = "visualize"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "halo" },
-    { name = "install-jdk" },
-    { name = "selenium" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "halo", specifier = ">=0.0.31" },
-    { name = "install-jdk", specifier = ">=1.1.0" },
-    { name = "selenium", specifier = ">=4.33.0" },
 ]
 
 [[package]]
