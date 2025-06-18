@@ -35,7 +35,7 @@ jdk_vendors: list[str] = [
 ]
 
 
-current_dir: Path = Path(".").resolve()
+current_dir: Path = Path(os.path.dirname(__file__)).resolve()
 
 
 backend_dir: Path = current_dir / "backend"
