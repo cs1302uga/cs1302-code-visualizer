@@ -2,57 +2,97 @@
 
 import fileinput
 import jdk
+import jdk.client
+import jdk.enums
 import shutil
 import tempfile
 import argparse
 import json
 import os
+import platform
 import sys
 import subprocess
+import logging
+
 from subprocess import CalledProcessError
 from pathlib import Path
 from halo import Halo as spinner
+from typing import Generator
+from jdk.enums import Architecture
+from os import PathLike
 
-this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
+
+# logging.basicConfig(level=logging.DEBUG)
+
+
+logger: logging.Logger = logging.getLogger(__name__)
+
+
+jdk_vendors: list[str] = [
+    vendor.removesuffix("Client").lower()
+    for vendor in dir(jdk.client)
+    if vendor.endswith("Client")
+]
+
+
+current_dir: Path = Path(".").resolve()
+
+
+backend_dir: Path = current_dir / "backend"
+
+
+backend_classes_dir: Path = current_dir / ".backend_classes"
+
+
+backend_classes_cp: list[Path] = [
+    backend_classes_dir,
+    backend_dir / "cp",
+    backend_dir / "cp" / "javax.json-1.0.jar",
+]
+
+
+default_jdk8_install_dir: Path = current_dir / ".jdk8"
 
 
 def compile_backend(java_home: Path) -> None:
-    if os.path.isdir(this_files_dir / ".backend_classes"):
-        # we already have classes from a previous run, short circuit
+
+    if dir_exists(backend_classes_dir):
+        logger.debug("we already have classes from a previous run, short circuit")
         return
 
-    backend_dir = this_files_dir / "backend"
-    java_files = Path(backend_dir / "cp").rglob("*.java")
+    logger.debug("compiling backend...")
+
+    backend_java_files: Generator[Path, None, None] = (backend_dir / "cp").resolve().rglob("*.java")
+
     try:
-        os.mkdir(this_files_dir / ".backend_classes")
+        backend_classes_dir.mkdir()
         with spinner(text="Compiling backend...", stream=sys.stderr):
             subprocess.run(
                 [
-                    java_home / "bin" / "javac",
+                    str(java_home / "bin" / "javac"),
                     "-cp",
-                    f"""{backend_dir / "cp"}:{backend_dir / "cp" / "javax.json-1.0.jar"}:{java_home / "lib" / "tools.jar"}""",
+                    ":".join(map(str, backend_classes_cp + [java_home / "lib" / "tools.jar"])),
                     "-d",
-                    this_files_dir / ".backend_classes",
-                    *java_files,
+                    str(backend_classes_dir),
+                    *map(str, backend_java_files)
                 ],
                 capture_output=True,
                 check=True,
                 text=True,
             )
     except CalledProcessError as e:
-        os.rmdir(this_files_dir / ".backend_classes")
-        print(
-            f"Backend compilation failed with exit code {e.returncode} and the following output:",
-            file=sys.stderr,
+        if backend_classes_dir.exists():
+            backend_classes_dir.rmdir()
+        logger.exception(
+            "Backend compilation failed with exit code %d and output: %s",
+            e.returncode,
+            e.stderr,
         )
-        print(e.stderr, file=sys.stderr)
         exit(1)
-
 
 def generate_trace(
     java_home: Path, java_program: str, timeout_secs: float | None = None
 ) -> str:
-    backend_dir = this_files_dir / "backend"
     tracegen_input = json.dumps(
         {
             "usercode": java_program,
@@ -61,13 +101,14 @@ def generate_trace(
             "stdin": "",
         }
     )
+
     try:
         with spinner(text="Generating execution trace...", stream=sys.stderr):
             return subprocess.run(
                 [
-                    java_home / "bin" / "java",
+                    str(java_home / "bin" / "java"),
                     "-cp",
-                    f"""{this_files_dir / ".backend_classes"}:{backend_dir / "cp" / "javax.json-1.0.jar"}:{java_home / "lib" / "tools.jar"}""",
+                    ":".join(map(str, backend_classes_cp + [java_home / "lib" / "tools.jar"])),
                     "traceprinter.InMemory",
                 ],
                 input=tracegen_input,
@@ -77,14 +118,8 @@ def generate_trace(
                 timeout=timeout_secs,
             ).stdout
     except CalledProcessError as e:
-        print(e.cmd)
-        print(
-            f"Trace generation failed with exit code {e.returncode} and the following output:",
-            file=sys.stderr,
-        )
-        print(e.stderr, file=sys.stderr)
+        logger.exception("Trace generation failed with exit code %d and output:", e.returncode)
         exit(1)
-
 
 # if (!trace ||
 #     (trace.length == 0) ||
@@ -124,6 +159,85 @@ def validate_trace(trace_json: str):
         # no error
         return
 
+def dir_exists(path: str | PathLike[str]) -> bool:
+    path = Path(path).resolve()
+    return path.is_dir() and path.exists()
+
+def file_exists(path: str | PathLike[str]) -> bool:
+    path = Path(path).resolve()
+    return path.is_file() and path.exists()
+
+def jdk8_home(path: str | PathLike[str], raise_not_found: bool = False) -> Path | None:
+    javac_paths = list(Path(path).glob("**/bin/javac"))
+    print(javac_paths)
+    if not javac_paths and raise_not_found:
+        raise FileNotFoundError(f"javac not found under {str(path)}")
+    elif not javac_paths:
+        return None
+    else:
+        return javac_paths[0].parent.parent.resolve()
+
+
+def jdk8_exists(path: str | PathLike[str], raise_not_found: bool = False) -> Path | None:
+    home: Path | None = jdk8_home(path)
+    print(home)
+    if not home and raise_not_found:
+        raise FileNotFoundError(f"javac not found under {str(path)}")
+    elif not home:
+        return None
+    result: bool = all([
+        file_exists(home / "bin" / "java"),
+        file_exists(home / "bin" / "javac"),
+    ])
+    result = result and "1.8" in subprocess.check_output(
+        [
+            str(home / "bin" / "javac"),
+            "-version",
+        ],
+        stderr=subprocess.STDOUT,
+    ).decode().strip()
+    if not result and raise_not_found:
+        raise FileNotFoundError(f"JDK 8 not found at {str(path)}")
+    return home
+
+def detect_jdk8_architecture() -> Architecture:
+    bits: int = int(platform.architecture()[0].removesuffix("bit"))
+    machine: str = platform.machine()
+    arch: Architecture | None = None
+    if "arm" in machine and bits == 64:
+        arch = Architecture.AARCH64
+    else:
+        arch = Architecture.detect()
+    if arch:
+        return arch
+    else:
+        raise OSError(f"unable to detect JDK 8 architecture: {machine=}; {bits=}")
+
+def install_jdk8(install_dir: str | PathLike[str] = default_jdk8_install_dir) -> Path:
+    install_dir = Path(install_dir)
+    if jdk8_exists(install_dir):
+        logger.debug("using existing jdk installation at %s", str(install_dir))
+    else:
+        logger.debug("no existing jdk installation found at %s", str(install_dir))
+        arch: Architecture = detect_jdk8_architecture()
+        for vendor in jdk_vendors:
+            try:
+                logger.debug("attempting to install %s JDK 8 at %s", vendor, str(install_dir))
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_install_dir: str = jdk.install(
+                        "8",
+                        arch=arch,
+                        path=temp_dir,
+                        vendor=vendor,
+                    )
+                    temp_install_dir = str(jdk8_exists(temp_install_dir, raise_not_found=True))
+                    shutil.move(temp_install_dir, str(install_dir))
+                    logger.debug("successfully installed %s JDK 8 at %s", vendor, str(install_dir))
+                    return install_dir.resolve()
+            except Exception as e:
+                logger.exception("unable to install %s JDK 8", vendor)
+    jdk8_exists(install_dir, raise_not_found=True)
+    return Path(install_dir)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -150,22 +264,13 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.jdk8_home:
-        # no java provided, get our own
-        if os.path.isdir(this_files_dir / ".jdk8"):
-            # assume .jdk8 has a previous download and use that
-            java_home = this_files_dir / ".jdk8"
-        else:
-            # no jdk found, download one from the web
-            with (
-                tempfile.TemporaryDirectory() as tmp_dir,
-                spinner(text="Installing JDK 8...", stream=sys.stderr),
-            ):
-                java_home = jdk.install("8", path=tmp_dir)
-                shutil.move(java_home, this_files_dir / ".jdk8")
-                java_home = this_files_dir / ".jdk8"
+    if args.jdk8_home and jdk8_exists(args.jdk8_home):
+        java_home: Path = Path(args.jdk8_home)
+    elif args.jdk8_home:
+        logger.error("JDK 8 installation not found at %s", args.jdk8_home)
+        exit(1)
     else:
-        java_home = parser.parse_args().jdk8_home
+        java_home: Path = install_jdk8()
 
     compile_backend(java_home)
 
