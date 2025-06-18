@@ -22,9 +22,6 @@ from jdk.enums import Architecture
 from os import PathLike
 
 
-# logging.basicConfig(level=logging.DEBUG)
-
-
 logger: logging.Logger = logging.getLogger(__name__)
 
 
@@ -56,10 +53,10 @@ default_jdk8_install_dir: Path = current_dir / ".jdk8"
 
 def compile_backend(java_home: Path) -> None:
     if dir_exists(backend_classes_dir):
-        logger.debug("we already have classes from a previous run, short circuit")
+        logger.debug("We already have classes from a previous run, short circuiting")
         return
 
-    logger.debug("compiling backend...")
+    logger.debug("Compiling backend...")
 
     backend_java_files: Generator[Path, None, None] = (
         (backend_dir / "cp").resolve().rglob("*.java")
@@ -181,7 +178,7 @@ def file_exists(path: str | PathLike[str]) -> bool:
 
 def jdk8_home(path: str | PathLike[str], raise_not_found: bool = False) -> Path | None:
     javac_paths = list(Path(path).glob("**/bin/javac"))
-    print(javac_paths)
+    logger.debug(f"Found `javac` executable(s): {javac_paths}")
     if not javac_paths and raise_not_found:
         raise FileNotFoundError(f"javac not found under {str(path)}")
     elif not javac_paths:
@@ -194,7 +191,7 @@ def jdk8_exists(
     path: str | PathLike[str], raise_not_found: bool = False
 ) -> Path | None:
     home: Path | None = jdk8_home(path)
-    print(home)
+    logger.debug(f"Found JDK home directory: {home}")
     if not home and raise_not_found:
         raise FileNotFoundError(f"javac not found under {str(path)}")
     elif not home:
@@ -234,20 +231,20 @@ def detect_jdk8_architecture() -> Architecture:
     if arch:
         return arch
     else:
-        raise OSError(f"unable to detect JDK 8 architecture: {machine=}; {bits=}")
+        raise OSError(f"Unable to detect JDK 8 architecture: {machine=}; {bits=}")
 
 
 def install_jdk8(install_dir: str | PathLike[str] = default_jdk8_install_dir) -> Path:
     install_dir = Path(install_dir)
     if jdk8_exists(install_dir):
-        logger.debug("using existing jdk installation at %s", str(install_dir))
+        logger.debug("Using existing JDK installation at %s", str(install_dir))
     else:
-        logger.debug("no existing jdk installation found at %s", str(install_dir))
+        logger.debug("No existing JDK installation found at %s", str(install_dir))
         arch: Architecture = detect_jdk8_architecture()
         for vendor in jdk_vendors:
             try:
                 logger.debug(
-                    "attempting to install %s JDK 8 at %s", vendor, str(install_dir)
+                    "Attempting to install %s JDK 8 at %s", vendor, str(install_dir)
                 )
                 with tempfile.TemporaryDirectory() as temp_dir:
                     temp_install_dir: str = jdk.install(
@@ -261,13 +258,13 @@ def install_jdk8(install_dir: str | PathLike[str] = default_jdk8_install_dir) ->
                     )
                     shutil.move(temp_install_dir, str(install_dir))
                     logger.debug(
-                        "successfully installed %s JDK 8 at %s",
+                        "Successfully installed %s JDK 8 at %s",
                         vendor,
                         str(install_dir),
                     )
                     return install_dir.resolve()
-            except Exception as e:
-                logger.exception("unable to install %s JDK 8", vendor)
+            except Exception:
+                logger.exception("Unable to install %s JDK 8", vendor)
     jdk8_exists(install_dir, raise_not_found=True)
     return Path(install_dir)
 
@@ -295,7 +292,14 @@ def main():
         type=float,
     )
 
+    parser.add_argument(
+        "--verbose", "-v", help="Enable output from logger.", action="store_true"
+    )
+
     args = parser.parse_args()
+
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
 
     if args.jdk8_home and jdk8_exists(args.jdk8_home):
         java_home: Path = Path(args.jdk8_home)
@@ -308,7 +312,7 @@ def main():
     compile_backend(java_home)
 
     # get java file from stdin
-    java_input = "".join(fileinput.input())
+    java_input = "".join(fileinput.input("-"))
 
     trace = generate_trace(
         java_home,
