@@ -56,9 +56,8 @@ def main():
         top + viz.size["height"],
     )
 
-    # for some reason the width isn't scaled by the DPI
     # resize the window so it contains the dataViz component
-    driver.set_window_size(right, bottom * args.dpi)
+    driver.set_window_size(max(right, 1280), max(bottom, 720))
 
     # resize again to get rid of the scrollbar (if one exists)
     client_width: int = driver.execute_script(
@@ -71,7 +70,7 @@ def main():
     window_height = driver.get_window_size()["height"]
     width_offset = window_width - client_width
     height_offset = window_height - client_height
-    driver.set_window_size(right + width_offset, bottom * args.dpi + height_offset)
+    driver.set_window_size(max(right + width_offset, 1280), max(bottom + height_offset, 720))
 
     screenshot = driver.get_screenshot_as_png()
     driver.quit()
