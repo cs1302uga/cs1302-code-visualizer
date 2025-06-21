@@ -272,7 +272,15 @@ def main():
     )
 
     parser.add_argument(
-        "--verbose", "-v", help="Enable output from logger.", action="store_true"
+        "--verbose", "-v", help="Enable output from logger.", action="store_true",
+    )
+
+    parser.add_argument(
+        "--input", "-i", help="Path to Java source file to be traced, or `-` for stdin.", default="-",
+    )
+
+    parser.add_argument(
+        "--output", "-o", help="Output path. If not provided, traces are printed to standard output.",
     )
 
     args = parser.parse_args()
@@ -291,7 +299,7 @@ def main():
     compile_backend(java_home)
 
     # get java file from stdin
-    java_input = "".join(fileinput.input("-"))
+    java_input = "".join(fileinput.input(args.input))
 
     trace = generate_trace(
         java_home,
@@ -302,7 +310,11 @@ def main():
     if not validate_trace(trace):
         exit(1)
 
-    print(trace)
+    if args.output is None:
+        print(trace)
+    else:
+        with open(args.output, "w") as f:
+            f.write(trace)
 
 
 if __name__ == "__main__":
