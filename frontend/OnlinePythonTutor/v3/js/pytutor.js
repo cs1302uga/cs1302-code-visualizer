@@ -346,13 +346,11 @@ ExecutionVisualizer.prototype.render = function() {
          <tr>\
            <td id="stack_td">\
              <div id="globals_area">\
-               <div id="stackHeader">Frames</div>\
              </div>\
              <div id="stack"></div>\
            </td>\
            <td id="heap_td">\
              <div id="heap">\
-               <div id="heapHeader">Objects</div>\
              </div>\
            </td>\
          </tr>\
@@ -2220,8 +2218,7 @@ ExecutionVisualizer.prototype.renderDataStructures = function(curEntry, curTople
   // deterministic and predictable output for other functions. sigh, i'm
   // not really using d3 to the fullest, but oh wells!
   myViz.domRoot.find('#heap')
-    .empty()
-    .html('<div id="heapHeader">Objects</div>');
+    .empty();
 
 
   var heapRows = myViz.domRootD3.select('#heap')

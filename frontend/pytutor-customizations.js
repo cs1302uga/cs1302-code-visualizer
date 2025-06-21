@@ -93,11 +93,6 @@ add_pytutor_hook(
         }
      });
 
-     if (faking_cpp) {
-        $("#stackHeader").html('Variables');
-        $("#heapHeader").html('Memory');
-     }
-   
     var myViz = args.myViz;
     var curEntry = myViz.curTrace[myViz.curInstr];
     if (myViz.params.stdin && myViz.params.stdin != "") {
