@@ -127,43 +127,22 @@ def generate_trace(
         exit(1)
 
 
-# if (!trace ||
-#     (trace.length == 0) ||
-#     (trace[trace.length - 1].event == 'uncaught_exception')) {
-#
-#   if (trace.length == 1) {
-#     var errorLineNo = trace[0].line - 1; /* CodeMirror lines are zero-indexed */
-#     if (errorLineNo !== undefined) {
-#       // highlight the faulting line in pyInputCodeMirror
-#       pyInputCodeMirror.focus();
-#       pyInputCodeMirror.setCursor(errorLineNo, 0);
-#       var marked = pyInputCodeMirror.addLineClass(errorLineNo, null, 'errorLine');
-#       //console.log(marked);
-#       var hook = function(marked) { return function() {
-#         pyInputCodeMirror.removeLineClass(marked, null, 'errorLine'); // reset line back to normal
-#         pyInputCodeMirror.off('change', hook); // cancel
-#       }} (marked);
-#       pyInputCodeMirror.on('change', hook);
-#     }
-#
-#     alert(trace[0].exception_msg);
-#   }
-#   else if (trace[trace.length - 1].exception_msg) {
-#     alert(trace[trace.length - 1].exception_msg);
-#   }
-#   else {
-#     alert("Whoa, unknown error! Reload to try again, or report a bug to daveagp@gmail.com\n\n(Click the 'Generate URL' button to include a unique URL in your email bug report.)");
-#   }
-#
-#   $('#executeBtn').html("Visualize execution");
-#   $('#executeBtn').attr('disabled', false);
-# }
-def validate_trace(trace_json: str):
-    """Catch "show-stopping errors", derived from jv-frontend.js."""
+def validate_trace(trace_json: str) -> bool:
+    """Catch "show-stopping errors", derived from jv-frontend.js
+    Returns true if trace is valid, false otherwise.
+    """
     trace: list = json.loads(trace_json)["trace"]
     if trace and trace[-1]["event"] != "uncaught_exception":
         # no error
-        return
+        return True
+    if len(trace) == 1 and "line" in trace[0]:
+        error_line = trace[0]["line"]
+        logger.fatal(f"Error encountered on line {error_line} of the provided Java source code.")
+    if "exception_msg" in trace[-1]:
+        logger.fatal(trace[0]["exception_method"])
+    else:
+        logger.fatal("Whoa, unknown error!")
+    return False
 
 
 def dir_exists(path: str | PathLike[str]) -> bool:
@@ -319,7 +298,10 @@ def main():
         java_input,
         args.trace_timeout,
     )
-    validate_trace(trace)
+
+    if not validate_trace(trace):
+        exit(1)
+
     print(trace)
 
 
