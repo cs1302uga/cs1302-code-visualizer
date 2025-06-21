@@ -57,7 +57,7 @@ div.ExecutionVisualizer td#heap_td {
 }
 
 div.ExecutionVisualizer #dataViz {
-  margin-left: 25px;
+  padding-top: 6px;
 }
 
 div.ExecutionVisualizer div#codeDisplayDiv {
@@ -495,10 +495,6 @@ div.ExecutionVisualizer td.toplevelHeapObject {
   border: 2px dotted white;
   border-color: white;
   */
-}
-
-div.ExecutionVisualizer table.heapRow {
-  margin-bottom: 10px;
 }
 
 div.ExecutionVisualizer div.heapObject {
