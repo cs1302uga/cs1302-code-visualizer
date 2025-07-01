@@ -52,12 +52,8 @@ def main():
     )
 
     viz = driver.find_element(By.ID, "dataViz")
-    viz_location = viz.location
-    left, top = (viz_location["x"], viz_location["y"])
-    right, bottom = (
-        left + viz.size["width"],
-        top + viz.size["height"],
-    )
+    left, top = (viz.location["x"], viz.location["y"])
+    right, bottom = (left + viz.size["width"], top + viz.size["height"])
 
     # resize the window so it contains the dataViz component
     driver.set_window_size(max(right, 1280), max(bottom, 720))
@@ -73,7 +69,12 @@ def main():
     window_height = driver.get_window_size()["height"]
     width_offset = window_width - client_width
     height_offset = window_height - client_height
-    driver.set_window_size(max(right + width_offset, 1280), max(bottom + height_offset, 720))
+    driver.set_window_size(
+        max(right + width_offset, 1280), max(bottom + height_offset, 720)
+    )
+
+    left, top = (viz.location["x"], viz.location["y"])
+    right, bottom = (left + viz.size["width"], top + viz.size["height"])
 
     screenshot = driver.get_screenshot_as_png()
     driver.quit()
