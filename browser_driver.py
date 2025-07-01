@@ -6,7 +6,6 @@ import fileinput
 import argparse
 
 from pathlib import Path
-from urllib.parse import quote
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -36,17 +35,21 @@ def main():
 
     args = parser.parse_args()
 
-    stdin_data = "".join(fileinput.input("-"))
-
     frontend_path = (this_files_dir / "frontend" / "iframe-embed.html").as_uri()
-    frontend_query = f"?data={quote(stdin_data)}"
 
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument(f"--force-device-scale-factor={args.dpi}")
     driver = webdriver.Chrome(options=options)
     driver.implicitly_wait(2)  # only wait 2 secods for element to show up
-    driver.get(frontend_path + frontend_query)
+    driver.get(frontend_path)
+
+    driver.find_element(By.ID, "indicatorElement")
+
+    stdin_data = "".join(fileinput.input("-"))
+    driver.execute_script(
+        "seleniumRunHook(String.raw`" + stdin_data.replace("`", "${'`'}") + "`);"
+    )
 
     viz = driver.find_element(By.ID, "dataViz")
     viz_location = viz.location

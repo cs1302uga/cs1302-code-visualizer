@@ -134,7 +134,67 @@ $(document).ready(function() {
                             codeDivHeight: codeDivHeight,
                            }
 
+window.seleniumRunHook = function(dataFromBackend) {
+  let frontendOptionsObj = {
+    startingInstruction: undefined,
+    embeddedMode: true,
+    verticalStack: verticalStackBool,
+    disableHeapNesting: true,
+    drawParentPointers: drawParentPointerBool,
+    textualMemoryLabels: textRefsBool,
+    showOnlyOutputs: showOnlyOutputsBool,
+    executeCodeWithRawInputFunc: executeCodeWithRawInput,
+    heightChangeCallback: (resizeContainer ? resizeContainerNow : NOP),
+
+    // undocumented experimental modes:
+    pyCrazyMode: (pyState == '2crazy'),
+    highlightLines: typeof $.bbq.getState("highlightLines") !== "undefined",
+    codeDivWidth: codeDivWidth,
+    codeDivHeight: codeDivHeight,
+  };
+
+  let outputDiv = "vizDiv";
+
+  dataFromBackend = JSON.parse(dataFromBackend);
+  var trace = dataFromBackend.trace;
+  // cut off any jvm cleanup after main returns
+  trace.length = trace.findIndex((t) => t.event === "return" && t.func_name === "main");
+
+  // don't enter visualize mode if there are killer errors:
+  if (!trace ||
+      (trace.length == 0) ||
+      (trace[trace.length - 1].event == 'uncaught_exception')) {
+
+    if (trace.length == 1) {
+      return (trace[0].exception_msg);
+    }
+    else if (trace[trace.length - 1].exception_msg) {
+      return (trace[trace.length - 1].exception_msg);
+    }
+    else {
+      return "Unknown error.";
+    }
+  }
+
+  // skip to last trace state
+  frontendOptionsObj.jumpToEnd = true;
+  // don't show code on the side
+  frontendOptionsObj.hideCode = true;
+
+  // fail-soft to prevent running off of the end of trace
+  if (frontendOptionsObj.startingInstruction >= trace.length) {
+    frontendOptionsObj.startingInstruction = 0;
+  }
+  myVisualizer = new ExecutionVisualizer(outputDiv, dataFromBackend, frontendOptionsObj);
+}
+
+
   function executeCode(forceStartingInstr) {
+    let indicatorElement = document.createElement("div")
+    indicatorElement.id = "indicatorElement";
+    indicatorElement.hidden = true;
+    document.body.appendChild(indicatorElement);
+    return;
     if (forceStartingInstr) {
       frontendOptionsObj.startingInstruction = forceStartingInstr;
     }
