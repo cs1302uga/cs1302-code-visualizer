@@ -15,40 +15,28 @@ from PIL import Image
 this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Generate a screenshot from a Java execution trace"
-    )
+def generate_image(trace: str, *, dpi=1, format="PNG") -> bytes:
+    """Generate an image of the final state of an OnlinePythonTutor trace file.
+    trace:  The OnlinePythonTutor execution trace.
+    dpi:    Multiplicative factor for output image resolution (positive integer).
+    format: The image output format. This gets passed directly into PIL's Image.save(),
+            see that function's docs for details on acceptable values.
 
-    def require_geq_one(value):
-        number = float(value)
-        if number < 1:
-            raise argparse.ArgumentTypeError(f"Number {value} must be >= 1.")
-        return number
-
-    parser.add_argument(
-        "--dpi",
-        help="DPI scale to apply to the screenshot.",
-        type=require_geq_one,
-        default=1,
-    )
-
-    args = parser.parse_args()
-
+    out:    Raw image bytes in the format specified by the format argument.
+    """
     frontend_path = (this_files_dir / "frontend" / "iframe-embed.html").as_uri()
 
     options = Options()
     options.add_argument("--headless=new")
-    options.add_argument(f"--force-device-scale-factor={args.dpi}")
+    options.add_argument(f"--force-device-scale-factor={dpi}")
     driver = webdriver.Chrome(options=options)
     driver.implicitly_wait(2)  # only wait 2 secods for element to show up
     driver.get(frontend_path)
 
     driver.find_element(By.ID, "indicatorElement")
 
-    stdin_data = "".join(fileinput.input("-"))
     driver.execute_script(
-        "seleniumRunHook(String.raw`" + stdin_data.replace("`", "${'`'}") + "`);"
+        "seleniumRunHook(String.raw`" + trace.replace("`", "${'`'}") + "`);"
     )
 
     viz = driver.find_element(By.ID, "dataViz")
@@ -82,12 +70,36 @@ def main():
     # crop the screenshot down to the element borders
     screenshot_bytes = BytesIO(screenshot)
     pil_img = Image.open(BytesIO(screenshot)).crop(
-        tuple(args.dpi * x for x in [left, top, right, bottom])
+        tuple(dpi * x for x in [left, top, right, bottom])
     )
-    pil_img.save(screenshot_bytes, format="PNG")
-    # dump png to stdout, should be redirected to destination
-    sys.stdout.buffer.write(screenshot_bytes.getvalue())
+    pil_img.save(screenshot_bytes, format=format)
+
+    return screenshot_bytes.getvalue()
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Generate a screenshot from a Java execution trace"
+    )
+
+    def require_geq_one(value):
+        number = float(value)
+        if number < 1:
+            raise argparse.ArgumentTypeError(f"Number {value} must be >= 1.")
+        return number
+
+    parser.add_argument(
+        "--dpi",
+        help="DPI scale to apply to the screenshot.",
+        type=require_geq_one,
+        default=1,
+    )
+
+    args = parser.parse_args()
+
+    stdin_data = "".join(fileinput.input("-"))
+
+    image_bytes = generate_image(stdin_data, dpi=args.dpi)
+
+    # dump png to stdout, should be redirected to destination
+    sys.stdout.buffer.write(image_bytes)

@@ -83,12 +83,7 @@ def compile_backend(java_home: Path) -> None:
     except CalledProcessError as e:
         if backend_classes_dir.exists():
             backend_classes_dir.rmdir()
-        logger.exception(
-            "Backend compilation failed with exit code %d and output: %s",
-            e.returncode,
-            e.stderr,
-        )
-        exit(1)
+        raise e
 
 
 def generate_trace(
@@ -103,46 +98,40 @@ def generate_trace(
         }
     )
 
-    try:
-        with spinner(text="Generating execution trace...", stream=sys.stderr):
-            return subprocess.run(
-                [
-                    str(java_home / "bin" / "java"),
-                    "-cp",
-                    ":".join(
-                        map(str, backend_classes_cp + [java_home / "lib" / "tools.jar"])
-                    ),
-                    "traceprinter.InMemory",
-                ],
-                input=tracegen_input,
-                capture_output=True,
-                check=True,
-                text=True,
-                timeout=timeout_secs,
-            ).stdout
-    except CalledProcessError as e:
-        logger.exception(
-            "Trace generation failed with exit code %d and output:", e.returncode
-        )
-        exit(1)
+    with spinner(text="Generating execution trace...", stream=sys.stderr):
+        return subprocess.run(
+            [
+                str(java_home / "bin" / "java"),
+                "-cp",
+                ":".join(
+                    map(str, backend_classes_cp + [java_home / "lib" / "tools.jar"])
+                ),
+                "traceprinter.InMemory",
+            ],
+            input=tracegen_input,
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=timeout_secs,
+        ).stdout
 
 
-def validate_trace(trace_json: str) -> bool:
+def validate_trace(trace_json: str) -> str | None:
     """Catch "show-stopping errors", derived from jv-frontend.js
-    Returns true if trace is valid, false otherwise.
+    Returns an error string if trace is invalid, None otherwise.
     """
     trace: list = json.loads(trace_json)["trace"]
     if trace and trace[-1]["event"] != "uncaught_exception":
         # no error
-        return True
+        return None
+    error_msg = ""
     if len(trace) == 1 and "line" in trace[0]:
-        error_line = trace[0]["line"]
-        logger.fatal(f"Error encountered on line {error_line} of the provided Java source code.")
+        error_msg += f"Error encountered on line {trace[0]['line']} of the provided Java source code."
     if "exception_msg" in trace[-1]:
-        logger.fatal(trace[0]["exception_method"])
+        error_msg += trace[0]["exception_method"]
     else:
-        logger.fatal("Whoa, unknown error!")
-    return False
+        error_msg += "Whoa, unknown error!"
+    return error_msg
 
 
 def dir_exists(path: str | PathLike[str]) -> bool:
@@ -272,15 +261,23 @@ def main():
     )
 
     parser.add_argument(
-        "--verbose", "-v", help="Enable output from logger.", action="store_true",
+        "--verbose",
+        "-v",
+        help="Enable output from logger.",
+        action="store_true",
     )
 
     parser.add_argument(
-        "--input", "-i", help="Path to Java source file to be traced, or `-` for stdin.", default="-",
+        "--input",
+        "-i",
+        help="Path to Java source file to be traced, or `-` for stdin.",
+        default="-",
     )
 
     parser.add_argument(
-        "--output", "-o", help="Output path. If not provided, traces are printed to standard output.",
+        "--output",
+        "-o",
+        help="Output path. If not provided, traces are printed to standard output.",
     )
 
     args = parser.parse_args()
@@ -296,18 +293,33 @@ def main():
     else:
         java_home: Path = install_jdk8()
 
-    compile_backend(java_home)
+    try:
+        compile_backend(java_home)
+    except CalledProcessError as e:
+        logger.exception(
+            "Backend compilation failed with exit code %d and output: %s",
+            e.returncode,
+            e.stderr,
+        )
+        exit(1)
 
     # get java file from stdin
     java_input = "".join(fileinput.input(args.input))
 
-    trace = generate_trace(
-        java_home,
-        java_input,
-        args.trace_timeout,
-    )
+    try:
+        trace = generate_trace(
+            java_home,
+            java_input,
+            args.trace_timeout,
+        )
+    except CalledProcessError as e:
+        logger.exception(
+            "Trace generation failed with exit code %d and output:", e.returncode
+        )
+        exit(1)
 
-    if not validate_trace(trace):
+    if (v := validate_trace(trace)) is not None:
+        logger.fatal(v)
         exit(1)
 
     if args.output is None:
