@@ -9,7 +9,12 @@ maintainers = [
     {name = "Michael E. Cotterell", email = "mepcott@uga.edu"},
     {name = "Bradley J. Barnes", email = "bjb211@uga.edu"},
 ]
-license = { text = "MIT" }
+license = "MIT"
+license-files = [
+    "LICEN[CS]E*",
+    "cs1302_code_visualizer/backend/LICENSE",
+    "cs1302_code_visualizer/frontend/LICENSE",
+]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
