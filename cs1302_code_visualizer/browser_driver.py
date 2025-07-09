@@ -77,7 +77,7 @@ def generate_image(trace: str, *, dpi=1, format="PNG") -> bytes:
     return screenshot_bytes.getvalue()
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(
         description="Generate a screenshot from a Java execution trace"
     )
@@ -103,3 +103,7 @@ if __name__ == "__main__":
 
     # dump png to stdout, should be redirected to destination
     sys.stdout.buffer.write(image_bytes)
+
+
+if __name__ == "__main__":
+    main()

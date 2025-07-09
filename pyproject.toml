@@ -2,6 +2,14 @@
 name = "cs1302-code-visualizer"
 version = "0.1.0"
 description = "Visualize Java program memory state and output a screenshot."
+authors = [
+    {name = "Gabe Livengood", email = "timothy.livengood@uga.edu"},
+]
+maintainers = [
+    {name = "Michael E. Cotterell", email = "mepcott@uga.edu"},
+    {name = "Bradley J. Barnes", email = "bjb211@uga.edu"},
+]
+license = { text = "MIT" }
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -10,3 +18,12 @@ dependencies = [
     "pillow>=11.2.1",
     "selenium>=4.33.0",
 ]
+
+[project.scripts]
+trace_generator = "cs1302_code_visualizer.trace_generator:main"
+browser_driver = "cs1302_code_visualizer.browser_driver:main"
+render_image = "cs1302_code_visualizer:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

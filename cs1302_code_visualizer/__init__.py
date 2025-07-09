@@ -1,11 +1,12 @@
 #!/bin/env python3
 
 import fileinput
-from sys import stdout
-from pathlib import Path
 
-import browser_driver
-import trace_generator
+from pathlib import Path
+from sys import stdout
+
+from . import browser_driver
+from . import trace_generator
 
 
 def render_image(
@@ -13,7 +14,7 @@ def render_image(
     *,
     java_home: Path | None = None,
     timeout_secs: int | None = None,
-    dpi: int = 1,
+    dpi: int = 4,
     format: str = "PNG",
 ) -> bytes:
     """Visualize the state of a Java program just before exiting as an image.
@@ -45,6 +46,7 @@ def render_image(
 
     return browser_driver.generate_image(trace, dpi=dpi)
 
-
-if __name__ == "__main__":
-    stdout.buffer.write(render_image("".join(fileinput.input())))
+def main() -> None:
+    java_source: str = "".join(fileinput.input())
+    rendered_image: bytes = render_image(java_source)
+    stdout.buffer.write(rendered_image)
