@@ -3,41 +3,21 @@ package cs1302.tracer;
 import org.apache.commons.cli.Options;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import org.apache.commons.cli.ParseException;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Scanner;
 import java.util.Set;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-import javax.tools.DiagnosticCollector;
-import javax.tools.FileObject;
-import javax.tools.JavaCompiler;
-import javax.tools.JavaFileManager;
-import javax.tools.JavaFileObject;
-import javax.tools.ForwardingJavaFileManager;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.ToolProvider;
-import javax.tools.JavaFileObject.Kind;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -45,16 +25,8 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 
-import com.github.javaparser.ParseProblemException;
-import com.github.javaparser.StaticJavaParser;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.Node;
-import com.github.javaparser.ast.body.BodyDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.body.TypeDeclaration;
 import com.sun.jdi.AbsentInformationException;
 import com.sun.jdi.ArrayReference;
-import com.sun.jdi.ArrayType;
 import com.sun.jdi.Bootstrap;
 import com.sun.jdi.ClassType;
 import com.sun.jdi.Field;
@@ -71,14 +43,11 @@ import com.sun.jdi.connect.LaunchingConnector;
 import com.sun.jdi.event.ClassPrepareEvent;
 import com.sun.jdi.event.Event;
 import com.sun.jdi.event.MethodExitEvent;
-import com.sun.jdi.event.StepEvent;
-import com.sun.jdi.event.ThreadStartEvent;
 import com.sun.jdi.event.VMDeathEvent;
 import com.sun.jdi.request.ClassPrepareRequest;
-import com.sun.jdi.request.MethodEntryRequest;
 import com.sun.jdi.request.MethodExitRequest;
-import com.sun.jdi.request.StepRequest;
-import com.sun.jdi.request.ThreadStartRequest;
+
+import cs1302.tracer.CompilationHelper.CompilationResult;
 
 /**
  * Hello world!
@@ -103,78 +72,16 @@ public class App {
       source = sb.toString();
     }
 
-    CompilationUnit sourceCompilationUnit = StaticJavaParser.parse(source);
-
-    /*
-     * Create a working directory tree for compilation
-     */
-    Path workingDir = createWorkingDir();
-    String[] topLevelClassBinaryName = findTopLevelClassBinaryName(sourceCompilationUnit).split("\\.");
-
-    Path inputSourceDirectory;
-    if (topLevelClassBinaryName.length == 1) {
-      inputSourceDirectory = workingDir;
-    } else {
-      inputSourceDirectory = Files.createDirectories(
-          Paths.get(workingDir.toString(), Arrays.copyOf(topLevelClassBinaryName, topLevelClassBinaryName.length - 1)));
-    }
-    Path inputSourceFile = Paths.get(inputSourceDirectory.toString(),
-        topLevelClassBinaryName[topLevelClassBinaryName.length - 1] + Kind.SOURCE.extension);
-    Files.writeString(inputSourceFile, source);
-
-    /*
-     * Compile Java source code
-     */
-    Set<String> compiledClassNames = new HashSet<String>();
-    JavaCompiler javaCompiler = Objects.requireNonNull(ToolProvider.getSystemJavaCompiler(),
-        "Could not get Java compiler");
-    DiagnosticCollector<JavaFileObject> diagnosticCollector = new DiagnosticCollector<>();
-    // this file manager is used to open source files from disk
-    StandardJavaFileManager standardFileManager = javaCompiler.getStandardFileManager(diagnosticCollector, null, null);
-    // this file manager is used when outputting class files to disk. it wraps the
-    // standard file manager so that we can record what classes are compiled. this
-    // is necessary for debugging later.
-    JavaFileManager forwardingFileManager = new ForwardingJavaFileManager<StandardJavaFileManager>(
-        javaCompiler.getStandardFileManager(diagnosticCollector, null, null)) {
-      @Override
-      public JavaFileObject getJavaFileForOutput(Location location, String className, Kind kind,
-          FileObject sibling) throws IOException {
-        compiledClassNames.add(className);
-        return super.getJavaFileForOutput(location, className, kind, sibling);
-      }
-    };
-    Iterable<? extends JavaFileObject> compilationUnit = standardFileManager.getJavaFileObjects(inputSourceFile);
-
-    boolean compilationSuccess = javaCompiler
-        .getTask(null, forwardingFileManager, diagnosticCollector, List.of("-g"), null, compilationUnit).call();
-
-    if (!compilationSuccess) {
-      StringBuilder message = new StringBuilder("Compilation of provided Java source code failed");
-      List<?> diagnostics = diagnosticCollector.getDiagnostics();
-
-      if (diagnostics.isEmpty()) {
-        message.append('.');
-      } else {
-        message.append(" with the following messages:\n");
-        message.append(
-            diagnosticCollector.getDiagnostics().stream()
-                .map(Object::toString)
-                .collect(Collectors.joining("\n")));
-      }
-
-      throw new IllegalArgumentException(message.toString());
-    }
+    CompilationResult c = CompilationHelper.compile(source);
 
     /*
      * Start debugging session for newly compiled code
      */
-    MethodDeclaration mainMethod = findMain(sourceCompilationUnit);
-
     LaunchingConnector launchingConnector = Bootstrap.virtualMachineManager().defaultConnector();
     Map<String, Connector.Argument> env = launchingConnector.defaultArguments();
 
-    env.get("main").setValue(String.join(".", getAncestorFqn(sourceCompilationUnit, mainMethod)));
-    env.get("options").setValue("-classpath " + workingDir.toString());
+    env.get("main").setValue(c.mainClass());
+    env.get("options").setValue("-classpath " + c.classPath());
     VirtualMachine vm = launchingConnector.launch(env);
 
     // the JVM will crash if output buffers (stdout/err) are filled, so we start
@@ -217,11 +124,11 @@ public class App {
     // fire an event when exiting main
     {
       MethodExitRequest methodExitRequest = vm.eventRequestManager().createMethodExitRequest();
-      methodExitRequest.addClassFilter(String.join(".", getAncestorFqn(sourceCompilationUnit, mainMethod)));
+      methodExitRequest.addClassFilter(c.mainClass());
       methodExitRequest.enable();
     }
 
-    for (String className : compiledClassNames) {
+    for (String className : c.compiledClassNames()) {
       // fire an event each time one of our classes is prepared, mostly as a
       // springboard for setting up further eventrequests
       ClassPrepareRequest classPrepareRequest = vm.eventRequestManager().createClassPrepareRequest();
@@ -238,15 +145,15 @@ public class App {
           case ClassPrepareEvent cpe -> {
             System.out.println("CPE for " + cpe.referenceType());
             ClassType ct = (ClassType) cpe.referenceType();
-            if (compiledClassNames.contains(ct.name())) {
+            if (c.compiledClassNames().contains(ct.name())) {
               loadedClasses.add(ct);
               // NOTE this requests a step given that we're already at a breakpoint, I think.
               // we want this to create breakpoints.
-              //StepRequest sr = vm.eventRequestManager().createStepRequest(cpe.thread(),
-              //    StepRequest.STEP_LINE,
-              //    StepRequest.STEP_OVER);
-              //sr.addClassFilter(ct.name());
-              //sr.enable();
+              // StepRequest sr = vm.eventRequestManager().createStepRequest(cpe.thread(),
+              // StepRequest.STEP_LINE,
+              // StepRequest.STEP_OVER);
+              // sr.addClassFilter(ct.name());
+              // sr.enable();
             }
           }
           case MethodExitEvent mee -> {
@@ -315,116 +222,24 @@ public class App {
   public static void walkHeapFromRootObject(ObjectReference root, Set<Value> seen) {
     seen.add(root);
     if (root instanceof ArrayReference) {
-      ArrayReference ar = (ArrayReference)root;
+      ArrayReference ar = (ArrayReference) root;
       System.err.println("LIST" + ar.getValues());
       return;
     } else {
       System.err.println("INSTANCE" + root);
     }
 
-    ClassType ct = (ClassType)root.referenceType();
+    ClassType ct = (ClassType) root.referenceType();
     for (Field f : ct.fields()) {
       switch (root.getValue(f)) {
         case PrimitiveValue pv -> System.err.println("PRIM" + f + pv);
         case ObjectReference or -> walkHeapFromRootObject(or, seen);
         case null -> System.err.println("null");
-        default -> {}
-      };
-    }
-  }
-
-  public static Path createWorkingDir() throws IOException {
-    Path workingDir = Files.createTempDirectory("code-tracer");
-    Thread workingDirCleanupHook = new Thread(() -> {
-      try (Stream<Path> paths = Files.walk(workingDir)) {
-        paths.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
-      } catch (IOException e) {
+        default -> {
+        }
       }
-    });
-    Runtime.getRuntime().addShutdownHook(workingDirCleanupHook);
-    return workingDir;
-  }
-
-  public static List<String> getAncestorFqn(CompilationUnit cu, BodyDeclaration<?> node) {
-    Iterator<Node> parents = new Node.ParentsVisitor(node);
-    List<String> ancestorNames = new LinkedList<>();
-    while (parents.hasNext()) {
-      Node parent = parents.next();
-      if (!(parent instanceof TypeDeclaration<?>)) {
-        continue;
-      }
-      TypeDeclaration<?> parentDecl = (TypeDeclaration<?>) parent;
-      ancestorNames.add(0, parentDecl.getNameAsString());
+      ;
     }
-
-    cu.getPackageDeclaration().ifPresent(p -> {
-      ancestorNames.addAll(0, Arrays.asList(p.getNameAsString().split("\\.")));
-    });
-
-    return ancestorNames;
-  }
-
-  public static String findTopLevelClassBinaryName(CompilationUnit cu) {
-    List<Node> topLevelNodes = new ArrayList<>();
-    new Node.DirectChildrenIterator(cu).forEachRemaining(topLevelNodes::add);
-    List<TypeDeclaration<?>> topLevelPublicDeclarations = topLevelNodes.stream()
-        .filter(n -> n instanceof TypeDeclaration)
-        .map(n -> (TypeDeclaration<?>) n)
-        .filter(t -> t.isPublic())
-        .collect(Collectors.toList());
-
-    if (topLevelPublicDeclarations.size() != 1) {
-      String lines = "[" + String.join(", ", topLevelPublicDeclarations.stream()
-          .filter(m -> m.getBegin().isPresent())
-          .map(m -> m.getBegin().get().line)
-          .map(Object::toString)
-          .toArray(String[]::new)) + "]";
-      throw new IllegalArgumentException(String.format(
-          "Java source code must have exactly one public top-level type declaration. Found %d such declarations on lines %s.",
-          topLevelPublicDeclarations.size(), lines));
-    }
-
-    TypeDeclaration<?> fileClass = topLevelPublicDeclarations.get(0);
-    List<String> fqn = getAncestorFqn(cu, fileClass);
-    fqn.add(fileClass.getNameAsString());
-
-    return String.join(".", fqn);
-  }
-
-  /**
-   * Parse the provided Java source code and locate the main method.
-   *
-   * @param javaSource the Java source code
-   * @return the parsed method declaration
-   * @throws ParseProblemException    if the source code has parser errors
-   * @throws IllegalArgumentException if the source code doesn't have exactly one
-   *                                  main method
-   */
-  public static MethodDeclaration findMain(CompilationUnit cu) {
-    Predicate<MethodDeclaration> isMain = m -> {
-      boolean isNamedMain = m.getNameAsString().equals("main");
-      boolean hasVoidReturn = m.getType().isVoidType();
-      boolean hasStringArrArg = m.getParameterByType(String[].class).isPresent();
-      boolean hasStringVarargsArg = m.getParameterByType(String.class).map(p -> p.isVarArgs()).orElse(false);
-      boolean hasOneArg = m.getParameters().size() == 1;
-      return m.isPublic() && m.isStatic() && hasVoidReturn && isNamedMain && (hasStringArrArg ^ hasStringVarargsArg)
-          && hasOneArg;
-    };
-
-    List<MethodDeclaration> mainMethods = cu.findAll(MethodDeclaration.class, isMain);
-
-    if (mainMethods.size() != 1) {
-      String lines = "[" + String.join(", ", mainMethods.stream()
-          .filter(m -> m.getBegin().isPresent())
-          .map(m -> m.getBegin().get().line)
-          .map(Object::toString)
-          .toArray(String[]::new)) + "]";
-      throw new IllegalArgumentException(
-          String.format("Java source code must have exactly one main method. Found %d main methods on lines %s.",
-              mainMethods.size(), lines));
-    }
-
-    return mainMethods.get(0);
   }
 
   /**
