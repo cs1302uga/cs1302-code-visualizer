@@ -4,9 +4,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.sun.jdi.AbsentInformationException;
@@ -14,7 +16,6 @@ import com.sun.jdi.BooleanValue;
 import com.sun.jdi.Bootstrap;
 import com.sun.jdi.ByteValue;
 import com.sun.jdi.CharValue;
-import com.sun.jdi.ClassType;
 import com.sun.jdi.DoubleValue;
 import com.sun.jdi.Field;
 import com.sun.jdi.FloatValue;
@@ -25,6 +26,7 @@ import com.sun.jdi.LongValue;
 import com.sun.jdi.Method;
 import com.sun.jdi.ObjectReference;
 import com.sun.jdi.PrimitiveValue;
+import com.sun.jdi.ReferenceType;
 import com.sun.jdi.ShortValue;
 import com.sun.jdi.StackFrame;
 import com.sun.jdi.ThreadReference;
@@ -43,12 +45,18 @@ import com.sun.jdi.request.ClassPrepareRequest;
 import com.sun.jdi.request.MethodExitRequest;
 
 import cs1302.tracer.CompilationHelper.CompilationResult;
+import cs1302.tracer.DebugTraceHelper.ExecutionSnapshot.Pair;
+import cs1302.tracer.DebugTraceHelper.ExecutionSnapshot.StackSnapshot;
 import cs1302.tracer.DebugTraceHelper.ExecutionSnapshot.TraceValue;
 
 public class DebugTraceHelper {
-  public static record ExecutionSnapshot(List<List<Pair<String, ? extends TraceValue>>> stack,
+  public static record ExecutionSnapshot(List<StackSnapshot> stack,
       List<Pair<String, ? extends TraceValue>> statics, Map<Long, TraceValue.TraceObject> heap) {
     public static record Pair<L, R>(L l, R r) {
+    }
+
+    public static final record StackSnapshot(String methodName, long methodLine,
+        List<Pair<String, ? extends TraceValue>> visibleVariables) {
     }
 
     public static sealed interface TraceValue {
@@ -107,15 +115,7 @@ public class DebugTraceHelper {
     boolean snapMainEnd = breakPoints == null || breakPoints.isEmpty() || breakPoints.contains(-1);
     Map<Integer, ExecutionSnapshot> snapshots = new HashMap<>();
 
-    /*
-     * Start debugging session for newly compiled code
-     */
-    LaunchingConnector launchingConnector = Bootstrap.virtualMachineManager().defaultConnector();
-    Map<String, Connector.Argument> env = launchingConnector.defaultArguments();
-
-    env.get("main").setValue(compilationResult.mainClass());
-    env.get("options").setValue("-classpath " + compilationResult.classPath());
-    VirtualMachine vm = launchingConnector.launch(env);
+    VirtualMachine vm = startVmWithCprs(compilationResult);
 
     // TODO the JVM will crash if output buffers (stdout/err) are filled, so we need
     // to empty them as they're populated during debugging
@@ -127,33 +127,24 @@ public class DebugTraceHelper {
       methodExitRequest.enable();
     }
 
-    for (String className : compilationResult.compiledClassNames()) {
-      // fire an event each time one of our classes is prepared, mostly as a
-      // springboard for setting up further eventrequests
-      ClassPrepareRequest classPrepareRequest = vm.eventRequestManager().createClassPrepareRequest();
-      classPrepareRequest.addClassFilter(className);
-      classPrepareRequest.enable();
-    }
-
-    List<ClassType> loadedClasses = new ArrayList<>();
+    List<ReferenceType> loadedClasses = new ArrayList<>();
 
     boolean endEventLoop = false;
     while (!endEventLoop) {
       for (Event event : vm.eventQueue().remove()) {
         switch (event) {
           case ClassPrepareEvent cpe -> {
-            ClassType ct = (ClassType) cpe.referenceType();
-            if (compilationResult.compiledClassNames().contains(ct.name())) {
+            if (compilationResult.compiledClassNames().contains(cpe.referenceType().name())) {
               if (breakPoints != null) {
                 for (int breakLine : breakPoints) {
-                  List<Location> locations = ct.locationsOfLine(breakLine);
+                  List<Location> locations = cpe.referenceType().locationsOfLine(breakLine);
                   if (locations.isEmpty()) {
                     break;
                   }
                   vm.eventRequestManager().createBreakpointRequest(locations.get(0)).enable();
                 }
               }
-              loadedClasses.add(ct);
+              loadedClasses.add(cpe.referenceType());
             }
           }
           case BreakpointEvent bpe -> {
@@ -201,26 +192,80 @@ public class DebugTraceHelper {
     return trace(compilationResult, null).get(-1);
   }
 
-  private static ExecutionSnapshot snapshotTheWorld(ThreadReference worldThread, Iterable<ClassType> loadedClasses)
+  public static Collection<Integer> getValidBreakpointLines(CompilationResult compilationResult)
+      throws IOException, IllegalConnectorArgumentsException, VMStartException, InterruptedException,
+      AbsentInformationException {
+    VirtualMachine vm = startVmWithCprs(compilationResult);
+
+    Set<Integer> validBreakLines = new HashSet<>();
+    Set<String> compiledClasses = new HashSet<>(compilationResult.compiledClassNames());
+
+    while (!compiledClasses.isEmpty()) {
+      for (Event event : vm.eventQueue().remove()) {
+        switch (event) {
+          case ClassPrepareEvent cpe -> {
+            validBreakLines.addAll(cpe.referenceType().allLineLocations().stream().map(ll -> ll.lineNumber()).toList());
+            compiledClasses.remove(cpe.referenceType().name());
+          }
+          case VMDeathEvent vde -> {
+            return validBreakLines;
+          }
+          default -> {
+          }
+        }
+
+        vm.resume();
+      }
+    }
+
+    return validBreakLines;
+  }
+
+  /**
+   * Start a JDI VM prepopulated with ClassPrepareRequests for the
+   * compiledClassNames present in compilationResult.
+   */
+  private static VirtualMachine startVmWithCprs(CompilationResult compilationResult)
+      throws IOException, IllegalConnectorArgumentsException, VMStartException {
+    LaunchingConnector launchingConnector = Bootstrap.virtualMachineManager().defaultConnector();
+    Map<String, Connector.Argument> env = launchingConnector.defaultArguments();
+
+    env.get("main").setValue(compilationResult.mainClass());
+    env.get("options").setValue("-classpath " + compilationResult.classPath());
+    VirtualMachine vm = launchingConnector.launch(env);
+
+    for (String className : compilationResult.compiledClassNames()) {
+      // fire an event each time one of our classes is prepared, mostly as a
+      // springboard for setting up further eventrequests
+      ClassPrepareRequest classPrepareRequest = vm.eventRequestManager().createClassPrepareRequest();
+      classPrepareRequest.addClassFilter(className);
+      classPrepareRequest.enable();
+    }
+
+    return vm;
+  }
+
+  private static ExecutionSnapshot snapshotTheWorld(ThreadReference worldThread, Iterable<ReferenceType> loadedClasses)
       throws IncompatibleThreadStateException, AbsentInformationException {
 
     List<ObjectReference> heapReferencesToWalk = new ArrayList<>();
 
     // collect stack values
-    List<List<ExecutionSnapshot.Pair<String, ? extends TraceValue>>> stack = new ArrayList<>();
+    List<StackSnapshot> stack = new ArrayList<>();
     for (StackFrame frame : worldThread.frames()) {
-      stack.add(frame.visibleVariables().stream()
-          .map(v -> new ExecutionSnapshot.Pair<>(v.name(),
-              TraceValue.fromJdiValue(frame.getValue(v), heapReferencesToWalk)))
-          .collect(Collectors.toList()));
+      stack.add(new StackSnapshot(frame.location().method().name(), frame.location().lineNumber(),
+          frame.visibleVariables().stream()
+              .map(v -> new Pair<>(v.name(),
+                  TraceValue.fromJdiValue(frame.getValue(v), heapReferencesToWalk)))
+              .collect(Collectors.toList())));
     }
 
     // collect static values
-    List<ExecutionSnapshot.Pair<String, ? extends TraceValue>> statics = new ArrayList<>();
-    for (ClassType loadedClass : loadedClasses) {
+    List<Pair<String, ? extends TraceValue>> statics = new ArrayList<>();
+    for (ReferenceType loadedClass : loadedClasses) {
       statics.addAll(loadedClass.allFields().stream()
           .filter(f -> f.isStatic())
-          .map(f -> new ExecutionSnapshot.Pair<>(String.join(".", loadedClass.name(), f.name()),
+          .map(f -> new Pair<>(String.join(".", loadedClass.name(), f.name()),
               TraceValue.fromJdiValue(loadedClass.getValue(f), heapReferencesToWalk)))
           .toList());
     }

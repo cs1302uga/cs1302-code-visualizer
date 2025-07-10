@@ -7,12 +7,17 @@ To run:
 ```console
 $ java -jar target/code-tracer-1.0-SNAPSHOT-jar-with-dependencies.jar -h
 usage: code-tracer
- -b,--breakpoint <arg>   breakpoint at which to take a snapshot (defaults
-                         to after main if none are provided)
- -h,--help               print this help message
- -i,--input <arg>        input path to Java source file (defaults to stdin
-                         if omitted)
- -o,--output <arg>       output path (defaults to stdout if omitted)
+ -b,--breakpoint <arg>             breakpoint at which to take a snapshot
+                                   (defaults to after main if none are
+                                   provided)
+ -h,--help                         print this help message
+ -i,--input <arg>                  input path to Java source file
+                                   (defaults to stdin if omitted)
+ -l,--list-available-breakpoints   instead of running a trace, list the
+                                   breakpoints available in provided
+                                   source file
+ -o,--output <arg>                 output path (defaults to stdout if
+                                   omitted)
 ```
 
 References:

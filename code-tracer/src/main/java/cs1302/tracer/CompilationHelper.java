@@ -37,9 +37,11 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 
 public class CompilationHelper {
   /**
-   * @param classPath root of the class path where compiled classes were output
+   * @param classPath          root of the class path where compiled classes were
+   *                           output
    * @param compiledClassNames binary names of the classes that were compiled
-   * @param mainClass binary name of the class that contains the main method
+   * @param mainClass          binary name of the class that contains the main
+   *                           method
    */
   public static record CompilationResult(Path classPath, Set<String> compiledClassNames, String mainClass) {
   }

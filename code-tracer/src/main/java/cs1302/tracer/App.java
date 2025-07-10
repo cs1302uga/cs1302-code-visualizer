@@ -3,9 +3,13 @@ package cs1302.tracer;
 import org.apache.commons.cli.Options;
 
 import org.apache.commons.cli.ParseException;
+import org.fusesource.jansi.Ansi;
+import org.fusesource.jansi.AnsiConsole;
 
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.Scanner;
 import java.util.stream.Stream;
@@ -41,12 +45,35 @@ public class App {
 
     // compile the source code
     CompilationResult c = CompilationHelper.compile(source);
+
     // and then debug it
-    String[] breakpoints = opts.getOptionValues("breakpoint");
-    if (breakpoints != null) {
-      System.out.println(DebugTraceHelper.trace(c, Stream.of(breakpoints).map(Integer::parseInt).toList()));
+    if (opts.hasOption("list-available-breakpoints")) {
+      Collection<Integer> availableBreakpoints = DebugTraceHelper.getValidBreakpointLines(c);
+      String[] sourceLines = source.split("\n");
+      int digitLength = ((int) Math.log10(sourceLines.length)) + 1;
+      StringBuilder annotatedSource = new StringBuilder();
+      AnsiConsole.systemInstall();
+      for (int i = 0; i < sourceLines.length; i++) {
+        if (availableBreakpoints.contains(i + 1)) {
+          annotatedSource.append(Ansi.ansi().fgGreen().a(String.format("b %" + digitLength + "d | ", i + 1)));
+        } else {
+          annotatedSource.append(String.format("  %" + digitLength + "d | ", i + 1));
+        }
+        annotatedSource.append(sourceLines[i]);
+        annotatedSource.append(Ansi.ansi().reset());
+        if (i < sourceLines.length - 1) {
+          annotatedSource.append('\n');
+        }
+      }
+      AnsiConsole.systemUninstall();
+      System.out.println(annotatedSource.toString());
     } else {
-      System.out.println(DebugTraceHelper.trace(c));
+      String[] breakpoints = opts.getOptionValues("breakpoint");
+      if (breakpoints != null) {
+        System.out.println(DebugTraceHelper.trace(c, Stream.of(breakpoints).map(Integer::parseInt).toList()));
+      } else {
+        System.out.println(DebugTraceHelper.trace(c));
+      }
     }
   }
 
@@ -82,6 +109,12 @@ public class App {
             .desc("breakpoint at which to take a snapshot (defaults to after main if none are provided)")
             .required(false)
             .hasArg()
+            .build());
+    options.addOption(
+        Option.builder("l")
+            .longOpt("list-available-breakpoints")
+            .desc("instead of running a trace, list the breakpoints available in provided source file")
+            .required(false)
             .build());
     options.addOption(
         Option.builder("h")
