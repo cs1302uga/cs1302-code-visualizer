@@ -3,6 +3,7 @@ package cs1302.tracer;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -12,10 +13,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import com.sun.jdi.AbsentInformationException;
+import com.sun.jdi.ArrayReference;
 import com.sun.jdi.BooleanValue;
 import com.sun.jdi.Bootstrap;
 import com.sun.jdi.ByteValue;
 import com.sun.jdi.CharValue;
+import com.sun.jdi.ClassType;
 import com.sun.jdi.DoubleValue;
 import com.sun.jdi.Field;
 import com.sun.jdi.FloatValue;
@@ -29,6 +32,7 @@ import com.sun.jdi.PrimitiveValue;
 import com.sun.jdi.ReferenceType;
 import com.sun.jdi.ShortValue;
 import com.sun.jdi.StackFrame;
+import com.sun.jdi.StringReference;
 import com.sun.jdi.ThreadReference;
 import com.sun.jdi.Value;
 import com.sun.jdi.VirtualMachine;
@@ -60,13 +64,115 @@ public class DebugTraceHelper {
     }
 
     public static sealed interface TraceValue {
-      public static TraceValue fromJdiValue(Value value) {
-        return fromJdiValue(value, null);
+      public static TraceValue fromJdiValue(VirtualMachine vm, ThreadReference mainThread, Value value) {
+        return fromJdiValue(vm, mainThread, value, Optional.empty());
       }
 
-      public static TraceValue fromJdiValue(Value value, List<ObjectReference> outEncounteredReferences) {
+      public static TraceValue fromJdiValue(VirtualMachine vm, ThreadReference mainThread, Value value,
+          List<ObjectReference> outEncounteredReferences) {
+        return fromJdiValue(vm, mainThread, value, Optional.ofNullable(outEncounteredReferences));
+      }
+
+      private static TraceValue fromJdiValue(VirtualMachine vm, ThreadReference mainThread, Value value,
+          Optional<List<ObjectReference>> outEncounteredReferences) {
         return switch (value) {
-          case PrimitiveValue pv -> new TracePrimitive(switch (pv) {
+          // TODO primitive wrapper classes will not match here, add toggle to interpret
+          // them as primitive vs on heap
+          case PrimitiveValue pv -> TracePrimitive.fromJdiPrimitive(pv);
+          case ObjectReference or -> {
+            // TODO composite objects are just dumping contained values to heap, things like string should be inlined
+            if (or.referenceType() instanceof ClassType) {
+              ClassType ct = (ClassType) or.referenceType();
+              boolean isCollection = !Collections.disjoint(ct.allInterfaces(),
+                  vm.classesByName("java.util.Collection"));
+              if (isCollection) {
+                try {
+                  Method toArray = ct.concreteMethodByName("toArray", "()[Ljava/lang/Object;");
+                  ArrayReference ar = (ArrayReference) or.invokeMethod(mainThread, toArray, List.of(),
+                      ObjectReference.INVOKE_SINGLE_THREADED);
+                  boolean isList = !Collections.disjoint(ct.allInterfaces(), vm.classesByName("java.util.List"));
+                  List<TraceValue> traceArray = arrayReferenceToList(ar, outEncounteredReferences);
+                  if (isList) {
+                    yield new TraceList(traceArray);
+                  } else {
+                    yield new TraceCollection(traceArray);
+                  }
+                } catch (Exception e) {
+                  outEncounteredReferences.ifPresent(l -> l.add(or));
+                  yield new TraceReference(or.uniqueID());
+                }
+              }
+
+              boolean isMap = !Collections.disjoint(ct.allInterfaces(), vm.classesByName("java.util.Map"));
+              if (isMap) {
+                try {
+                  Method entrySet = ct.concreteMethodByName("entrySet", "()Ljava/util/Set;");
+                  ObjectReference entries = (ObjectReference) or.invokeMethod(mainThread, entrySet, List.of(),
+                      ObjectReference.INVOKE_SINGLE_THREADED);
+                  ClassType entriesCt = (ClassType) entries.referenceType();
+                  Method entriesToArray = entriesCt.concreteMethodByName("toArray", "()[Ljava/lang/Object;");
+                  ArrayReference ar = (ArrayReference) entries.invokeMethod(mainThread, entriesToArray, List.of(),
+                      ObjectReference.INVOKE_SINGLE_THREADED);
+                  Map<TraceValue, TraceValue> map = new HashMap<>();
+                  for (int i = 0; i < ar.length(); i++) {
+                    ObjectReference entry = (ObjectReference) ar.getValue(i);
+                    ClassType entryCt = (ClassType) entry.referenceType();
+                    Method entryGetKey = entryCt.concreteMethodByName("getKey", "()Ljava/lang/Object;");
+                    ObjectReference entryKey = (ObjectReference) entry.invokeMethod(mainThread, entryGetKey,
+                        List.of(), ObjectReference.INVOKE_SINGLE_THREADED);
+                    Method entryGetValue = entryCt.concreteMethodByName("getValue", "()Ljava/lang/Object;");
+                    ObjectReference entryValue = (ObjectReference) entry.invokeMethod(mainThread, entryGetValue,
+                        List.of(), ObjectReference.INVOKE_SINGLE_THREADED);
+                    outEncounteredReferences.ifPresent(l -> l.add(entryKey));
+                    outEncounteredReferences.ifPresent(l -> l.add(entryValue));
+                    map.put(new TraceReference(entryKey.uniqueID()), new TraceReference(entryValue.uniqueID()));
+                  }
+                  yield new TraceMap(map);
+                } catch (Exception e) {
+                  e.printStackTrace();
+                  outEncounteredReferences.ifPresent(l -> l.add(or));
+                  yield new TraceReference(or.uniqueID());
+                }
+              }
+            }
+
+            outEncounteredReferences.ifPresent(l -> l.add(or));
+            yield switch (or) {
+              case ArrayReference ar -> new TraceList(arrayReferenceToList(ar, outEncounteredReferences));
+              case StringReference sr -> new TraceString(sr.value());
+              default -> new TraceReference(or.uniqueID());
+            };
+          }
+          case null -> null;
+          default -> null;
+        };
+      }
+
+      private static List<TraceValue> arrayReferenceToList(ArrayReference ar,
+          Optional<List<ObjectReference>> outEncounteredReferences) {
+        List<TraceValue> tvs = new ArrayList<>(ar.length());
+        for (int i = 0; i < ar.length(); i++) {
+          switch (ar.getValue(i)) {
+            case PrimitiveValue cpv -> tvs.add(TracePrimitive.fromJdiPrimitive(cpv));
+            case StringReference sr -> tvs.add(new TraceString(sr.value()));
+            case ObjectReference cor -> {
+              outEncounteredReferences.ifPresent(l -> l.add(cor));
+              tvs.add(new TraceReference(cor.uniqueID()));
+            }
+            case null -> tvs.add(null);
+            default -> {
+            }
+          }
+        }
+        return tvs;
+      }
+
+      public static final record TraceReference(long uniqueId) implements TraceValue {
+      }
+
+      public static final record TracePrimitive(Object value) implements TraceValue {
+        public static TracePrimitive fromJdiPrimitive(PrimitiveValue primitiveValue) {
+          return new TracePrimitive(switch (primitiveValue) {
             case BooleanValue bv -> bv.value();
             case ByteValue bv -> bv.value();
             case CharValue cv -> cv.value();
@@ -77,22 +183,22 @@ public class DebugTraceHelper {
             case ShortValue sv -> sv.value();
             default -> null;
           });
-          case ObjectReference or -> {
-            Optional.ofNullable(outEncounteredReferences).ifPresent(l -> l.add(or));
-            yield new TraceReference(or.uniqueID());
-          }
-          case null -> null;
-          default -> null;
-        };
-      }
-
-      public static final record TraceReference(long uniqueId) implements TraceValue {
-      }
-
-      public static final record TracePrimitive(Object value) implements TraceValue {
+        }
       }
 
       public static final record TraceObject(Map<String, ? extends TraceValue> fields) implements TraceValue {
+      }
+
+      public static final record TraceString(String string) implements TraceValue {
+      }
+
+      public static final record TraceList(List<? extends TraceValue> list) implements TraceValue {
+      }
+
+      public static final record TraceCollection(Collection<? extends TraceValue> collection) implements TraceValue {
+      }
+
+      public static final record TraceMap(Map<? extends TraceValue, ? extends TraceValue> map) implements TraceValue {
       }
     }
   }
@@ -150,7 +256,7 @@ public class DebugTraceHelper {
           case BreakpointEvent bpe -> {
             Location breakLocation = bpe.location();
             if (compilationResult.compiledClassNames().contains(breakLocation.declaringType().name())) {
-              snapshots.put(breakLocation.lineNumber(), snapshotTheWorld(bpe.thread(), loadedClasses));
+              snapshots.put(breakLocation.lineNumber(), snapshotTheWorld(vm, bpe.thread(), loadedClasses));
             }
           }
           case MethodExitEvent mee -> {
@@ -163,7 +269,7 @@ public class DebugTraceHelper {
                 && method.signature().equals(mainJniSignature);
 
             if (isMain && (snapMainEnd || snapshots.isEmpty())) {
-              snapshots.put(-1, snapshotTheWorld(mee.thread(), loadedClasses));
+              snapshots.put(-1, snapshotTheWorld(vm, mee.thread(), loadedClasses));
             }
           }
           case VMDeathEvent vde -> {
@@ -245,7 +351,8 @@ public class DebugTraceHelper {
     return vm;
   }
 
-  private static ExecutionSnapshot snapshotTheWorld(ThreadReference worldThread, Iterable<ReferenceType> loadedClasses)
+  private static ExecutionSnapshot snapshotTheWorld(VirtualMachine vm, ThreadReference worldThread,
+      Iterable<ReferenceType> loadedClasses)
       throws IncompatibleThreadStateException, AbsentInformationException {
 
     List<ObjectReference> heapReferencesToWalk = new ArrayList<>();
@@ -256,7 +363,7 @@ public class DebugTraceHelper {
       stack.add(new StackSnapshot(frame.location().method().name(), frame.location().lineNumber(),
           frame.visibleVariables().stream()
               .map(v -> new Pair<>(v.name(),
-                  TraceValue.fromJdiValue(frame.getValue(v), heapReferencesToWalk)))
+                  TraceValue.fromJdiValue(vm, worldThread, frame.getValue(v), heapReferencesToWalk)))
               .collect(Collectors.toList())));
     }
 
@@ -266,7 +373,7 @@ public class DebugTraceHelper {
       statics.addAll(loadedClass.allFields().stream()
           .filter(f -> f.isStatic())
           .map(f -> new Pair<>(String.join(".", loadedClass.name(), f.name()),
-              TraceValue.fromJdiValue(loadedClass.getValue(f), heapReferencesToWalk)))
+              TraceValue.fromJdiValue(vm, worldThread, loadedClass.getValue(f), heapReferencesToWalk)))
           .toList());
     }
 
@@ -283,7 +390,8 @@ public class DebugTraceHelper {
           .toList();
       for (Field workingObjectField : workingObjectFields) {
         Value fieldValue = workingObject.getValue(workingObjectField);
-        namedFields.put(workingObjectField.name(), TraceValue.fromJdiValue(fieldValue, heapReferencesToWalk));
+        namedFields.put(workingObjectField.name(),
+            TraceValue.fromJdiValue(vm, worldThread, fieldValue, heapReferencesToWalk));
       }
 
       heap.put(workingObject.uniqueID(), new TraceValue.TraceObject(namedFields));
