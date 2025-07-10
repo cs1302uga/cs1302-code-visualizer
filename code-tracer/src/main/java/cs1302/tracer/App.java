@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.Scanner;
+import java.util.stream.Stream;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -41,7 +42,12 @@ public class App {
     // compile the source code
     CompilationResult c = CompilationHelper.compile(source);
     // and then debug it
-    System.out.println(DebugTraceHelper.trace(c));
+    String[] breakpoints = opts.getOptionValues("breakpoint");
+    if (breakpoints != null) {
+      System.out.println(DebugTraceHelper.trace(c, Stream.of(breakpoints).map(Integer::parseInt).toList()));
+    } else {
+      System.out.println(DebugTraceHelper.trace(c));
+    }
   }
 
   /**
@@ -67,6 +73,13 @@ public class App {
         Option.builder("o")
             .longOpt("output")
             .desc("output path (defaults to stdout if omitted)")
+            .required(false)
+            .hasArg()
+            .build());
+    options.addOption(
+        Option.builder("b")
+            .longOpt("breakpoint")
+            .desc("breakpoint at which to take a snapshot (defaults to after main if none are provided)")
             .required(false)
             .hasArg()
             .build());
