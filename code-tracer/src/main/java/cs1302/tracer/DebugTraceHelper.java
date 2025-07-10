@@ -171,7 +171,7 @@ public class DebugTraceHelper {
             boolean isMain = method.isPublic() && method.isStatic() && method.name().equals("main")
                 && method.signature().equals(mainJniSignature);
 
-            if (isMain && snapMainEnd) {
+            if (isMain && (snapMainEnd || snapshots.isEmpty())) {
               snapshots.put(-1, snapshotTheWorld(mee.thread(), loadedClasses));
             }
           }
