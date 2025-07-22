@@ -178,7 +178,7 @@ public class CompilationHelper {
   }
 
   /**
-   * Parse the provided Java source code and locate the main method.
+   * Locate the main method in the provided compilation unit.
    *
    * @param compilationUnit parsed Java source code
    * @return the declaration node for the main method

@@ -9,7 +9,6 @@ import org.fusesource.jansi.AnsiConsole;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Optional;
 import java.util.Scanner;
 import java.util.stream.Stream;
@@ -21,6 +20,7 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 
 import cs1302.tracer.CompilationHelper.CompilationResult;
+import cs1302.tracer.trace.DebugTraceHelper;
 
 /**
  * Hello world!
@@ -89,6 +89,10 @@ public class App {
   public static Optional<CommandLine> getOptions(String[] args) {
     Options options = new Options();
 
+    // TODO add an option for restricting which classes/objects have their full set
+    // of fields dumped vs just a class fqn. would help declutter snapshots
+    // containing java builtins like scanner, stringbuilder, etc
+
     options.addOption(
         Option.builder("i")
             .longOpt("input")
@@ -106,7 +110,12 @@ public class App {
     options.addOption(
         Option.builder("b")
             .longOpt("breakpoint")
-            .desc("breakpoint at which to take a snapshot (defaults to after main if none are provided)")
+            .desc(
+                """
+                    breakpoint at which to take a snapshot. the snapshot taken will represent the
+                    state of memory immediately before this line is executed. multiple instances of
+                    this option can be provided. if none are provided, the default behavior is to
+                    take one snapshot at the end of the program's main method.""")
             .required(false)
             .hasArg()
             .build());
@@ -119,7 +128,7 @@ public class App {
     options.addOption(
         Option.builder("h")
             .longOpt("help")
-            .desc("print this help message")
+            .desc("print this help message and then exit")
             .required(false)
             .build());
 
