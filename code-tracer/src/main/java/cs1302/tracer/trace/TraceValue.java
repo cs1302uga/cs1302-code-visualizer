@@ -6,28 +6,54 @@ import com.sun.jdi.*;
 public sealed interface TraceValue {
 
   public static sealed interface Primitive extends TraceValue {
+    java.lang.String valueToString();
+
     public static final record Boolean(boolean value) implements Primitive {
+      public java.lang.String valueToString() {
+        return java.lang.String.valueOf(value);
+      }
     }
 
     public static final record Byte(byte value) implements Primitive {
+      public java.lang.String valueToString() {
+        return java.lang.String.valueOf(value);
+      }
     }
 
     public static final record Character(char value) implements Primitive {
+      public java.lang.String valueToString() {
+        return java.lang.String.valueOf(value);
+      }
     }
 
     public static final record Short(short value) implements Primitive {
+      public java.lang.String valueToString() {
+        return java.lang.String.valueOf(value);
+      }
     }
 
     public static final record Integer(int value) implements Primitive {
+      public java.lang.String valueToString() {
+        return java.lang.String.valueOf(value);
+      }
     }
 
     public static final record Long(long value) implements Primitive {
+      public java.lang.String valueToString() {
+        return java.lang.String.valueOf(value);
+      }
     }
 
     public static final record Float(float value) implements Primitive {
+      public java.lang.String valueToString() {
+        return java.lang.String.valueOf(value);
+      }
     }
 
     public static final record Double(double value) implements Primitive {
+      public java.lang.String valueToString() {
+        return java.lang.String.valueOf(value);
+      }
     }
 
     public static Primitive fromJdiPrimitive(PrimitiveValue primitiveValue) {

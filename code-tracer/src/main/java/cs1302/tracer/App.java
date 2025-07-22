@@ -9,6 +9,7 @@ import org.fusesource.jansi.AnsiConsole;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Scanner;
 import java.util.stream.Stream;
@@ -21,6 +22,8 @@ import org.apache.commons.cli.Option;
 
 import cs1302.tracer.CompilationHelper.CompilationResult;
 import cs1302.tracer.trace.DebugTraceHelper;
+import cs1302.tracer.trace.ExecutionSnapshot;
+import cs1302.tracer.serialize.PyTutorSerializer;
 
 /**
  * Hello world!
@@ -69,10 +72,13 @@ public class App {
       System.out.println(annotatedSource.toString());
     } else {
       String[] breakpoints = opts.getOptionValues("breakpoint");
-      if (breakpoints != null) {
-        System.out.println(DebugTraceHelper.trace(c, Stream.of(breakpoints).map(Integer::parseInt).toList()));
-      } else {
-        System.out.println(DebugTraceHelper.trace(c));
+      Map<Integer, ExecutionSnapshot> snapshot = switch (breakpoints) {
+        case null -> Map.of(-1, DebugTraceHelper.trace(c));
+        default -> DebugTraceHelper.trace(c, Stream.of(breakpoints).map(Integer::parseInt).toList());
+      };
+
+      for (ExecutionSnapshot s : snapshot.values()) {
+        System.out.println(PyTutorSerializer.serialize(source, s));
       }
     }
   }
