@@ -22,7 +22,6 @@ import tarfile
 from subprocess import CalledProcessError
 from pathlib import Path
 from halo import Halo as spinner
-from jdk.enums import Architecture
 from os import PathLike
 
 
@@ -42,14 +41,22 @@ cache_dir: Path = Path(
 
 
 def generate_trace(
-    java_home: Path, java_program: str, timeout_secs: float | None = None
+    java_home: Path,
+    java_program: str,
+    timeout_secs: float | None = None,
+    inline_strings: bool = True,
 ) -> str:
     return subprocess.check_output(
-        [
-            str(java_home / "bin" / "java"),
-            "-jar",
-            str(cache_dir / "code-tracer.jar"),
-        ],
+        (
+            [
+                str(java_home / "bin" / "java"),
+                "-jar",
+                str(cache_dir / "code-tracer.jar"),
+            ]
+            + ["-s"]
+            if inline_strings
+            else []
+        ),
         input=java_program,
         timeout=timeout_secs,
         text=True,
