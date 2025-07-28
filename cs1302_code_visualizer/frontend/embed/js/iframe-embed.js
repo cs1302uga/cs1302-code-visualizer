@@ -157,8 +157,6 @@ window.seleniumRunHook = function(dataFromBackend) {
 
   dataFromBackend = JSON.parse(dataFromBackend);
   var trace = dataFromBackend.trace;
-  // cut off any jvm cleanup after main returns
-  trace.length = trace.findIndex((t) => t.event === "return" && t.func_name === "main");
 
   // don't enter visualize mode if there are killer errors:
   if (!trace ||

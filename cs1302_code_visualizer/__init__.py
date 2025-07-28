@@ -18,8 +18,8 @@ def render_image(
     format: str = "PNG",
 ) -> bytes:
     """Visualize the state of a Java program just before exiting as an image.
-    java_source:  The Java 8 source code to visualize.
-    java_home:    A path to a JDK 8 installation home. If not provided, a JDK will be fetched
+    java_source:  The Java source code to visualize.
+    java_home:    A path to a JDK 21+ installation home. If not provided, a JDK will be fetched
                   automatically.
     timeout_secs: Maximum execution time for the Java source's trace generation, or no limit if
                   None.
@@ -31,20 +31,15 @@ def render_image(
 
     Note that exceptions may be raised if image generation fails.
     """
-    if java_home and not trace_generator.jdk8_exists(java_home):
-        raise FileNotFoundError(
-            f"Provided {java_home=} is not a valid JDK 8 installation."
-        )
-    elif not java_home:
-        java_home = trace_generator.install_jdk8()
+    if not (java_home and trace_generator.jdk_exists(java_home)):
+        java_home = trace_generator.ensure_jdk_installed()
 
-    trace_generator.compile_backend(java_home)
+    trace_generator.ensure_code_tracer_installed()
+
     trace = trace_generator.generate_trace(java_home, java_source, timeout_secs)
 
-    if (v := trace_generator.validate_trace(trace)) is not None:
-        raise Exception(v)
+    return browser_driver.generate_image(trace, dpi=dpi, format=format)
 
-    return browser_driver.generate_image(trace, dpi=dpi)
 
 def main() -> None:
     java_source: str = "".join(fileinput.input())

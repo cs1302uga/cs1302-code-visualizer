@@ -1,7 +1,0 @@
-*~
-*.class
-proc
-compile
-etc/resolv.conf
-lib
-princeton-Makefile
