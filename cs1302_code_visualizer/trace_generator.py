@@ -2,9 +2,6 @@
 
 import fileinput
 import socket
-import jdk
-import jdk.client
-import jdk.enums
 import json
 import shutil
 import tempfile
@@ -27,12 +24,6 @@ from os import PathLike
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-jdk_vendors: list[str] = [
-    vendor.removesuffix("Client").lower()
-    for vendor in dir(jdk.client)
-    if vendor.endswith("Client")
-]
-
 current_dir: Path = Path(os.path.dirname(__file__)).resolve()
 
 cache_dir: Path = Path(
@@ -45,17 +36,21 @@ def generate_trace(
     java_program: str,
     timeout_secs: float | None = None,
     inline_strings: bool = True,
+    breakpoints: set[int] = set(),
 ) -> str:
+    args = ["-s"] if inline_strings else []
+    for breakpoint in breakpoints:
+        args.extend(["-b", str(breakpoint)])
+
     return subprocess.check_output(
         (
             [
                 str(java_home / "bin" / "java"),
                 "-jar",
                 str(cache_dir / "code-tracer.jar"),
+                *(["-b", str(i)] for i in breakpoints),
             ]
-            + ["-s"]
-            if inline_strings
-            else []
+            + args
         ),
         input=java_program,
         timeout=timeout_secs,
