@@ -11,6 +11,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from io import BytesIO
 from PIL import Image
+from urllib.parse import urlencode
+from tempfile import NamedTemporaryFile
 
 this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
 
@@ -29,15 +31,15 @@ def generate_image(trace: str, *, dpi=1, format="PNG") -> bytes:
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument(f"--force-device-scale-factor={dpi}")
+    options.add_argument("--allow-file-access-from-files")
     driver = webdriver.Chrome(options=options)
     driver.implicitly_wait(2)  # only wait 2 secods for element to show up
-    driver.get(frontend_path)
 
-    driver.find_element(By.ID, "indicatorElement")
+    trace_file = NamedTemporaryFile()
+    with open(trace_file.name, "w") as f:
+        print(trace, file=f)
 
-    driver.execute_script(
-        "seleniumRunHook(String.raw`" + trace.replace("`", "${'`'}") + "`);"
-    )
+    driver.get(frontend_path + "?" + urlencode({"tracePath": trace_file.name}))
 
     viz = driver.find_element(By.ID, "dataViz")
     left, top = (viz.location["x"], viz.location["y"])
@@ -66,6 +68,7 @@ def generate_image(trace: str, *, dpi=1, format="PNG") -> bytes:
 
     screenshot = driver.get_screenshot_as_png()
     driver.quit()
+    trace_file.close()
 
     # crop the screenshot down to the element borders
     screenshot_bytes = BytesIO(screenshot)
