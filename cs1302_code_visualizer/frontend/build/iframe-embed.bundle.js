@@ -22131,7 +22131,7 @@ var AbstractBaseFrontend = /** @class */ (function () {
             appMode: $.bbq.getState('mode'),
             py: $.bbq.getState('py'),
             cumulative: $.bbq.getState('cumulative'),
-            heapPrimitives: $.bbq.getState('heapPrimitives'),
+            heapPrimitives: true,
             textReferences: $.bbq.getState('textReferences'),
             rawInputLst: ril ? $.parseJSON(ril) : undefined,
             demoMode: $.bbq.getState('demo'),
@@ -22150,15 +22150,14 @@ var AbstractBaseFrontend = /** @class */ (function () {
     };
     AbstractBaseFrontend.prototype.getBaseBackendOptionsObj = function () {
         var ret = { cumulative_mode: ($('#cumulativeModeSelector').val() == 'true'),
-            heap_primitives: ($('#heapPrimitivesSelector').val() == 'true'),
+            heap_primitives: true,
             show_only_outputs: false,
             origin: this.originFrontendJsFile };
         return ret;
     };
     AbstractBaseFrontend.prototype.getBaseFrontendOptionsObj = function () {
         var ret = {
-            disableHeapNesting: (($('#heapPrimitivesSelector').val() == 'true') ||
-                ($('#heapPrimitivesSelector').val() == 'nevernest')),
+            disableHeapNesting: true,
             textualMemoryLabels: ($('#textualMemoryLabelsSelector').val() == 'true'),
             executeCodeWithRawInputFunc: this.executeCodeWithRawInput.bind(this),
             // always use the same visualizer ID for all
@@ -22762,7 +22761,7 @@ var IframeEmbedFrontend = /** @class */ (function (_super) {
         var preseededCode = queryStrOptions.preseededCode;
         var pyState = queryStrOptions.py;
         var verticalStackBool = (queryStrOptions.verticalStack == 'true');
-        var heapPrimitivesBool = (queryStrOptions.heapPrimitives == 'true'); // note that it can be 'nevernest' as well
+        var heapPrimitivesBool = true; // note that it can be 'nevernest' as well
         var textRefsBool = (queryStrOptions.textReferences == 'true');
         var cumModeBool = (queryStrOptions.cumulative == 'true');
         var drawParentPointerBool = (queryStrOptions.drawParentPointers == 'true');
@@ -22782,13 +22781,13 @@ var IframeEmbedFrontend = /** @class */ (function (_super) {
         }
         // set up all options in a JS object
         var backendOptionsObj = { cumulative_mode: cumModeBool,
-            heap_primitives: heapPrimitivesBool,
+            heap_primitives: true,
             show_only_outputs: false,
             origin: this.originFrontendJsFile };
         var frontendOptionsObj = { startingInstruction: startingInstruction,
             embeddedMode: true,
             verticalStack: verticalStackBool,
-            disableHeapNesting: (heapPrimitivesBool || (queryStrOptions.heapPrimitives == 'nevernest')),
+            disableHeapNesting: true,
             drawParentPointers: drawParentPointerBool,
             textualMemoryLabels: textRefsBool,
             executeCodeWithRawInputFunc: this.executeCodeWithRawInput.bind(this),
