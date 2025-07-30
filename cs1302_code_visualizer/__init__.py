@@ -48,10 +48,10 @@ def render_images(
         java_home, java_source, timeout_secs, inline_strings, breakpoints
     )
 
-    traces: dict[int, dict] = json.loads(trace)
+    traces: dict[str, dict] = json.loads(trace)
     out = dict()
     for line in traces:
-        out[line] = browser_driver.generate_image(trace, dpi=dpi, format=format)
+        out[int(line)] = browser_driver.generate_image(json.dumps(traces[line]), dpi=dpi, format=format)
     return out
 
 
