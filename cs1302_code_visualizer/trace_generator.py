@@ -174,9 +174,9 @@ def ensure_code_tracer_installed(update_existing: bool = False):
     with tempfile.TemporaryFile() as temp_file:
         for chunk in resp.iter_content(2**8):
             temp_file.write(chunk)
-
-    with open(cache_dir / "code-tracer.jar", "wb") as jar_file:
-        shutil.copyfileobj(temp_file, jar_file)
+        temp_file.seek(0)
+        with open(cache_dir / "code-tracer.jar", "wb") as jar_file:
+            shutil.copyfileobj(temp_file, jar_file)
 
     with open(dl_info_path, "w") as dl_info_file:
         json.dump(dict(resp.headers), dl_info_file)
