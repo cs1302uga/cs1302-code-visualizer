@@ -16,7 +16,7 @@ def render_images(
     *,
     java_home: Path | None = None,
     timeout_secs: int | None = None,
-    dpi: int = 4,
+    dpi: int = 1,
     format: str = "PNG",
     inline_strings: bool = True,
 ) -> dict[int, bytes]:
@@ -60,7 +60,7 @@ def render_image(
     *,
     java_home: Path | None = None,
     timeout_secs: int | None = None,
-    dpi: int = 4,
+    dpi: int = 1,
     format: str = "PNG",
     inline_strings: bool = True,
 ) -> bytes:
