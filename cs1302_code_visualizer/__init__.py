@@ -19,21 +19,24 @@ def render_images(
     dpi: int = 1,
     format: str = "PNG",
     inline_strings: bool = True,
+    remove_main_args: bool = True,
 ) -> dict[int, bytes]:
     """Visualize the state of a Java program at given breakpoints.
-    java_source:    The Java source code to visualize.
-    breakpoints:    The source lines at which an execution snapshot should be taken. If a line is
-                    executed multiple times, the last execution is the one visualized. If a breakpoint
-                    cannot be created on a line, it will not be included in this function's output.
-    java_home:      A path to a JDK 21+ installation home. If not provided, a JDK will be fetched
-                    automatically.
-    timeout_secs:   Maximum execution time for the Java source's trace generation, or no limit if
-                    None.
-    dpi:            A positive, integer multiplicative factor for the output image's resolution.
-    format:         The image output format. This gets passed directly into PIL's Image.save() method,
-                    refer to that method's documentation for acceptable values.
-    inline_strings: True if strings should be inlined in the visualization, false if they should be
-                    rendered seperately on the heap.
+    java_source:      The Java source code to visualize.
+    breakpoints:      The source lines at which an execution snapshot should be taken. If a line is
+                      executed multiple times, the last execution is the one visualized. If a breakpoint
+                      cannot be created on a line, it will not be included in this function's output.
+    java_home:        A path to a JDK 21+ installation home. If not provided, a JDK will be fetched
+                      automatically.
+    timeout_secs:     Maximum execution time for the Java source's trace generation, or no limit if
+                      None.
+    dpi:              A positive, integer multiplicative factor for the output image's resolution.
+    format:           The image output format. This gets passed directly into PIL's Image.save() method,
+                      refer to that method's documentation for acceptable values.
+    inline_strings:   True if strings should be inlined in the visualization, false if they should be
+                      rendered seperately on the heap.
+    remove_main_args: False if the visualization should include the main method's `args` parameter,
+                      True otherwise
 
     out:            Mapping from breakpoint lines to visualization images.
 
@@ -45,7 +48,7 @@ def render_images(
     trace_generator.ensure_code_tracer_installed()
 
     trace = trace_generator.generate_trace(
-        java_home, java_source, timeout_secs, inline_strings, breakpoints
+        java_home, java_source, timeout_secs, inline_strings, remove_main_args, breakpoints
     )
 
     traces: dict[str, dict] = json.loads(trace)
@@ -63,18 +66,21 @@ def render_image(
     dpi: int = 1,
     format: str = "PNG",
     inline_strings: bool = True,
+    remove_main_args: bool = True,
 ) -> bytes:
     """Visualize the state of a Java program just before exiting as an image.
-    java_source:    The Java source code to visualize.
-    java_home:      A path to a JDK 21+ installation home. If not provided, a JDK will be fetched
-                    automatically.
-    timeout_secs:   Maximum execution time for the Java source's trace generation, or no limit if
-                    None.
-    dpi:            A positive, integer multiplicative factor for the output image's resolution.
-    format:         The image output format. This gets passed directly into PIL's Image.save() method,
-                    refer to that method's documentation for acceptable values.
-    inline_strings: True if strings should be inlined in the visualization, false if they should be
-                    rendered seperately on the heap.
+    java_source:      The Java source code to visualize.
+    java_home:        A path to a JDK 21+ installation home. If not provided, a JDK will be fetched
+                      automatically.
+    timeout_secs:     Maximum execution time for the Java source's trace generation, or no limit if
+                      None.
+    dpi:              A positive, integer multiplicative factor for the output image's resolution.
+    format:           The image output format. This gets passed directly into PIL's Image.save() method,
+                      refer to that method's documentation for acceptable values.
+    inline_strings:   True if strings should be inlined in the visualization, false if they should be
+                      rendered seperately on the heap.
+    remove_main_args: False if the visualization should include the main method's `args` parameter,
+                      True otherwise
 
     out:            Raw bytes of the visualization image.
 
@@ -86,7 +92,7 @@ def render_image(
     trace_generator.ensure_code_tracer_installed()
 
     trace = trace_generator.generate_trace(
-        java_home, java_source, timeout_secs, inline_strings
+        java_home, java_source, timeout_secs, inline_strings, remove_main_args
     )
 
     return browser_driver.generate_image(trace, dpi=dpi, format=format)

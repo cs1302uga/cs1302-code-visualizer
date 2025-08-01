@@ -19,7 +19,7 @@ import tarfile
 from subprocess import CalledProcessError
 from pathlib import Path
 from halo import Halo as spinner
-from os import PathLike
+from os import PathLike, remove
 
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -36,11 +36,14 @@ def generate_trace(
     java_program: str,
     timeout_secs: float | None = None,
     inline_strings: bool = True,
+    remove_main_args_parameter: bool = True,
     breakpoints: set[int] = set(),
 ) -> str:
     args = ["-s"] if inline_strings else []
     for breakpoint in breakpoints:
         args.extend(["-b", str(breakpoint)])
+    if remove_main_args_parameter:
+        args.append("--remove-main-args")
 
     return subprocess.check_output(
         (
