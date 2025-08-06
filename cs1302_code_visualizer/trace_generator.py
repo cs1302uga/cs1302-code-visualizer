@@ -113,9 +113,9 @@ def download_jdk():
                 toplevel_dir = zip.namelist()[0]
                 zip.extractall(cache_dir)
         else:
-            with tarfile.open(temp_file.name, mode="r:*") as tar:
+            with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
                 toplevel_dir = tar.getnames()[0]
-                tar.extractall(cache_dir, numeric_owner=True, filter='fully_trusted')
+                tar.extractall(cache_dir, numeric_owner=True, filter='tar')
 
     shutil.move(cache_dir / toplevel_dir, cache_dir / "jdk")
 
