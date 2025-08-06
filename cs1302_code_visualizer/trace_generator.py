@@ -27,7 +27,11 @@ logger: logging.Logger = logging.getLogger(__name__)
 current_dir: Path = Path(os.path.dirname(__file__)).resolve()
 
 cache_dir: Path = Path(
-    platformdirs.user_cache_dir("cs1302-code-visualizer", ensure_exists=True)
+    platformdirs.user_cache_dir(
+        "cs1302-code-visualizer", 
+        ensure_exists=True,
+        numeric_owner=True,
+    )
 )
 
 
