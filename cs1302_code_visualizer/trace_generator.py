@@ -30,7 +30,6 @@ cache_dir: Path = Path(
     platformdirs.user_cache_dir(
         "cs1302-code-visualizer", 
         ensure_exists=True,
-        numeric_owner=True,
     )
 )
 
@@ -116,7 +115,7 @@ def download_jdk():
         else:
             with tarfile.open(temp_file.name, mode="r:gz") as tar:
                 toplevel_dir = tar.getnames()[0]
-                tar.extractall(cache_dir)
+                tar.extractall(cache_dir, numeric_owner=True)
 
     shutil.move(cache_dir / toplevel_dir, cache_dir / "jdk")
 
