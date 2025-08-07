@@ -108,10 +108,14 @@ def download_jdk():
         with temp_file.file as f:
             for chunk in resp.iter_content(2**8):
                 f.write(chunk)
-        if os == "Windows":
+        if os == "windows":
             with zipfile.ZipFile(temp_file) as zip:
                 toplevel_dir = zip.namelist()[0]
                 zip.extractall(cache_dir)
+        elif os == "mac":
+            with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
+                toplevel_dir = Path(tar.getnames()[0]) / "Contents" / "Home"
+                tar.extractall(cache_dir, numeric_owner=True, filter='tar')
         else:
             with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
                 toplevel_dir = tar.getnames()[0]
