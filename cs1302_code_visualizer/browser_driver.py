@@ -54,7 +54,7 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
 
     driver.get(frontend_path + "?" + urlencode({"tracePath": trace_file.name}))
 
-    waitForViz = WebDriverWait(driver, timeout=4)
+    waitForViz = WebDriverWait(driver, timeout=10)
     waitForViz.until(EC.visibility_of_element_located((By.ID, "dataViz")))
 
     viz = driver.find_element(By.ID, "dataViz")
