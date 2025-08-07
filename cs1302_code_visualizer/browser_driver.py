@@ -27,7 +27,6 @@ logging.getLogger('selenium.webdriver.remote').setLevel(logging.DEBUG)
 logging.getLogger('selenium.webdriver.common').setLevel(logging.DEBUG)
 
 
-@cache
 def get_driver(dpi: int = 1) -> webdriver.Chrome:
     options = Options()
     options.add_argument("--headless=new")
