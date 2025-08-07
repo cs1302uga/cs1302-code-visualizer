@@ -4,7 +4,9 @@ import os
 import sys
 import fileinput
 import argparse
+import logging
 
+from functools import cache
 from pathlib import Path
 from selenium import webdriver
 from selenium.common import NoSuchElementException
@@ -19,6 +21,22 @@ from tempfile import NamedTemporaryFile
 this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
 
 
+logging.getLogger('selenium').setLevel(logging.DEBUG)
+logging.getLogger('selenium.webdriver.remote').setLevel(logging.DEBUG)
+logging.getLogger('selenium.webdriver.common').setLevel(logging.DEBUG)
+
+
+@cache
+def get_driver() -> webdriver.Chrome:
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument(f"--force-device-scale-factor={dpi}")
+    options.add_argument("--allow-file-access-from-files")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--verbose")
+    return webdriver.Chrome(options=options)
+
+
 def generate_image(trace: str, *, dpi=1, format="PNG") -> bytes:
     """Generate an image of the final state of an OnlinePythonTutor trace file.
     trace:  The OnlinePythonTutor execution trace.
@@ -29,14 +47,7 @@ def generate_image(trace: str, *, dpi=1, format="PNG") -> bytes:
     out:    Raw image bytes in the format specified by the format argument.
     """
     frontend_path = (this_files_dir / "frontend" / "iframe-embed.html").as_uri()
-
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument(f"--force-device-scale-factor={dpi}")
-    options.add_argument("--allow-file-access-from-files")
-    options.add_argument("--no-sandbox")
-
-    driver = webdriver.Chrome(options=options)
+    driver = get_driver()
 
     trace_file = NamedTemporaryFile()
     with open(trace_file.name, "w") as f:
