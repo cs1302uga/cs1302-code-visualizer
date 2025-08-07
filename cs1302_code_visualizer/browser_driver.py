@@ -54,6 +54,8 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
     with open(trace_file.name, "w") as f:
         print(trace, file=f)
 
+    print(f"{frontend_path=}", file=sys.stderr)
+
     driver.get(frontend_path + "?" + urlencode({"tracePath": trace_file.name}))
 
     # waitForViz = WebDriverWait(driver, timeout=10)
