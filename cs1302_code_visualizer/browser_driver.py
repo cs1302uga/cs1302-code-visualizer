@@ -7,6 +7,7 @@ import argparse
 
 from pathlib import Path
 from selenium import webdriver
+from selenium.common import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
@@ -45,7 +46,12 @@ def generate_image(trace: str, *, dpi=1, format="PNG") -> bytes:
 
     viz = driver.find_element(By.ID, "dataViz")
 
-    waitForViz = WebDriverWait(driver, timeout=4)
+    waitForViz = WebDriverWait(
+        driver,
+        timeout=4,
+        poll_frequency=0.2,
+        ignored_exceptions=[NoSuchElementException],
+    )
     waitForViz.until(lambda _ : viz.is_displayed())
 
     left, top = (viz.location["x"], viz.location["y"])
