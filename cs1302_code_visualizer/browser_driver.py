@@ -27,7 +27,7 @@ logging.getLogger('selenium.webdriver.common').setLevel(logging.DEBUG)
 
 
 @cache
-def get_driver() -> webdriver.Chrome:
+def get_driver(dpi: int = 1) -> webdriver.Chrome:
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument(f"--force-device-scale-factor={dpi}")
@@ -37,7 +37,7 @@ def get_driver() -> webdriver.Chrome:
     return webdriver.Chrome(options=options)
 
 
-def generate_image(trace: str, *, dpi=1, format="PNG") -> bytes:
+def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
     """Generate an image of the final state of an OnlinePythonTutor trace file.
     trace:  The OnlinePythonTutor execution trace.
     dpi:    Multiplicative factor for output image resolution (positive integer).
@@ -47,7 +47,7 @@ def generate_image(trace: str, *, dpi=1, format="PNG") -> bytes:
     out:    Raw image bytes in the format specified by the format argument.
     """
     frontend_path = (this_files_dir / "frontend" / "iframe-embed.html").as_uri()
-    driver = get_driver()
+    driver = get_driver(dpi=dpi)
 
     trace_file = NamedTemporaryFile()
     with open(trace_file.name, "w") as f:

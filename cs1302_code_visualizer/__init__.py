@@ -65,7 +65,7 @@ def render_image(
     timeout_secs: int | None = None,
     dpi: int = 1,
     format: str = "PNG",
-    inline_strings: bool = True,
+    inline_strings: bool = False,
     remove_main_args: bool = True,
 ) -> bytes:
     """Visualize the state of a Java program just before exiting as an image.
