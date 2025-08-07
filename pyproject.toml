@@ -1,6 +1,6 @@
 [project]
 name = "cs1302-code-visualizer"
-version = "0.1.17"
+version = "0.1.18"
 description = "Visualize Java program memory state and output a screenshot."
 authors = [
     {name = "Gabe Livengood", email = "timothy.livengood@uga.edu"},
@@ -12,7 +12,6 @@ maintainers = [
 license = "MIT"
 license-files = [
     "LICEN[CS]E*",
-    "cs1302_code_visualizer/backend/LICENSE",
     "cs1302_code_visualizer/frontend/LICENSE",
 ]
 readme = "README.md"
