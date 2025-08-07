@@ -33,7 +33,9 @@ def get_driver(dpi: int = 1) -> webdriver.Chrome:
     options.add_argument(f"--force-device-scale-factor={dpi}")
     options.add_argument("--allow-file-access-from-files")
     options.add_argument("--no-sandbox")
-    return webdriver.Chrome(options=options)
+    driver = webdriver.Chrome(options=options)
+    driver.implicitly_wait(10)
+    return driver
 
 
 def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
