@@ -33,7 +33,7 @@ def generate_image(trace: str, *, dpi=1, format="PNG") -> bytes:
     options.add_argument(f"--force-device-scale-factor={dpi}")
     options.add_argument("--allow-file-access-from-files")
     driver = webdriver.Chrome(options=options)
-    driver.implicitly_wait(2)  # only wait 2 secods for element to show up
+    driver.implicitly_wait(4)  # only wait 4 secods for element to show up
 
     trace_file = NamedTemporaryFile()
     with open(trace_file.name, "w") as f:
