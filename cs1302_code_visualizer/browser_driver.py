@@ -32,6 +32,7 @@ def get_driver(dpi: int = 1) -> webdriver.Chrome:
     options.add_argument("--headless=new")
     options.add_argument(f"--force-device-scale-factor={dpi}")
     options.add_argument("--allow-file-access-from-files")
+    options.add_argument("--no-sandbox")
     return webdriver.Chrome(options=options)
 
 
