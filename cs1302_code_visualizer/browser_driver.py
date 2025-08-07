@@ -34,7 +34,7 @@ def get_driver(dpi: int = 1) -> webdriver.Chrome:
     options.add_argument("--allow-file-access-from-files")
     options.add_argument("--no-sandbox")
     driver = webdriver.Chrome(options=options)
-    driver.implicitly_wait(10)
+    driver.implicitly_wait(2)
     return driver
 
 
