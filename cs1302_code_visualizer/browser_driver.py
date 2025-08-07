@@ -9,6 +9,7 @@ from pathlib import Path
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.wait import WebDriverWait
 from io import BytesIO
 from PIL import Image
 from urllib.parse import urlencode
@@ -32,6 +33,7 @@ def generate_image(trace: str, *, dpi=1, format="PNG") -> bytes:
     options.add_argument("--headless=new")
     options.add_argument(f"--force-device-scale-factor={dpi}")
     options.add_argument("--allow-file-access-from-files")
+    options.add_argument("--no-sandbox")
     driver = webdriver.Chrome(options=options)
     driver.implicitly_wait(4)  # only wait 4 secods for element to show up
 
@@ -42,6 +44,10 @@ def generate_image(trace: str, *, dpi=1, format="PNG") -> bytes:
     driver.get(frontend_path + "?" + urlencode({"tracePath": trace_file.name}))
 
     viz = driver.find_element(By.ID, "dataViz")
+
+    waitForViz = WebDriverWait(driver, timeout=4)
+    waitForViz.until(lambda _ : viz.is_displayed())
+
     left, top = (viz.location["x"], viz.location["y"])
     right, bottom = (left + viz.size["width"], top + viz.size["height"])
 
