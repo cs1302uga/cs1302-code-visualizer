@@ -654,9 +654,7 @@ var ExecutionVisualizer = /** @class */ (function () {
         // ALWAYS use these and never use raw $(__) or d3.select(__)
         this.domRoot = tmpRoot.find('div.ExecutionVisualizer');
         this.domRootD3 = tmpRootD3.select('div.ExecutionVisualizer');
-        if (this.params.lang === 'java') {
-            this.activateJavaFrontend(); // ohhhh yeah! do this before initializing codeOutputLines (ugh order dependency)
-        }
+        this.activateJavaFrontend(); // ohhhh yeah! do this before initializing codeOutputLines (ugh order dependency)
         var lines = this.curInputCode.split('\n');
         for (var i = 0; i < lines.length; i++) {
             var cod = lines[i];
