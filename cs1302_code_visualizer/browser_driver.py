@@ -85,6 +85,17 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
     left, top = (viz.location["x"], viz.location["y"])
     right, bottom = (left + viz.size["width"], top + viz.size["height"])
 
+    # tidy up String instances by removing the empty column that is usually
+    # used to show an object's instance variable names.
+    driver.execute_script(
+        """
+        Array
+            .from(document.querySelectorAll("#dataViz .heapObject"))
+            .filter((element) => element.querySelector(".typeLabel").textContent.includes("String instance"))
+            .forEach((element) => element.querySelector(".instKey").remove());
+        """
+    )
+
     screenshot = driver.get_screenshot_as_png()
     driver.quit()
     trace_file.close()
