@@ -39,7 +39,7 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
         The webdriver used to display the frontend.
     """
     options = Options()
-    options.add_experimental_option("detach", True)
+    # options.add_experimental_option("detach", True)
     options.add_argument("--headless=new")
     options.add_argument(f"--force-device-scale-factor={dpi}")
     options.add_argument("--allow-file-access-from-files")
