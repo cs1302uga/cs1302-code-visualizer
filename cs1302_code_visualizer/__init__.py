@@ -100,5 +100,5 @@ def render_image(
 
 def main() -> None:
     java_source: str = "".join(fileinput.input())
-    rendered_image: bytes = render_image(java_source)
+    rendered_image: bytes = render_image(java_source, dpi=1)
     stdout.buffer.write(rendered_image)

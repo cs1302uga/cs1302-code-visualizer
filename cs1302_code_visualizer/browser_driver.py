@@ -19,6 +19,7 @@ from PIL import Image
 from urllib.parse import urlencode
 from tempfile import NamedTemporaryFile
 
+
 this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
 
 
@@ -27,9 +28,17 @@ logging.getLogger('selenium.webdriver.remote').setLevel(logging.DEBUG)
 logging.getLogger('selenium.webdriver.common').setLevel(logging.DEBUG)
 
 
-def get_driver(dpi: int = 1) -> webdriver.Chrome:
+def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
+    """Get the webdriver used to display the frontend.
+
+    Args:
+        dpi: Dots Per Inch (DPI), a positive integer used to scale the driver's display resolution.
+
+    Return:
+        The webdriver used to display the frontend.
+    """
     options = Options()
-    options.add_argument("--headless=new")
+    #options.add_argument("--headless=new")
     options.add_argument(f"--force-device-scale-factor={dpi}")
     options.add_argument("--allow-file-access-from-files")
     options.add_argument("--no-sandbox")
@@ -37,18 +46,57 @@ def get_driver(dpi: int = 1) -> webdriver.Chrome:
     driver.implicitly_wait(2)
     return driver
 
+def tidy_set_font(driver: webdriver.Chrome) -> None:
+    """Set the font used by the data visualization."""
+    driver.execute_script(
+        """
+        document.head.insertAdjacentHTML(
+            'beforeend',
+            `
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link href="https://fonts.googleapis.com/css2?family=Recursive:slnt,wght,CASL,CRSV,MONO@-15..0,300..1000,0..1,0..1,0..1&display=swap" rel="stylesheet">
+            <style>
+                #dataViz, #dataViz * {
+                    font-family: "Recursive", monospace;
+                    font-variation-settings: "MONO" 1;
+                    font-optical-sizing: auto;
+                    font-smooth: auto;
+                    -webkit-font-smoothing: auto;
+                }
+            </style>
+            `
+        );
+        """
+    )
+
+def tidy_string_objects(driver: webdriver.Chrome) -> None:
+    """Tidy up String instances by removing their instance variable identifiers."""
+    driver.execute_script(
+        """
+        Array
+            .from(document.querySelectorAll("#dataViz .heapObject"))
+            .filter((element) => element.querySelector(".typeLabel").textContent.includes("String instance"))
+            .forEach((element) => element.querySelector(".instKey").remove());
+        """
+    )
 
 def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
-    """Generate an image of the final state of an OnlinePythonTutor trace file.
-    trace:  The OnlinePythonTutor execution trace.
-    dpi:    Multiplicative factor for output image resolution (positive integer).
-    format: The image output format. This gets passed directly into PIL's Image.save(),
-            see that function's docs for details on acceptable values.
+    """Generate an image of the final state of an execution trace file.
 
-    out:    Raw image bytes in the format specified by the format argument.
+    The trace file is expected to be formatted using JSON as specified by OnlinePythonTutor.
+
+    Args:
+        trace: The execution trace file.
+        dpi: Dots Per Inch (DPI), a positive integer used to scale the driver's display resolution.
+        format: The image output format. This gets passed directly into PIL's ``Image.save()``.
+
+    Return:
+        The bytes of the generated image in the format specified by the ``format`` argument.
+
     """
     frontend_path = (this_files_dir / "frontend" / "iframe-embed.html").as_uri()
-    driver = get_driver(dpi=dpi)
+    driver = get_webdriver(dpi)
 
     trace_file = NamedTemporaryFile()
     with open(trace_file.name, "w") as f:
@@ -56,10 +104,10 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
 
     driver.get(frontend_path + "?" + urlencode({"tracePath": trace_file.name}))
 
-    # waitForViz = WebDriverWait(driver, timeout=10)
-    # waitForViz.until(EC.presence_of_element_located((By.ID, "dataViz")))
-
     viz = driver.find_element(By.ID, "dataViz")
+
+    tidy_set_font(driver)
+    tidy_string_objects(driver)
 
     left, top = (viz.location["x"], viz.location["y"])
     right, bottom = (left + viz.size["width"], top + viz.size["height"])
@@ -85,16 +133,6 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
     left, top = (viz.location["x"], viz.location["y"])
     right, bottom = (left + viz.size["width"], top + viz.size["height"])
 
-    # tidy up String instances by removing the empty column that is usually
-    # used to show an object's instance variable names.
-    driver.execute_script(
-        """
-        Array
-            .from(document.querySelectorAll("#dataViz .heapObject"))
-            .filter((element) => element.querySelector(".typeLabel").textContent.includes("String instance"))
-            .forEach((element) => element.querySelector(".instKey").remove());
-        """
-    )
 
     screenshot = driver.get_screenshot_as_png()
     driver.quit()
@@ -105,7 +143,11 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
     pil_img = Image.open(BytesIO(screenshot)).crop(
         tuple(dpi * x for x in [left, top, right, bottom])
     )
-    pil_img.save(screenshot_bytes, format=format)
+    pil_img.save(
+        screenshot_bytes,
+        format=format,
+        dpi=(300, 300),
+    )
 
     return screenshot_bytes.getvalue()
 
