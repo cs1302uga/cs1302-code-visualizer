@@ -217,7 +217,7 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
 
     """
 
-    print(f"#dataViz.outerHTML={generate_html(trace, dpi=dpi)}", file=sys.stderr)
+    # print(f"#dataViz.outerHTML={generate_html(trace, dpi=dpi)}", file=sys.stderr)
 
     with online_python_tutor_frontend(trace, dpi=dpi) as frontend:
 
