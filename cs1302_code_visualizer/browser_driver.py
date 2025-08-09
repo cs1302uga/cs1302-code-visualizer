@@ -12,6 +12,7 @@ from selenium import webdriver
 from selenium.common import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from io import BytesIO
@@ -38,13 +39,36 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
         The webdriver used to display the frontend.
     """
     options = Options()
+    options.add_experimental_option("detach", True)
     options.add_argument("--headless=new")
     options.add_argument(f"--force-device-scale-factor={dpi}")
     options.add_argument("--allow-file-access-from-files")
     options.add_argument("--no-sandbox")
     driver = webdriver.Chrome(options=options)
-    driver.implicitly_wait(2)
+    driver.implicitly_wait(4)
     return driver
+
+
+def tidy_set_window_size_for_element(driver: webdriver.Chrome, element: WebElement) -> None:
+    """Set the driver's window size for the target element."""
+    driver.set_window_size(
+        element.location["x"] + element.size["width"],
+        element.location["y"] + element.size["height"],
+    )
+    window_size: dict[str, int] = driver.get_window_size()
+    client_size: dict[str, int] = {
+        "width": driver.execute_script("return document.documentElement.clientWidth;"),
+        "height": driver.execute_script("return document.documentElement.clientHeight;"),
+    }
+    offset_size: dict[str, int] = {
+        "width": window_size["width"] - client_size["width"],
+        "height": window_size["height"] - client_size["height"],
+    }
+    driver.set_window_size(
+        element.location["x"] + element.size["width"] + offset_size["width"],
+        element.location["y"] + element.size["height"] + offset_size["height"],
+    )
+
 
 def tidy_set_font(driver: webdriver.Chrome) -> None:
     """Set the font used by the data visualization."""
@@ -55,7 +79,12 @@ def tidy_set_font(driver: webdriver.Chrome) -> None:
             `
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-            <link href="https://fonts.googleapis.com/css2?family=Recursive:slnt,wght,CASL,CRSV,MONO@-15..0,300..1000,0..1,0..1,0..1&display=swap" rel="stylesheet">
+            <link href="https://fonts.googleapis.com/css2?family=Recursive:wght,CRSV,MONO@300..1000,0,1&display=swap" rel="stylesheet">
+            `
+        );
+        document.head.insertAdjacentHTML(
+            'beforeend',
+            `
             <style>
                 #dataViz, #dataViz * {
                     font-family: "Recursive", monospace;
@@ -64,9 +93,13 @@ def tidy_set_font(driver: webdriver.Chrome) -> None:
                     font-smooth: auto;
                     -webkit-font-smoothing: auto;
                 }
+                #dataViz .typeLabel {
+                    width: max-content;
+                }
             </style>
             `
         );
+        document.querySelector("#dataViz").style.fontFamily = "Recursive";
         """
     )
 
@@ -81,7 +114,7 @@ def tidy_string_objects(driver: webdriver.Chrome) -> None:
         """
     )
 
-def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
+def generate_image(trace: str, *, dpi: float = 1, format: str ="PNG") -> bytes:
     """Generate an image of the final state of an execution trace file.
 
     The trace file is expected to be formatted using JSON as specified by OnlinePythonTutor.
@@ -104,39 +137,39 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
 
     driver.get(frontend_path + "?" + urlencode({"tracePath": trace_file.name}))
 
+    tidy_set_font(driver)
+
     viz = driver.find_element(By.ID, "dataViz")
 
-    tidy_set_font(driver)
-    tidy_string_objects(driver)
 
-    left, top = (viz.location["x"], viz.location["y"])
-    right, bottom = (left + viz.size["width"], top + viz.size["height"])
+
+
+    # left, top = (viz.location["x"], viz.location["y"])
+    # right, bottom = (left + viz.size["width"] * dpi, top + viz.size["height"] * dpi)
 
     # resize the window so it contains the dataViz component
-    driver.set_window_size(max(right, 1280), max(bottom, 720))
+    # driver.set_window_size(right, bottom)
 
     # resize again to get rid of the scrollbar (if one exists)
-    client_width: int = driver.execute_script(
-        "return document.documentElement.clientWidth;"
-    )
-    client_height: int = driver.execute_script(
-        "return document.documentElement.clientHeight;"
-    )
-    window_width = driver.get_window_size()["width"]
-    window_height = driver.get_window_size()["height"]
-    width_offset = window_width - client_width
-    height_offset = window_height - client_height
-    driver.set_window_size(
-        max(right + width_offset, 1280), max(bottom + height_offset, 720)
+
+    # driver.set_window_size(
+    #     right + width_offset, bottom + height_offset
+    # )
+
+    # left, top = (viz.location["x"], viz.location["y"])
+    # right, bottom = (left + viz.size["width"] * dpi, top + viz.size["height"] * dpi)
+
+    (left, top, right, bottom) = (
+        viz.location["x"],
+        viz.location["y"],
+        viz.location["x"] + viz.size["width"],
+        viz.location["y"] + viz.size["height"],
     )
 
-    left, top = (viz.location["x"], viz.location["y"])
-    right, bottom = (left + viz.size["width"], top + viz.size["height"])
-
+    tidy_set_window_size_for_element(driver, viz)
+    tidy_string_objects(driver)
 
     screenshot = driver.get_screenshot_as_png()
-    driver.quit()
-    trace_file.close()
 
     # crop the screenshot down to the element borders
     screenshot_bytes = BytesIO(screenshot)
@@ -146,8 +179,11 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
     pil_img.save(
         screenshot_bytes,
         format=format,
-        dpi=(300, 300),
+        dpi=(dpi*100, dpi*100),
     )
+
+    driver.quit()
+    trace_file.close()
 
     return screenshot_bytes.getvalue()
 
