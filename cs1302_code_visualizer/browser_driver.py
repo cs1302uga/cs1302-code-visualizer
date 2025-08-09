@@ -6,19 +6,18 @@ import fileinput
 import argparse
 import logging
 
-from functools import cache
+from textwrap import dedent, indent
+from contextlib import contextmanager
 from pathlib import Path
+from typing import TypedDict
 from selenium import webdriver
-from selenium.common import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.wait import WebDriverWait
 from io import BytesIO
 from PIL import Image
 from urllib.parse import urlencode
-from tempfile import NamedTemporaryFile
+from tempfile import _TemporaryFileWrapper, NamedTemporaryFile, TemporaryFile
 
 
 this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
@@ -114,7 +113,96 @@ def tidy_string_objects(driver: webdriver.Chrome) -> None:
         """
     )
 
-def generate_image(trace: str, *, dpi: float = 1, format: str ="PNG") -> bytes:
+class OnlinePythonTutor(TypedDict):
+    driver: webdriver.Chrome
+    vizDiv: WebElement
+    dataViz: WebElement
+    traceFile: _TemporaryFileWrapper
+
+@contextmanager
+def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
+    """TODO."""
+    frontend_path = (this_files_dir / "frontend" / "iframe-embed.html").as_uri()
+    driver = get_webdriver(dpi)
+    trace_file = NamedTemporaryFile()
+
+    with open(trace_file.name, "w") as f:
+        print(trace, file=f)
+
+    frontend_query: dict = {
+        "tracePath": trace_file.name,
+    }
+
+    frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
+
+    # from pprint import pformat
+    # print(f"{trace=}", file=sys.stderr)
+    # print(f"frontend_query={pformat(frontend_query)}", file=sys.stderr)
+    # print(f"{frontend_uri=}", file=sys.stderr)
+
+    driver.get(frontend_uri)
+    tidy_set_font(driver)
+
+    vizDiv = driver.find_element(By.ID, "vizDiv")
+    dataViz = driver.find_element(By.ID, "dataViz")
+
+    driver.execute_script(
+        """
+        // remove displayed code
+        document.querySelector("#vizDiv .visualizer .vizLayoutTd").remove();
+        """
+    )
+
+    tidy_set_window_size_for_element(driver, dataViz);
+    tidy_string_objects(driver)
+
+    #print(f"#dataViz.innerHTML={dataViz.get_attribute('innerHTML')}", file=sys.stderr)
+
+    frontend: OnlinePythonTutor = OnlinePythonTutor(
+        driver=driver,
+        vizDiv=vizDiv,
+        dataViz=dataViz,
+    )
+
+    try:
+        yield frontend
+    finally:
+        driver.quit()
+        trace_file.close()
+
+def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> str:
+    """Generate HTML depicting the final state of an execution trace file.
+
+    The trace file is expected to be formatted using JSON as specified by OnlinePythonTutor.
+
+    Args:
+        trace: The execution trace file.
+        dpi: Dots Per Inch (DPI), a positive integer used to scale the driver's display resolution.
+        include_style: If True, prefix the output with a style tag that contains some default CSS.
+
+    Return:
+        The bytes of the generated image in the format specified by the ``format`` argument.
+
+    """
+    # TODO: implement include_style
+    with online_python_tutor_frontend(trace, dpi=dpi) as frontend:
+        dataViz: str | None = frontend["dataViz"].get_attribute('outerHTML')
+        if dataViz:
+            return dedent(f"""
+            <div id="vizDiv">
+                <div class="ExecutionVisualizer">
+                    <div class="visualizer">
+                        <div class="vizLayoutTd" id="vizLayoutTdSecond">
+                            {indent(dataViz," " * 4 * 5)}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """)
+        else:
+            raise Exception("unable to generate an HTML visualization for this trace")
+
+def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
     """Generate an image of the final state of an execution trace file.
 
     The trace file is expected to be formatted using JSON as specified by OnlinePythonTutor.
@@ -128,64 +216,35 @@ def generate_image(trace: str, *, dpi: float = 1, format: str ="PNG") -> bytes:
         The bytes of the generated image in the format specified by the ``format`` argument.
 
     """
-    frontend_path = (this_files_dir / "frontend" / "iframe-embed.html").as_uri()
-    driver = get_webdriver(dpi)
 
-    trace_file = NamedTemporaryFile()
-    with open(trace_file.name, "w") as f:
-        print(trace, file=f)
+    print(f"#dataViz.outerHTML={generate_html(trace, dpi=dpi)}", file=sys.stderr)
 
-    driver.get(frontend_path + "?" + urlencode({"tracePath": trace_file.name}))
+    with online_python_tutor_frontend(trace, dpi=dpi) as frontend:
 
-    tidy_set_font(driver)
+        driver: webdriver.Chrome = frontend["driver"]
+        viz: WebElement = frontend["dataViz"]
 
-    viz = driver.find_element(By.ID, "dataViz")
+        (left, top, right, bottom) = (
+            viz.location["x"],
+            viz.location["y"],
+            viz.location["x"] + viz.size["width"],
+            viz.location["y"] + viz.size["height"],
+        )
 
+        screenshot = driver.get_screenshot_as_png()
 
+        # crop the screenshot down to the element borders
+        screenshot_bytes = BytesIO(screenshot)
+        pil_img = Image.open(BytesIO(screenshot)).crop(
+            tuple(dpi * x for x in [left, top, right, bottom])
+        )
+        pil_img.save(
+            screenshot_bytes,
+            format=format,
+            dpi=(dpi * 100, dpi * 100),
+        )
 
-
-    # left, top = (viz.location["x"], viz.location["y"])
-    # right, bottom = (left + viz.size["width"] * dpi, top + viz.size["height"] * dpi)
-
-    # resize the window so it contains the dataViz component
-    # driver.set_window_size(right, bottom)
-
-    # resize again to get rid of the scrollbar (if one exists)
-
-    # driver.set_window_size(
-    #     right + width_offset, bottom + height_offset
-    # )
-
-    # left, top = (viz.location["x"], viz.location["y"])
-    # right, bottom = (left + viz.size["width"] * dpi, top + viz.size["height"] * dpi)
-
-    (left, top, right, bottom) = (
-        viz.location["x"],
-        viz.location["y"],
-        viz.location["x"] + viz.size["width"],
-        viz.location["y"] + viz.size["height"],
-    )
-
-    tidy_set_window_size_for_element(driver, viz)
-    tidy_string_objects(driver)
-
-    screenshot = driver.get_screenshot_as_png()
-
-    # crop the screenshot down to the element borders
-    screenshot_bytes = BytesIO(screenshot)
-    pil_img = Image.open(BytesIO(screenshot)).crop(
-        tuple(dpi * x for x in [left, top, right, bottom])
-    )
-    pil_img.save(
-        screenshot_bytes,
-        format=format,
-        dpi=(dpi*100, dpi*100),
-    )
-
-    driver.quit()
-    trace_file.close()
-
-    return screenshot_bytes.getvalue()
+        return screenshot_bytes.getvalue()
 
 
 def main():
