@@ -44,6 +44,7 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
     options.add_argument("--allow-file-access-from-files")
     options.add_argument("--no-sandbox")
     options.add_argument("start-maximized")
+    options.add_argument("--hide-scrollbars")
     driver = webdriver.Chrome(options=options)
     driver.implicitly_wait(4)
     return driver
