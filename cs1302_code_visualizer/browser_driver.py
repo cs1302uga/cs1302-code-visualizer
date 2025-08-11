@@ -102,20 +102,20 @@ def tidy_set_font(driver: webdriver.Chrome) -> None:
             'beforeend',
             `
             <style>
-                #dataViz, #dataViz * {
+                #vizDiv, #vizDiv * {
                     font-family: "Recursive", monospace;
                     font-variation-settings: "MONO" 1;
                     font-optical-sizing: auto;
                     font-smooth: auto;
                     -webkit-font-smoothing: auto;
                 }
-                #dataViz .typeLabel {
+                #vizDiv .typeLabel {
                     width: max-content;
                 }
             </style>
             `
         );
-        document.querySelector("#dataViz").style.fontFamily = "Recursive";
+        document.querySelector("#vizDiv").style.fontFamily = "Recursive";
         """
     )
 
