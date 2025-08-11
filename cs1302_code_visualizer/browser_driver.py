@@ -43,6 +43,7 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
     options.add_argument(f"--force-device-scale-factor={dpi}")
     options.add_argument("--allow-file-access-from-files")
     options.add_argument("--no-sandbox")
+    options.add_argument("start-maximized")
     driver = webdriver.Chrome(options=options)
     driver.implicitly_wait(4)
     return driver
@@ -69,13 +70,20 @@ def tidy_set_window_size_for_element(driver: webdriver.Chrome, element: WebEleme
     print("client_size", pformat(client_size), file=sys.stderr)
     print("offset_size", pformat(offset_size), file=sys.stderr)
 
-    width = element.location["x"] + element.size["width"] + offset_size["width"]
-    height = element.location["y"] + element.size["height"] + offset_size["height"]
+    new_width = max(
+        element.location["x"] + element.size["width"],
+        element.location["x"] + element.size["width"] + offset_size["width"],
+    )
+
+    new_height = max(
+        element.location["y"] + element.size["height"],
+        element.location["y"] + element.size["height"] + offset_size["height"]
+    )
 
     print(f"{element.location['x']=}", f"{element.location['y']=}", file=sys.stderr)
-    print(f"{width=}", f"{height=}", file=sys.stderr)
+    print(f"{new_width=}", f"{new_height=}", file=sys.stderr)
 
-    driver.set_window_size(width, height)
+    driver.set_window_size(new_width, new_height)
 
 def tidy_set_font(driver: webdriver.Chrome) -> None:
     """Set the font used by the data visualization."""
