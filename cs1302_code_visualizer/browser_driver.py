@@ -38,10 +38,7 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
         The webdriver used to display the frontend.
     """
     options = Options()
-
-    if "GITHUB_ACTIONS" not in os.environ:
-        options.add_argument("--headless=new")
-
+    options.add_argument("--headless=new")
     options.add_argument(f"--force-device-scale-factor={dpi}")
     options.add_argument("--allow-file-access-from-files")
     options.add_argument("--no-sandbox")
@@ -81,7 +78,7 @@ def tidy_set_window_size_for_element(driver: webdriver.Chrome, element: WebEleme
     new_height = max(
         element.location["y"] + element.size["height"],
         element.location["y"] + element.size["height"] + offset_size["height"]
-    )
+    ) + 20
 
     print(f"{element.location['x']=}", f"{element.location['y']=}", file=sys.stderr)
     print(f"{new_width=}", f"{new_height=}", file=sys.stderr)
