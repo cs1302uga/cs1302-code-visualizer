@@ -63,11 +63,19 @@ def tidy_set_window_size_for_element(driver: webdriver.Chrome, element: WebEleme
         "width": window_size["width"] - client_size["width"],
         "height": window_size["height"] - client_size["height"],
     }
-    driver.set_window_size(
-        element.location["x"] + element.size["width"] + offset_size["width"],
-        element.location["y"] + element.size["height"] + offset_size["height"],
-    )
+    from pprint import pformat
 
+    print("window_size", pformat(window_size), file=sys.stderr)
+    print("client_size", pformat(client_size), file=sys.stderr)
+    print("offset_size", pformat(offset_size), file=sys.stderr)
+
+    width = element.location["x"] + element.size["width"] + offset_size["width"]
+    height = element.location["y"] + element.size["height"] + offset_size["height"]
+
+    print(f"{element.location['x']=}", f"{element.location['y']=}", file=sys.stderr)
+    print(f"{width=}", f"{height=}", file=sys.stderr)
+
+    driver.set_window_size(width, height)
 
 def tidy_set_font(driver: webdriver.Chrome) -> None:
     """Set the font used by the data visualization."""
