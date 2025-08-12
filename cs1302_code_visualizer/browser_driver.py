@@ -14,6 +14,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.support.ui import WebDriverWait
 from io import BytesIO
 from PIL import Image
 from urllib.parse import urlencode
@@ -28,6 +29,9 @@ logging.getLogger('selenium.webdriver.remote').setLevel(logging.DEBUG)
 logging.getLogger('selenium.webdriver.common').setLevel(logging.DEBUG)
 
 
+DEBUG_MODE: bool = False
+
+
 def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
     """Get the webdriver used to display the frontend.
 
@@ -38,12 +42,20 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
         The webdriver used to display the frontend.
     """
     options = Options()
-    options.add_argument("--headless=new")
+
+    if DEBUG_MODE:
+        options.add_experimental_option("detach", True)
+    else:
+        options.add_argument("--headless=new")
+
     options.add_argument(f"--force-device-scale-factor={dpi}")
     options.add_argument("--allow-file-access-from-files")
     options.add_argument("--no-sandbox")
     options.add_argument("start-maximized")
     options.add_argument("--hide-scrollbars")
+    options.add_argument("--screen-info={1920x1080}")
+    options.add_argument("--window-size=1920,1080")
+
     driver = webdriver.Chrome(options=options)
     driver.implicitly_wait(4)
     return driver
@@ -51,39 +63,62 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
 
 def tidy_set_window_size_for_element(driver: webdriver.Chrome, element: WebElement) -> None:
     """Set the driver's window size for the target element."""
+
     driver.set_window_size(
         element.location["x"] + element.size["width"],
         element.location["y"] + element.size["height"],
     )
+
     window_size: dict[str, int] = driver.get_window_size()
+
+    bounds_size: dict[str, int] = {
+        "width": driver.execute_script("return document.documentElement.getBoundingClientRect().width;"),
+        "height": driver.execute_script("return document.documentElement.getBoundingClientRect().height;"),
+    }
+
     client_size: dict[str, int] = {
         "width": driver.execute_script("return document.documentElement.clientWidth;"),
         "height": driver.execute_script("return document.documentElement.clientHeight;"),
     }
+
     offset_size: dict[str, int] = {
         "width": window_size["width"] - client_size["width"],
         "height": window_size["height"] - client_size["height"],
     }
+
     from pprint import pformat
 
     print("window_size", pformat(window_size), file=sys.stderr)
+    print("bounds_size", pformat(bounds_size), file=sys.stderr)
     print("client_size", pformat(client_size), file=sys.stderr)
     print("offset_size", pformat(offset_size), file=sys.stderr)
 
     new_width = max(
         element.location["x"] + element.size["width"],
         element.location["x"] + element.size["width"] + offset_size["width"],
-    )
+    ) # + 50
 
     new_height = max(
         element.location["y"] + element.size["height"],
         element.location["y"] + element.size["height"] + offset_size["height"]
-    ) + 20
+    ) # + 50
 
-    print(f"{element.location['x']=}", f"{element.location['y']=}", file=sys.stderr)
+    print(
+        f"{element.location['x']=}",
+        f"{element.size['width']=}",
+        file=sys.stderr,
+    )
+
+    print(
+        f"{element.location['y']=}",
+        f"{element.size['height']=}",
+        file=sys.stderr,
+    )
+
     print(f"{new_width=}", f"{new_height=}", file=sys.stderr)
 
     driver.set_window_size(new_width, new_height)
+
 
 def tidy_set_font(driver: webdriver.Chrome) -> None:
     """Set the font used by the data visualization."""
@@ -101,6 +136,9 @@ def tidy_set_font(driver: webdriver.Chrome) -> None:
             'beforeend',
             `
             <style>
+                div.ExecutionVisualizer {
+                    padding: 0!important;
+                }
                 #vizDiv, #vizDiv * {
                     font-family: "Recursive", monospace;
                     font-variation-settings: "MONO" 1;
@@ -134,6 +172,7 @@ class OnlinePythonTutor(TypedDict):
     vizDiv: WebElement
     dataViz: WebElement
     traceFile: _TemporaryFileWrapper
+    wait: WebDriverWait
 
 @contextmanager
 def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
@@ -141,6 +180,7 @@ def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
     frontend_path = (this_files_dir / "frontend" / "iframe-embed.html").as_uri()
     driver = get_webdriver(dpi)
     trace_file = NamedTemporaryFile()
+    wait = WebDriverWait(driver, 10)
 
     with open(trace_file.name, "w") as f:
         print(trace, file=f)
@@ -157,6 +197,7 @@ def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
     # print(f"{frontend_uri=}", file=sys.stderr)
 
     driver.get(frontend_uri)
+
     tidy_set_font(driver)
 
     vizDiv = driver.find_element(By.ID, "vizDiv")
@@ -169,7 +210,7 @@ def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
         """
     )
 
-    tidy_set_window_size_for_element(driver, dataViz);
+    driver.fullscreen_window()
     tidy_string_objects(driver)
 
     #print(f"#dataViz.innerHTML={dataViz.get_attribute('innerHTML')}", file=sys.stderr)
@@ -178,13 +219,15 @@ def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
         driver=driver,
         vizDiv=vizDiv,
         dataViz=dataViz,
+        wait=wait,
     )
 
     try:
         yield frontend
     finally:
-        driver.quit()
         trace_file.close()
+        if not DEBUG_MODE:
+            driver.quit()
 
 def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> str:
     """Generate HTML depicting the final state of an execution trace file.
@@ -251,13 +294,15 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
 
         # crop the screenshot down to the element borders
         screenshot_bytes = BytesIO(screenshot)
-        pil_img = Image.open(BytesIO(screenshot)).crop(
+        pil_img = Image.open(BytesIO(screenshot))
+
+        pil_img = pil_img.crop(
             tuple(dpi * x for x in [left, top, right, bottom])
         )
+
         pil_img.save(
             screenshot_bytes,
             format=format,
-            dpi=(dpi * 100, dpi * 100),
         )
 
         return screenshot_bytes.getvalue()
