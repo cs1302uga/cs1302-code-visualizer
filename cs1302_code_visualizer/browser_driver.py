@@ -29,7 +29,7 @@ logging.getLogger('selenium.webdriver.remote').setLevel(logging.DEBUG)
 logging.getLogger('selenium.webdriver.common').setLevel(logging.DEBUG)
 
 
-DEBUG_MODE: bool = True
+DEBUG_MODE: bool = False
 
 
 def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
