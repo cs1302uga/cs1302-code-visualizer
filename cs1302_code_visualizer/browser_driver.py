@@ -29,7 +29,7 @@ logging.getLogger('selenium.webdriver.remote').setLevel(logging.DEBUG)
 logging.getLogger('selenium.webdriver.common').setLevel(logging.DEBUG)
 
 
-DEBUG_MODE: bool = False
+DEBUG_MODE: bool = True
 
 
 def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
@@ -130,14 +130,17 @@ def tidy_set_font(driver: webdriver.Chrome) -> None:
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
             <link href="https://fonts.googleapis.com/css2?family=Recursive:wght,CRSV,MONO@300..1000,0,1&display=swap" rel="stylesheet">
-            `
-        );
-        document.head.insertAdjacentHTML(
-            'beforeend',
-            `
             <style>
                 div.ExecutionVisualizer {
                     padding: 0!important;
+                }
+                :root {
+                    --object-background-color: #faebbf;
+                    --object-border: 1px solid black;
+                    --object-border-radius: 0.2rem;
+                    --value-background-color: #ffffc6;
+                    --value-border: var(--object-border);
+                    --value-border-radius: var(--object-border-radius);
                 }
                 #vizDiv, #vizDiv * {
                     font-family: "Recursive", monospace;
@@ -148,6 +151,48 @@ def tidy_set_font(driver: webdriver.Chrome) -> None:
                 }
                 #vizDiv .typeLabel {
                     width: max-content;
+                }
+                #vizDiv .stackFrame {
+                    border-left: 1px solid #a6b3b6;
+                    border-right: 1px solid #a6b3b6;
+                }
+                #vizDiv .stackFrameHeader {
+                    font-size: small;
+                }
+                #vizDiv .instTbl, #vizDiv .listTbl, #vizDiv .stackFrameVarTable {
+                    border: var(--object-border);
+                    border-radius: var(--object-border-radius);
+                    background-color: var(--object-background-color);
+                    border-spacing: unset;
+                }
+                #vizDiv .stackFrameVarTable {
+                    background-color: revert;
+                }
+                #vizDiv .instKey, #vizDiv .stackFrameVar {
+                    font-size: small;
+                    border: transparent;
+                    padding-left: 8px;
+                    padding-right: 8px;
+                }
+                #vizDiv .instVal, #vizDiv .listElt, #vizDiv .stackFrameValue {
+                    border: var(--value-border);
+                    border-radius: var(--value-border-radius);
+                    background-color: var(--value-background-color);
+                    padding: 4px;
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    font-size: x-small;
+                    min-width: 1.25rem;
+                }
+                #vizDiv .listHeader {
+                    font-size: xx-small;
+                    border: transparent;
+                }
+                #vizDiv .nullObj {
+                    font-size: x-small;
+                }
+                #vizDiv .instTbl:not(:has(.instKey)) {
+                    background-color: var(--value-background-color);
                 }
             </style>
             `
@@ -163,7 +208,10 @@ def tidy_string_objects(driver: webdriver.Chrome) -> None:
         Array
             .from(document.querySelectorAll("#dataViz .heapObject"))
             .filter((element) => element.querySelector(".typeLabel").textContent.includes("String instance"))
-            .forEach((element) => element.querySelector(".instKey").remove());
+            .forEach((element) => {
+                element.querySelector(".instKey").remove();
+                element.querySelector(".instVal").style.borderColor = "transparent";
+            });
         """
     )
 
@@ -207,13 +255,29 @@ def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
         """
         // remove displayed code
         document.querySelector("#vizDiv .visualizer .vizLayoutTd").remove();
+
+        // update output
+        optFrontend.myVisualizer.updateOutput();
+        // getEventListeners(window).resize.at(0).listener('resize')
+        console.log("document.fonts.status", document.fonts.status);
         """
     )
 
-    driver.fullscreen_window()
-    tidy_string_objects(driver)
+    import time
+    while not bool(driver.execute_script("return document.fonts.status;")):
+        driver.execute_script("console.log('document.fonts.status', document.fonts.status);")
+        time.sleep(1)
+        pass
 
-    #print(f"#dataViz.innerHTML={dataViz.get_attribute('innerHTML')}", file=sys.stderr)
+    driver.fullscreen_window()
+
+    driver.execute_script(
+        """
+        optFrontend.myVisualizer.updateOutput();
+        """
+    )
+
+    tidy_string_objects(driver)
 
     frontend: OnlinePythonTutor = OnlinePythonTutor(
         driver=driver,
@@ -290,6 +354,7 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
             viz.location["y"] + viz.size["height"],
         )
 
+        # while
         screenshot = driver.get_screenshot_as_png()
 
         # crop the screenshot down to the element borders
