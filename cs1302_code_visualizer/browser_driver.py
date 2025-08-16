@@ -18,7 +18,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from io import BytesIO
 from PIL import Image
 from urllib.parse import urlencode
-from tempfile import _TemporaryFileWrapper, NamedTemporaryFile, TemporaryFile
+from tempfile import _TemporaryFileWrapper, NamedTemporaryFile
 
 
 this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
@@ -159,7 +159,7 @@ def tidy_set_font(driver: webdriver.Chrome) -> None:
                 #vizDiv .stackFrameHeader {
                     font-size: small;
                 }
-                #vizDiv .instTbl, #vizDiv .listTbl, #vizDiv .stackFrameVarTable {
+                #vizDiv .instTbl, #vizDiv .listTbl {
                     border: var(--object-border);
                     border-radius: var(--object-border-radius);
                     background-color: var(--object-background-color);
