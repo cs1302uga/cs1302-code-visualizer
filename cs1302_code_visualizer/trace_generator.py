@@ -28,7 +28,7 @@ current_dir: Path = Path(os.path.dirname(__file__)).resolve()
 
 cache_dir: Path = Path(
     platformdirs.user_cache_dir(
-        "cs1302-code-visualizer", 
+        "cs1302-code-visualizer",
         ensure_exists=True,
     )
 )
@@ -132,12 +132,38 @@ def download_jdk():
 def ensure_jdk_installed(
     install_dir: str | PathLike[str] = str(cache_dir / "jdk"),
 ) -> Path:
+    # 1. check if javac is on the path and version 21 or greater
+    which_java: str | None = shutil.which("java")
+    if which_java:
+        java_exe: Path = Path(which_java).resolve()
+        java_props: str = subprocess.check_output(
+            [
+                java_exe,
+                "-XshowSettings:properties",
+                "-version",
+            ],
+            text=True,
+            stderr=subprocess.STDOUT,
+        )
+        java21_found: bool = False
+        for line in java_props.splitlines():
+            stripped_line: str = line.strip()
+            if stripped_line and stripped_line.startswith("java.home = "):
+                install_dir = Path(stripped_line.split(" = ")[1])
+            elif stripped_line and stripped_line.startswith("java.version = "):
+                java_version = tuple(map(int, stripped_line.split(" = ")[1].split('.')))
+                java21_found = java_version >= (21, 0, 0)
+        if java21_found:
+            logger.debug(f"Using existing JDK installation at {install_dir}")
+            return Path(install_dir)
+
+    # 2. otherwise, check and use the cache folder, if possible
     if jdk_exists(install_dir):
         # jdk is already installed
         logger.debug(f"Using existing JDK installation at {install_dir}")
         return Path(install_dir)
 
-    # we have to grab the jdk
+    # 3. otherwise, we have to grab the jdk
     install_dir = Path(install_dir)
     logger.debug(f"No existing JDK installation found at {install_dir}")
     download_jdk()
