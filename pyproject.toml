@@ -25,8 +25,9 @@ dependencies = [
 ]
 
 [project.scripts]
-trace_generator = "cs1302_code_visualizer.trace_generator:main"
-browser_driver = "cs1302_code_visualizer.browser_driver:main"
+generate_trace = "cs1302_code_visualizer.trace_generator:main"
+generate_visualization = "cs1302_code_visualizer.browser_driver:main"
+list_breakpoints = "cs1302_code_visualizer.breakpoint_lister:main"
 render_image = "cs1302_code_visualizer:main"
 
 [build-system]

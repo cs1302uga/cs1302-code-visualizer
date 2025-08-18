@@ -39,13 +39,40 @@ to standard output. You should use shell input/output redirection.
 $ uv run render_image < In.java > out.png
 ```
 
-Usage information for the Python interface is provided as docstrings in `__init__.py`.
+To view the execution trace fora program, use the `generate_trace` program (see
+`generate_trace --help` for available options):
+
+```console
+$ uv run generate_trace < In.java > trace.json
+```
+
+To render a visualization using an existing execution trace for a Java program,
+use the `generate_visualization` program (see `generate_visualization --help`
+for available options):
+
+```console
+$ uv run generate_trace < trace.java > out.png
+```
+
+To see a list of available breakpoints (i.e., breakpoint line numbers) for Java
+program, use the `list_breakpoints` program (see `list_breakpoints --help` for
+available options):
+
+
+```console
+$ uv run list_breakpoints < In.java
+```
+
+Usage information for the Python interface is provided as docstrings throughout
+the package.
 
 ## Project overview
 
-This project has three major components: the trace generator, the frontend, the browser driver.
+This project has three major components: the trace generator, the frontend, the
+browser driver.
 
-The trace generator is essentially a Python wrapper around a Java tracer program. It:
+The trace generator is essentially a Python wrapper around a Java tracer
+program. It:
 - downloads and installs both [the latest release of the
   tracer](https://github.com/cs1302uga/cs1302-tracer/releases/latest) and the
   latest release of the JDK

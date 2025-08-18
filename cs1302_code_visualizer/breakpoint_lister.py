@@ -34,19 +34,24 @@ cache_dir: Path = Path(
 )
 
 
-def generate_trace(
+def list_breakpoints(
     java_home: Path,
     java_program: str,
     timeout_secs: float | None = None,
     inline_strings: bool = True,
     remove_main_args_parameter: bool = True,
-    breakpoints: set[int] = set(),
+    output_json: bool = False,
 ) -> str:
+
     args = ["-s"] if inline_strings else []
-    for breakpoint in breakpoints:
-        args.extend(["-b", str(breakpoint)])
+
     if remove_main_args_parameter:
         args.append("--remove-main-args")
+
+    if output_json:
+        args.extend(["-L"])  # --list-available-breakpoints-json
+    else:
+        args.extend(["-l"])  # --list-available-breakpoints
 
     return subprocess.check_output(
         (
@@ -223,7 +228,14 @@ def ensure_code_tracer_installed(update_existing: bool = False):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Java program trace generator and visualizer"
+        description="List available breakpoints for a Java program."
+    )
+
+    parser.add_argument(
+        "--json",
+        "-j",
+        help="Output JSON.",
+        action="store_true",
     )
 
     parser.add_argument(
@@ -265,7 +277,7 @@ def main():
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
 
-    if args.jdk != None and jdk_exists(args.jdk):
+    if args.jdk is not None and jdk_exists(args.jdk):
         java_home = Path(args.jdk)
     else:
         with spinner(text="Installing the JDK...", stream=sys.stderr):
@@ -277,36 +289,13 @@ def main():
     # get java file from stdin
     java_input = "".join(fileinput.input(args.input))
 
-    # try:
-    #     with spinner(text="Listing breakpoints...", stream=sys.stderr):
-    #         list_breakpoints_output = subprocess.check_output(
-    #             (
-    #                 [
-    #                     str(java_home / "bin" / "java"),
-    #                     "-jar",
-    #                     str(cache_dir / "code-tracer.jar"),
-    #                 ]
-    #                 + args
-    #                 + ["-l"]
-    #             ),
-    #             input=java_input,
-    #             timeout=args.trace_timeout,
-    #             text=True,
-    #         )
-    #         logger.info(f"Available breakpoints:\n\n{list_breakpoints_output}")
-
-    # except CalledProcessError as e:
-    #     logger.exception(
-    #         "Trace generation failed with exit code %d and output:", e.returncode
-    #     )
-    #     exit(1)
-
     try:
         with spinner(text="Generating execution trace...", stream=sys.stderr):
-            trace = generate_trace(
-                java_home,
-                java_input,
-                args.trace_timeout,
+            list_breakpoints_output = list_breakpoints(
+                java_home=java_home,
+                java_program=java_input,
+                timeout_secs=args.trace_timeout,
+                output_json=args.json is not None,
             )
     except CalledProcessError as e:
         logger.exception(
@@ -315,10 +304,10 @@ def main():
         exit(1)
 
     if args.output is None:
-        print(trace)
+        print(list_breakpoints_output)
     else:
         with open(args.output, "w") as f:
-            f.write(trace)
+            f.write(list_breakpoints_output)
 
 
 if __name__ == "__main__":
