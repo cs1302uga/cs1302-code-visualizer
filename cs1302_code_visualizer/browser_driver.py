@@ -171,16 +171,17 @@ def tidy_set_font(driver: webdriver.Chrome) -> None:
                 #vizDiv .instKey, #vizDiv .stackFrameVar {
                     font-size: small;
                     border: transparent;
-                    padding-left: 8px;
-                    padding-right: 8px;
+                    padding: 1px;
+                    padding-left: 6px;
+                    padding-right: 6px;
                 }
                 #vizDiv .instVal, #vizDiv .listElt, #vizDiv .stackFrameValue {
                     border: var(--value-border);
                     border-radius: var(--value-border-radius);
                     background-color: var(--value-background-color);
-                    padding: 4px;
-                    padding-left: 8px;
-                    padding-right: 8px;
+                    padding: 1px;
+                    padding-left: 6px;
+                    padding-right: 6px;
                     font-size: x-small;
                     min-width: 1.25rem;
                 }
@@ -212,6 +213,13 @@ def tidy_string_objects(driver: webdriver.Chrome) -> None:
                 element.querySelector(".instKey").remove();
                 element.querySelector(".instVal").style.borderColor = "transparent";
             });
+        """
+    )
+
+def redraw_connectors(driver: webdriver.Chrome) -> None:
+    driver.execute_script(
+        """
+        optFrontend.redrawConnectors();
         """
     )
 
@@ -255,11 +263,6 @@ def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
         """
         // remove displayed code
         document.querySelector("#vizDiv .visualizer .vizLayoutTd").remove();
-
-        // update output
-        optFrontend.myVisualizer.updateOutput();
-        // getEventListeners(window).resize.at(0).listener('resize')
-        console.log("document.fonts.status", document.fonts.status);
         """
     )
 
@@ -270,14 +273,16 @@ def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
         pass
 
     driver.fullscreen_window()
-
-    driver.execute_script(
-        """
-        optFrontend.myVisualizer.updateOutput();
-        """
-    )
+    redraw_connectors(driver)
 
     tidy_string_objects(driver)
+    redraw_connectors(driver)
+
+    # driver.execute_script(
+    #     """
+    #     optFrontend.myVisualizer.updateOutput();
+    #     """
+    # )
 
     frontend: OnlinePythonTutor = OnlinePythonTutor(
         driver=driver,
