@@ -96,9 +96,11 @@ def download_jdk():
                 f"Cannot automatically download a JDK for your computer's architecture ({m} {os}). Please download and provide one yourself."
             )
 
-    lts_jdk_num = requests.get(
-        "https://api.adoptium.net/v3/info/available_releases"
-    ).json()["most_recent_lts"]
+    # lts_jdk_num = requests.get(
+    #     "https://api.adoptium.net/v3/info/available_releases"
+    # ).json()["most_recent_lts"]
+
+    lts_jdk_num = "21"  # TODO: FIX
     resp = requests.get(
         f"https://api.adoptium.net/v3/binary/latest/{lts_jdk_num}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse",
         stream=True,
