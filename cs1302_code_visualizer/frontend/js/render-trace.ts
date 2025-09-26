@@ -10,6 +10,7 @@ $(document).ready(function() {
     "hideCode": true,
     "disableHeapNesting": true,
     "lang": "java",
+    "includeTypes": true,
   };
 
   const urlParams = new URLSearchParams(window.location.search);

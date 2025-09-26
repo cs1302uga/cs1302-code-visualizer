@@ -879,10 +879,6 @@ div.ExecutionVisualizer, div.ExecutionVisualizer * {
     -webkit-font-smoothing: auto !important;
 }
 
-div.ExecutionVisualizer .typeLabel {
-    width: max-content !important;
-}
-
 div.ExecutionVisualizer .stackFrame {
     border-left: 1px solid #a6b3b6 !important;
     border-right: 1px solid #a6b3b6 !important;

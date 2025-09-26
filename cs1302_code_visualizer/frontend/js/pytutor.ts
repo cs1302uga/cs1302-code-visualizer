@@ -2272,10 +2272,14 @@ class DataVisualizer {
           return myViz.owner.generateID(varnameToCssID('global__' + d + '_tr')); // make globally unique (within the page)
       });
 
-
     var globalVarTableCells = globalVarTable
       .selectAll('td.stackFrameVar,td.stackFrameValue')
-      .data(function(d, i){return [d, d];}) /* map varname down both columns */
+      .data(function(d, i) {
+        let typeHtml = (myViz.params.includeTypes && curEntry.ordered_globals_types)
+          ? `<div class="typeLabel">${htmlsanitize(curEntry.ordered_globals_types?.[i])}</div>`
+          : "";
+        return [typeHtml + d, d];
+      });
 
     globalVarTableCells.enter()
       .append('td')
@@ -2497,7 +2501,7 @@ class DataVisualizer {
             // object as well as the variable name
             // TODO: look into whether we can use d3 parent nodes to avoid
             // this hack ... http://bost.ocks.org/mike/nest/
-            return frame.ordered_varnames.map(function(varname) {return {varname:varname, frame:frame};});
+            return frame.ordered_varnames.map(function(varname, i) {return {varname:varname, frame:frame, type:frame.ordered_varnames_types?.[i]};});
           }
         },
         function(d) {
@@ -2534,8 +2538,12 @@ class DataVisualizer {
         if (i == 0) {
           if (varname == '__return__')
             $(this).html('<span class="retval">Return<br/>value</span>');
-          else
-            $(this).html(varname);
+          else {
+            let typeHtml = (myViz.params.includeTypes && d.type)
+              ? `<div class="typeLabel">${htmlsanitize(d.type)}</div>`
+              : "";
+            $(this).html(typeHtml + varname);
+          }
         }
         else {
           // always delete and re-render the stack var ...
@@ -3345,6 +3353,8 @@ class DataVisualizer {
 
         var tbl = d3DomElement.children('table:last'); // tricky, there's more than 1 table if isPprintInstance is true
 
+        let types = myViz.curTrace[stepNum].heap_types?.[objID];
+
         $.each(obj, function(ind, kvPair) {
           if (ind < headerLength) return; // skip header tags
 
@@ -3365,6 +3375,10 @@ class DataVisualizer {
           if (typeof kvPair[0] == "string") {
             // common case ...
             var attrnameStr = htmlspecialchars(kvPair[0]);
+            let typeHtml = (myViz.params.includeTypes && types)
+              ? `<div class="typeLabel">${htmlsanitize(types[Number(ind) - 2])}</div>`
+              : "";
+            keyTd.append(typeHtml);
             keyTd.append('<span class="keyObj">' + attrnameStr + '</span>');
           }
           else {
