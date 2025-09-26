@@ -1,0 +1,31 @@
+{
+  "name": "v5-unity",
+  "version": "1.0.0",
+  "description": "OPT v5",
+  "main": "bundle.js",
+  "repository": "https://github.com/pgbovine/OnlinePythonTutor",
+  "license": "BSD-3-Clause",
+  "scripts": {
+    "start": "python bottle_server.py",
+    "py3start": "python3 bottle_server.py",
+    "webpack": "webpack --devtool sourcemap --progress --colors --watch",
+    "production-build": "rm -f build/* && webpack && python add_cache_busting_query_strings.py"
+  },
+  "devDependencies": {
+    "@types/jquery": "^3.5.33",
+    "@types/jquery.bbq": "^1.2.35",
+    "@types/jqueryui": "^1.12.24",
+    "@types/qtip2": "^2.2.34",
+    "css-loader": "^7.1.2",
+    "script-loader": "^0.7.2",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.4",
+    "url-loader": "^4.1.1",
+    "webpack": "^5.101.3",
+    "webpack-cli": "^6.0.1"
+  },
+  "dependencies": {
+    "@fontsource/recursive": "^5.2.8",
+    "d3": "^3.5.17"
+  }
+}

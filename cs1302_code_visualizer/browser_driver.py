@@ -24,9 +24,9 @@ from tempfile import _TemporaryFileWrapper, NamedTemporaryFile
 this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
 
 
-logging.getLogger('selenium').setLevel(logging.DEBUG)
-logging.getLogger('selenium.webdriver.remote').setLevel(logging.DEBUG)
-logging.getLogger('selenium.webdriver.common').setLevel(logging.DEBUG)
+logging.getLogger("selenium").setLevel(logging.DEBUG)
+logging.getLogger("selenium.webdriver.remote").setLevel(logging.DEBUG)
+logging.getLogger("selenium.webdriver.common").setLevel(logging.DEBUG)
 
 
 DEBUG_MODE: bool = False
@@ -61,7 +61,9 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
     return driver
 
 
-def tidy_set_window_size_for_element(driver: webdriver.Chrome, element: WebElement) -> None:
+def tidy_set_window_size_for_element(
+    driver: webdriver.Chrome, element: WebElement
+) -> None:
     """Set the driver's window size for the target element."""
 
     driver.set_window_size(
@@ -72,13 +74,19 @@ def tidy_set_window_size_for_element(driver: webdriver.Chrome, element: WebEleme
     window_size: dict[str, int] = driver.get_window_size()
 
     bounds_size: dict[str, int] = {
-        "width": driver.execute_script("return document.documentElement.getBoundingClientRect().width;"),
-        "height": driver.execute_script("return document.documentElement.getBoundingClientRect().height;"),
+        "width": driver.execute_script(
+            "return document.documentElement.getBoundingClientRect().width;"
+        ),
+        "height": driver.execute_script(
+            "return document.documentElement.getBoundingClientRect().height;"
+        ),
     }
 
     client_size: dict[str, int] = {
         "width": driver.execute_script("return document.documentElement.clientWidth;"),
-        "height": driver.execute_script("return document.documentElement.clientHeight;"),
+        "height": driver.execute_script(
+            "return document.documentElement.clientHeight;"
+        ),
     }
 
     offset_size: dict[str, int] = {
@@ -96,12 +104,12 @@ def tidy_set_window_size_for_element(driver: webdriver.Chrome, element: WebEleme
     new_width = max(
         element.location["x"] + element.size["width"],
         element.location["x"] + element.size["width"] + offset_size["width"],
-    ) # + 50
+    )  # + 50
 
     new_height = max(
         element.location["y"] + element.size["height"],
-        element.location["y"] + element.size["height"] + offset_size["height"]
-    ) # + 50
+        element.location["y"] + element.size["height"] + offset_size["height"],
+    )  # + 50
 
     print(
         f"{element.location['x']=}",
@@ -120,109 +128,6 @@ def tidy_set_window_size_for_element(driver: webdriver.Chrome, element: WebEleme
     driver.set_window_size(new_width, new_height)
 
 
-def tidy_set_font(driver: webdriver.Chrome) -> None:
-    """Set the font used by the data visualization."""
-    driver.execute_script(
-        """
-        document.head.insertAdjacentHTML(
-            'beforeend',
-            `
-            <link rel="preconnect" href="https://fonts.googleapis.com">
-            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-            <link href="https://fonts.googleapis.com/css2?family=Recursive:wght,CRSV,MONO@300..1000,0,1&display=swap" rel="stylesheet">
-            <style>
-                div.ExecutionVisualizer {
-                    padding: 0!important;
-                }
-                :root {
-                    --object-background-color: #faebbf;
-                    --object-border: 1px solid black;
-                    --object-border-radius: 0.2rem;
-                    --value-background-color: #ffffc6;
-                    --value-border: var(--object-border);
-                    --value-border-radius: var(--object-border-radius);
-                }
-                #vizDiv, #vizDiv * {
-                    font-family: "Recursive", monospace;
-                    font-variation-settings: "MONO" 1;
-                    font-optical-sizing: auto;
-                    font-smooth: auto;
-                    -webkit-font-smoothing: auto;
-                }
-                #vizDiv .typeLabel {
-                    width: max-content;
-                }
-                #vizDiv .stackFrame {
-                    border-left: 1px solid #a6b3b6;
-                    border-right: 1px solid #a6b3b6;
-                }
-                #vizDiv .stackFrameHeader {
-                    font-size: small;
-                }
-                #vizDiv .instTbl, #vizDiv .listTbl {
-                    border: var(--object-border);
-                    border-radius: var(--object-border-radius);
-                    background-color: var(--object-background-color);
-                    border-spacing: unset;
-                }
-                #vizDiv .stackFrameVarTable {
-                    background-color: revert;
-                }
-                #vizDiv .instKey, #vizDiv .stackFrameVar {
-                    font-size: small;
-                    border: transparent;
-                    padding: 1px;
-                    padding-left: 6px;
-                    padding-right: 6px;
-                }
-                #vizDiv .instVal, #vizDiv .listElt, #vizDiv .stackFrameValue {
-                    border: var(--value-border);
-                    border-radius: var(--value-border-radius);
-                    background-color: var(--value-background-color);
-                    padding: 1px;
-                    padding-left: 6px;
-                    padding-right: 6px;
-                    font-size: x-small;
-                    min-width: 1.25rem;
-                }
-                #vizDiv .listHeader {
-                    font-size: xx-small;
-                    border: transparent;
-                }
-                #vizDiv .nullObj {
-                    font-size: x-small;
-                }
-                #vizDiv .instTbl:not(:has(.instKey)) {
-                    background-color: var(--value-background-color);
-                }
-            </style>
-            `
-        );
-        document.querySelector("#vizDiv").style.fontFamily = "Recursive";
-        """
-    )
-
-def tidy_string_objects(driver: webdriver.Chrome) -> None:
-    """Tidy up String instances by removing their instance variable identifiers."""
-    driver.execute_script(
-        """
-        Array
-            .from(document.querySelectorAll("#dataViz .heapObject"))
-            .filter((element) => element.querySelector(".typeLabel").textContent.includes("String instance"))
-            .forEach((element) => {
-                element.querySelector(".instKey").remove();
-                element.querySelector(".instVal").style.borderColor = "transparent";
-            });
-        """
-    )
-
-def redraw_connectors(driver: webdriver.Chrome) -> None:
-    driver.execute_script(
-        """
-        optFrontend.redrawConnectors();
-        """
-    )
-
 class OnlinePythonTutor(TypedDict):
     driver: webdriver.Chrome
     vizDiv: WebElement
@@ -230,10 +135,11 @@ class OnlinePythonTutor(TypedDict):
     traceFile: _TemporaryFileWrapper
     wait: WebDriverWait
 
+
 @contextmanager
 def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
     """TODO."""
-    frontend_path = (this_files_dir / "frontend" / "iframe-embed.html").as_uri()
+    frontend_path = (this_files_dir / "frontend" / "render-trace.html").as_uri()
     driver = get_webdriver(dpi)
     trace_file = NamedTemporaryFile()
     wait = WebDriverWait(driver, 10)
@@ -247,42 +153,14 @@ def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
 
     frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
 
-    # from pprint import pformat
-    # print(f"{trace=}", file=sys.stderr)
-    # print(f"frontend_query={pformat(frontend_query)}", file=sys.stderr)
-    # print(f"{frontend_uri=}", file=sys.stderr)
-
     driver.get(frontend_uri)
 
-    tidy_set_font(driver)
-
-    vizDiv = driver.find_element(By.ID, "vizDiv")
+    vizDiv = driver.find_element(By.ID, "visualizerDiv")
     dataViz = driver.find_element(By.ID, "dataViz")
 
-    driver.execute_script(
-        """
-        // remove displayed code
-        document.querySelector("#vizDiv .visualizer .vizLayoutTd").remove();
-        """
-    )
-
-    import time
-    while not bool(driver.execute_script("return document.fonts.status;")):
-        driver.execute_script("console.log('document.fonts.status', document.fonts.status);")
-        time.sleep(1)
-        pass
-
     driver.fullscreen_window()
-    redraw_connectors(driver)
 
-    tidy_string_objects(driver)
-    redraw_connectors(driver)
-
-    # driver.execute_script(
-    #     """
-    #     optFrontend.myVisualizer.updateOutput();
-    #     """
-    # )
+    driver.find_element(By.ID, "screenshotReadyIndicator")
 
     frontend: OnlinePythonTutor = OnlinePythonTutor(
         driver=driver,
@@ -297,6 +175,7 @@ def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
         trace_file.close()
         if not DEBUG_MODE:
             driver.quit()
+
 
 def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> str:
     """Generate HTML depicting the final state of an execution trace file.
@@ -314,9 +193,10 @@ def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> s
     """
     # TODO: implement include_style
     with online_python_tutor_frontend(trace, dpi=dpi) as frontend:
-        dataViz: str | None = frontend["dataViz"].get_attribute('outerHTML')
+        dataViz: str | None = frontend["dataViz"].get_attribute("outerHTML")
         if dataViz:
-            return dedent(f"""
+            return dedent(
+                f"""
             <div id="vizDiv">
                 <div class="ExecutionVisualizer">
                     <div class="visualizer">
@@ -326,11 +206,13 @@ def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> s
                     </div>
                 </div>
             </div>
-            """)
+            """
+            )
         else:
             raise Exception("unable to generate an HTML visualization for this trace")
 
-def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
+
+def generate_image(trace: str, *, dpi: int = 1, format: str = "PNG") -> bytes:
     """Generate an image of the final state of an execution trace file.
 
     The trace file is expected to be formatted using JSON as specified by OnlinePythonTutor.
@@ -352,6 +234,8 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
         driver: webdriver.Chrome = frontend["driver"]
         viz: WebElement = frontend["dataViz"]
 
+        tidy_set_window_size_for_element(driver, viz)
+
         (left, top, right, bottom) = (
             viz.location["x"],
             viz.location["y"],
@@ -359,16 +243,13 @@ def generate_image(trace: str, *, dpi: int = 1, format: str ="PNG") -> bytes:
             viz.location["y"] + viz.size["height"],
         )
 
-        # while
         screenshot = driver.get_screenshot_as_png()
 
         # crop the screenshot down to the element borders
         screenshot_bytes = BytesIO(screenshot)
         pil_img = Image.open(BytesIO(screenshot))
 
-        pil_img = pil_img.crop(
-            tuple(dpi * x for x in [left, top, right, bottom])
-        )
+        pil_img = pil_img.crop(tuple(dpi * x for x in [left, top, right, bottom]))
 
         pil_img.save(
             screenshot_bytes,

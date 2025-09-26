@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 from sys import stdout
 import logging
-import sys
 
 from . import browser_driver
 from . import trace_generator
@@ -50,13 +49,20 @@ def render_images(
     trace_generator.ensure_code_tracer_installed()
 
     trace = trace_generator.generate_trace(
-        java_home, java_source, timeout_secs, inline_strings, remove_main_args, breakpoints
+        java_home,
+        java_source,
+        timeout_secs,
+        inline_strings,
+        remove_main_args,
+        breakpoints,
     )
 
     traces: dict[str, dict] = json.loads(trace)
     out = dict()
     for line in traces:
-        out[int(line)] = browser_driver.generate_image(json.dumps(traces[line]), dpi=dpi, format=format)
+        out[int(line)] = browser_driver.generate_image(
+            json.dumps(traces[line]), dpi=dpi, format=format
+        )
     return out
 
 
@@ -147,10 +153,12 @@ def render_image(
         )
         return output
     except Exception as exc:
-        raise Exception(f"Unable to generate image from execution trace:\n\n{trace}\n", ) from exc
+        raise Exception(
+            f"Unable to generate image from execution trace:\n\n{trace}\n",
+        ) from exc
 
 
 def main() -> None:
     java_source: str = "".join(fileinput.input())
-    rendered_image: bytes = render_image(java_source, dpi=2, breakpoint_line=-1)
+    rendered_image: bytes = render_image(java_source, dpi=2)
     stdout.buffer.write(rendered_image)
