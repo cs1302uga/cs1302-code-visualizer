@@ -19,6 +19,14 @@ $(document).ready(function() {
     var myViz = new ExecutionVisualizer('visualizerDiv', trace, frontendOptions);
 
     document.fonts.addEventListener("loadingdone", () => {
+      Array
+        .from(document.querySelectorAll("#dataViz .heapObject"))
+        .filter((element) => element.querySelector(".typeLabel").textContent.includes("String instance"))
+        .forEach((element) => {
+          element.querySelector(".instKey").remove();
+          element.querySelector<HTMLElement>(".instVal").style.setProperty("border-color", "transparent", "important")
+        });
+
       myViz.redrawConnectors();
       let screenshotReadyIndicator = document.createElement("div");
       screenshotReadyIndicator.id = "screenshotReadyIndicator";
