@@ -21,6 +21,7 @@ def render_images(
     format: str = "PNG",
     inline_strings: bool = True,
     remove_main_args: bool = True,
+    include_types: bool = True,
 ) -> dict[int, bytes]:
     """Visualize the state of a Java program at given breakpoints.
     java_source:      The Java source code to visualize.
@@ -38,6 +39,7 @@ def render_images(
                       rendered seperately on the heap.
     remove_main_args: False if the visualization should include the main method's `args` parameter,
                       True otherwise
+    include_types:    True if type tags should be included in this visualization, False otherwise.
 
     out:            Mapping from breakpoint lines to visualization images.
 
@@ -61,7 +63,10 @@ def render_images(
     out = dict()
     for line in traces:
         out[int(line)] = browser_driver.generate_image(
-            json.dumps(traces[line]), dpi=dpi, format=format
+            json.dumps(traces[line]),
+            dpi=dpi,
+            format=format,
+            include_types=include_types,
         )
     return out
 
@@ -77,6 +82,7 @@ def render_image(
     remove_main_args: bool = True,
     breakpoint_line: int = -1,
     verbose: bool = False,
+    include_types: bool = True,
 ) -> bytes:
     """Visualize the state of a Java program just before exiting as an image.
 
@@ -107,6 +113,8 @@ def render_image(
             that it is executed. The default value is -1, which indicates that that the
             visualization should depict what memory looks like just after the entire body of the
             main method has executed.
+
+        include_types:    True if type tags should be included in this visualization, False otherwise.
 
     Return:
 
@@ -150,6 +158,7 @@ def render_image(
             trace,
             dpi=dpi,
             format=format,
+            include_types=include_types,
         )
         return output
     except Exception as exc:

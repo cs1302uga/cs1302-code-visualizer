@@ -137,7 +137,9 @@ class OnlinePythonTutor(TypedDict):
 
 
 @contextmanager
-def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
+def online_python_tutor_frontend(
+    trace: str, *, dpi: int = 1, include_types: bool = True
+):
     """TODO."""
     frontend_path = (this_files_dir / "frontend" / "render-trace.html").as_uri()
     driver = get_webdriver(dpi)
@@ -149,6 +151,7 @@ def online_python_tutor_frontend(trace: str, *, dpi: int = 1):
 
     frontend_query: dict = {
         "tracePath": trace_file.name,
+        "includeTypes": str(include_types).lower(),
     }
 
     frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
@@ -212,7 +215,9 @@ def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> s
             raise Exception("unable to generate an HTML visualization for this trace")
 
 
-def generate_image(trace: str, *, dpi: int = 1, format: str = "PNG") -> bytes:
+def generate_image(
+    trace: str, *, dpi: int = 1, format: str = "PNG", include_types: bool = True
+) -> bytes:
     """Generate an image of the final state of an execution trace file.
 
     The trace file is expected to be formatted using JSON as specified by OnlinePythonTutor.
@@ -221,6 +226,7 @@ def generate_image(trace: str, *, dpi: int = 1, format: str = "PNG") -> bytes:
         trace: The execution trace file.
         dpi: Dots Per Inch (DPI), a positive integer used to scale the driver's display resolution.
         format: The image output format. This gets passed directly into PIL's ``Image.save()``.
+        include_types: Whether or not type tags should be included in this visualization.
 
     Return:
         The bytes of the generated image in the format specified by the ``format`` argument.
@@ -229,7 +235,9 @@ def generate_image(trace: str, *, dpi: int = 1, format: str = "PNG") -> bytes:
 
     # print(f"#dataViz.outerHTML={generate_html(trace, dpi=dpi)}", file=sys.stderr)
 
-    with online_python_tutor_frontend(trace, dpi=dpi) as frontend:
+    with online_python_tutor_frontend(
+        trace, dpi=dpi, include_types=include_types
+    ) as frontend:
 
         driver: webdriver.Chrome = frontend["driver"]
         viz: WebElement = frontend["dataViz"]

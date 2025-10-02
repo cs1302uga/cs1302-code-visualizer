@@ -5,16 +5,17 @@
 import { ExecutionVisualizer } from './pytutor';
 
 $(document).ready(function() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const tracePath = urlParams.get("tracePath");
+  const includeTypes = (urlParams.get("includeTypes")?.toLowerCase() !== "false");
+
   let frontendOptions = {
     "jumpToEnd": true,
     "hideCode": true,
     "disableHeapNesting": true,
     "lang": "java",
-    "includeTypes": true,
+    "includeTypes": includeTypes,
   };
-
-  const urlParams = new URLSearchParams(window.location.search);
-  const tracePath = urlParams.get("tracePath");
 
   fetch("file://" + tracePath).then(r => r.json()).then(trace => {
     var myViz = new ExecutionVisualizer('visualizerDiv', trace, frontendOptions);
