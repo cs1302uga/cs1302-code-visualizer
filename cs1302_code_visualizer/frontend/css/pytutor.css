@@ -912,6 +912,10 @@ div.ExecutionVisualizer .instKey, div.ExecutionVisualizer .stackFrameVar {
     padding-right: 6px !important;
 }
 
+div.ExecutionVisualizer .javaStackVarThis {
+  color: #de4b58;
+}
+
 div.ExecutionVisualizer .instVal, div.ExecutionVisualizer .listElt, div.ExecutionVisualizer .stackFrameValue {
     border: var(--value-border) !important;
     border-radius: var(--value-border-radius) !important;

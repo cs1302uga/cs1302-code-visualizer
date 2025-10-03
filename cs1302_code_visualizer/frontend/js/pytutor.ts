@@ -2542,7 +2542,8 @@ class DataVisualizer {
             let typeHtml = (myViz.params.includeTypes && d.type)
               ? `<div class="fieldTypeLabel">${htmlsanitize(d.type)}</div>`
               : "";
-            $(this).html(typeHtml + varname);
+            let varNameHtml = (varname === "this" ? `<span class="javaStackVarThis">${htmlsanitize(varname)}</span>` : htmlsanitize(varname));
+            $(this).html(typeHtml + varNameHtml);
           }
         }
         else {
