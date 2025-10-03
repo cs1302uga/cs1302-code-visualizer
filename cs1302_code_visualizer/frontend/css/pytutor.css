@@ -490,10 +490,15 @@ div.ExecutionVisualizer .objectIdLabel {
   margin-bottom: 2px;
 }
 
+div.ExecutionVisualizer .fieldTypeLabel,
 div.ExecutionVisualizer .typeLabel {
   font-size: 8pt;
   color: #555;
   margin-bottom: 2px;
+}
+
+div.ExecutionVisualizer .fieldTypeLabel {
+  font-size: 6pt;
 }
 
 div.ExecutionVisualizer div#stack,

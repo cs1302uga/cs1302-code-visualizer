@@ -2276,7 +2276,7 @@ class DataVisualizer {
       .selectAll('td.stackFrameVar,td.stackFrameValue')
       .data(function(d, i) {
         let typeHtml = (myViz.params.includeTypes && curEntry.ordered_globals_types)
-          ? `<div class="typeLabel">${htmlsanitize(curEntry.ordered_globals_types?.[i])}</div>`
+          ? `<div class="fieldTypeLabel">${htmlsanitize(curEntry.ordered_globals_types?.[i])}</div>`
           : "";
         return [typeHtml + d, d];
       });
@@ -2540,7 +2540,7 @@ class DataVisualizer {
             $(this).html('<span class="retval">Return<br/>value</span>');
           else {
             let typeHtml = (myViz.params.includeTypes && d.type)
-              ? `<div class="typeLabel">${htmlsanitize(d.type)}</div>`
+              ? `<div class="fieldTypeLabel">${htmlsanitize(d.type)}</div>`
               : "";
             $(this).html(typeHtml + varname);
           }
@@ -3376,7 +3376,7 @@ class DataVisualizer {
             // common case ...
             var attrnameStr = htmlspecialchars(kvPair[0]);
             let typeHtml = (myViz.params.includeTypes && types)
-              ? `<div class="typeLabel">${htmlsanitize(types[Number(ind) - 2])}</div>`
+              ? `<div class="fieldTypeLabel">${htmlsanitize(types[Number(ind) - 2])}</div>`
               : "";
             keyTd.append(typeHtml);
             keyTd.append('<span class="keyObj">' + attrnameStr + '</span>');
