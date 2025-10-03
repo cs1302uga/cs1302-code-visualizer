@@ -30,6 +30,9 @@ $(document).ready(function() {
         });
 
       myViz.redrawConnectors();
+
+      (window as any).optFrontend = myViz;
+
       let screenshotReadyIndicator = document.createElement("div");
       screenshotReadyIndicator.id = "screenshotReadyIndicator";
       screenshotReadyIndicator.style.position = "absolute";

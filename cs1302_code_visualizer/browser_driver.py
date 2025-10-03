@@ -251,6 +251,8 @@ def generate_image(
             viz.location["y"] + viz.size["height"],
         )
 
+        driver.execute_script("window.optFrontend.redrawConnectors()");
+
         screenshot = driver.get_screenshot_as_png()
 
         # crop the screenshot down to the element borders
