@@ -8,6 +8,7 @@ $(document).ready(function() {
   const urlParams = new URLSearchParams(window.location.search);
   const tracePath = urlParams.get("tracePath");
   const includeTypes = (urlParams.get("includeTypes")?.toLowerCase() !== "false");
+  const textMemoryLabels = (urlParams.get("textMemoryLabels")?.toLowerCase() !== "false");
 
   let frontendOptions = {
     "jumpToEnd": true,
@@ -15,6 +16,7 @@ $(document).ready(function() {
     "disableHeapNesting": true,
     "lang": "java",
     "includeTypes": includeTypes,
+    "textualMemoryLabels": textMemoryLabels,
   };
 
   fetch("file://" + tracePath).then(r => r.json()).then(trace => {

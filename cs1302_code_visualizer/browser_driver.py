@@ -138,7 +138,11 @@ class OnlinePythonTutor(TypedDict):
 
 @contextmanager
 def online_python_tutor_frontend(
-    trace: str, *, dpi: int = 1, include_types: bool = True
+    trace: str,
+    *,
+    dpi: int = 1,
+    include_types: bool = True,
+    text_memory_labels: bool = True,
 ):
     """TODO."""
     frontend_path = (this_files_dir / "frontend" / "render-trace.html").as_uri()
@@ -152,6 +156,7 @@ def online_python_tutor_frontend(
     frontend_query: dict = {
         "tracePath": trace_file.name,
         "includeTypes": str(include_types).lower(),
+        "textMemoryLabels": str(text_memory_labels).lower(),
     }
 
     frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
@@ -216,7 +221,12 @@ def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> s
 
 
 def generate_image(
-    trace: str, *, dpi: int = 1, format: str = "PNG", include_types: bool = True
+    trace: str,
+    *,
+    dpi: int = 1,
+    format: str = "PNG",
+    include_types: bool = True,
+    text_memory_labels: bool = False,
 ) -> bytes:
     """Generate an image of the final state of an execution trace file.
 
@@ -227,6 +237,7 @@ def generate_image(
         dpi: Dots Per Inch (DPI), a positive integer used to scale the driver's display resolution.
         format: The image output format. This gets passed directly into PIL's ``Image.save()``.
         include_types: Whether or not type tags should be included in this visualization.
+        text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
 
     Return:
         The bytes of the generated image in the format specified by the ``format`` argument.
@@ -236,7 +247,10 @@ def generate_image(
     # print(f"#dataViz.outerHTML={generate_html(trace, dpi=dpi)}", file=sys.stderr)
 
     with online_python_tutor_frontend(
-        trace, dpi=dpi, include_types=include_types
+        trace,
+        dpi=dpi,
+        include_types=include_types,
+        text_memory_labels=text_memory_labels,
     ) as frontend:
 
         driver: webdriver.Chrome = frontend["driver"]
@@ -251,7 +265,7 @@ def generate_image(
             viz.location["y"] + viz.size["height"],
         )
 
-        driver.execute_script("window.optFrontend.redrawConnectors()");
+        driver.execute_script("window.optFrontend.redrawConnectors()")
 
         screenshot = driver.get_screenshot_as_png()
 

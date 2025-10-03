@@ -22,26 +22,28 @@ def render_images(
     inline_strings: bool = True,
     remove_main_args: bool = True,
     include_types: bool = True,
+    text_memory_labels: bool = False,
 ) -> dict[int, bytes]:
     """Visualize the state of a Java program at given breakpoints.
-    java_source:      The Java source code to visualize.
-    breakpoints:      The source lines at which an execution snapshot should be taken. If a line is
-                      executed multiple times, the last execution is the one visualized. If a breakpoint
-                      cannot be created on a line, it will not be included in this function's output.
-    java_home:        A path to a JDK 21+ installation home. If not provided, a JDK will be fetched
-                      automatically.
-    timeout_secs:     Maximum execution time for the Java source's trace generation, or no limit if
-                      None.
-    dpi:              A positive, integer multiplicative factor for the output image's resolution.
-    format:           The image output format. This gets passed directly into PIL's Image.save() method,
-                      refer to that method's documentation for acceptable values.
-    inline_strings:   True if strings should be inlined in the visualization, false if they should be
-                      rendered seperately on the heap.
-    remove_main_args: False if the visualization should include the main method's `args` parameter,
-                      True otherwise
-    include_types:    True if type tags should be included in this visualization, False otherwise.
+    java_source:        The Java source code to visualize.
+    breakpoints:        The source lines at which an execution snapshot should be taken. If a line is
+                        executed multiple times, the last execution is the one visualized. If a breakpoint
+                        cannot be created on a line, it will not be included in this function's output.
+    java_home:          A path to a JDK 21+ installation home. If not provided, a JDK will be fetched
+                        automatically.
+    timeout_secs:       Maximum execution time for the Java source's trace generation, or no limit if
+                        None.
+    dpi:                A positive, integer multiplicative factor for the output image's resolution.
+    format:             The image output format. This gets passed directly into PIL's Image.save() method,
+                        refer to that method's documentation for acceptable values.
+    inline_strings:     True if strings should be inlined in the visualization, false if they should be
+                        rendered seperately on the heap.
+    remove_main_args:   False if the visualization should include the main method's `args` parameter,
+                        True otherwise
+    include_types:      True if type tags should be included in this visualization, False otherwise.
+    text_memory_labels: True if object connections should be rendered as text labels, False otherwise.
 
-    out:            Mapping from breakpoint lines to visualization images.
+    out:                Mapping from breakpoint lines to visualization images.
 
     Note that exceptions may be raised if image generation fails.
     """
@@ -67,6 +69,7 @@ def render_images(
             dpi=dpi,
             format=format,
             include_types=include_types,
+            text_memory_labels=text_memory_labels,
         )
     return out
 
@@ -83,6 +86,7 @@ def render_image(
     breakpoint_line: int = -1,
     verbose: bool = False,
     include_types: bool = True,
+    text_memory_labels: bool = False,
 ) -> bytes:
     """Visualize the state of a Java program just before exiting as an image.
 
@@ -114,7 +118,9 @@ def render_image(
             visualization should depict what memory looks like just after the entire body of the
             main method has executed.
 
-        include_types:    True if type tags should be included in this visualization, False otherwise.
+        include_types: True if type tags should be included in this visualization, False otherwise.
+
+        text_memory_labels: True if object connections should be rendered as text labels, False otherwise.
 
     Return:
 
@@ -159,6 +165,7 @@ def render_image(
             dpi=dpi,
             format=format,
             include_types=include_types,
+            text_memory_labels=text_memory_labels,
         )
         return output
     except Exception as exc:
