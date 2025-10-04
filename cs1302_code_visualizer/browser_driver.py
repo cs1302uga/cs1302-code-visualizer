@@ -61,7 +61,6 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
     options.add_argument("--screen-info={1920x1080}")
     options.add_argument("--window-size=1920,1080")
 
-
     if chromedriver_path := shutil.which("chromedriver"):
         # use the local chromedriver on the executable PATH, if available
         service: Service = Service(executable_path=chromedriver_path)

@@ -123,7 +123,7 @@ def download_jdk():
                 toplevel_dir = tar.getnames()[0]
                 tar.extractall(cache_dir, numeric_owner=True, filter='tar')
 
-    shutil.move(cache_dir / toplevel_dir, cache_dir / "jdk")
+    shutil.copytree(cache_dir / toplevel_dir, cache_dir / "jdk", dirs_exist_ok=True)
 
     if not jdk_exists(str(cache_dir / "jdk")):
         raise Exception(
