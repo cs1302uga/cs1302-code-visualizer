@@ -51,7 +51,7 @@ use the `generate_visualization` program (see `generate_visualization --help`
 for available options):
 
 ```console
-$ uv run generate_trace < trace.java > out.png
+$ uv run generate_visualization < trace.java > out.png
 ```
 
 To see a list of available breakpoints (i.e., breakpoint line numbers) for Java

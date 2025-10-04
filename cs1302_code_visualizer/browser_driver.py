@@ -5,6 +5,7 @@ import sys
 import fileinput
 import argparse
 import logging
+import shutil
 
 from textwrap import dedent, indent
 from contextlib import contextmanager
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import TypedDict
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
@@ -21,15 +23,18 @@ from urllib.parse import urlencode
 from tempfile import _TemporaryFileWrapper, NamedTemporaryFile
 
 
+logger: logging.Logger = logging.getLogger(__name__)
+
+
 this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
+
+
+DEBUG_MODE: bool = False
 
 
 logging.getLogger("selenium").setLevel(logging.DEBUG)
 logging.getLogger("selenium.webdriver.remote").setLevel(logging.DEBUG)
 logging.getLogger("selenium.webdriver.common").setLevel(logging.DEBUG)
-
-
-DEBUG_MODE: bool = False
 
 
 def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
@@ -41,7 +46,7 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
     Return:
         The webdriver used to display the frontend.
     """
-    options = Options()
+    options: Options = Options()
 
     if DEBUG_MODE:
         options.add_experimental_option("detach", True)
@@ -56,9 +61,20 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
     options.add_argument("--screen-info={1920x1080}")
     options.add_argument("--window-size=1920,1080")
 
-    driver = webdriver.Chrome(options=options)
-    driver.implicitly_wait(4)
-    return driver
+
+    if chromedriver_path := shutil.which("chromedriver"):
+        # use the local chromedriver on the executable PATH, if available
+        service: Service = Service(executable_path=chromedriver_path)
+    else:
+        # otherwise, use the chromdriver bundled with Selenium
+        service: Service = Service()
+
+    try:
+        driver: webdriver.Chrome = webdriver.Chrome(options=options, service=service)
+        driver.implicitly_wait(4)
+        return driver
+    except Exception:
+        logger.exception(f"Unable to instantiate Selenium's webdriver: {options=}; {service=}")
 
 
 def tidy_set_window_size_for_element(
@@ -94,12 +110,14 @@ def tidy_set_window_size_for_element(
         "height": window_size["height"] - client_size["height"],
     }
 
-    from pprint import pformat
-
-    print("window_size", pformat(window_size), file=sys.stderr)
-    print("bounds_size", pformat(bounds_size), file=sys.stderr)
-    print("client_size", pformat(client_size), file=sys.stderr)
-    print("offset_size", pformat(offset_size), file=sys.stderr)
+    logger.debug(f"{window_size=}")
+    logger.debug(f"{bounds_size=}")
+    logger.debug(f"{client_size=}")
+    logger.debug(f"{offset_size=}")
+    logger.debug(f"{element.location['x']=}")
+    logger.debug(f"{element.location['y']=}")
+    logger.debug(f"{element.size['width']=}")
+    logger.debug(f"{element.size['height']=}")
 
     new_width = max(
         element.location["x"] + element.size["width"],
@@ -111,19 +129,9 @@ def tidy_set_window_size_for_element(
         element.location["y"] + element.size["height"] + offset_size["height"],
     )  # + 50
 
-    print(
-        f"{element.location['x']=}",
-        f"{element.size['width']=}",
-        file=sys.stderr,
-    )
 
-    print(
-        f"{element.location['y']=}",
-        f"{element.size['height']=}",
-        file=sys.stderr,
-    )
-
-    print(f"{new_width=}", f"{new_height=}", file=sys.stderr)
+    logger.debug(f"{new_width=}")
+    logger.debug(f"{new_height=}")
 
     driver.set_window_size(new_width, new_height)
 
