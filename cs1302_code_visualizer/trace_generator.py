@@ -74,6 +74,10 @@ def jdk_exists(maybe_java_home: str | PathLike[str]) -> bool:
 
 
 def download_jdk():
+
+    if (cache_dir / "jdk").exists():
+        return
+
     match platform.system():
         case "Linux":
             os = "linux"
