@@ -39,7 +39,7 @@ require("./lib/jquery.ba-dotimeout.min.js"); // for $.doTimeout
 import "@fontsource/recursive";
 require("../css/pytutor");
 
-import { unsupportedFeaturesStr } from "./footer-html";
+let unsupportedFeaturesStr = `see <a target="_blank" href="https://github.com/pgbovine/OnlinePythonTutor/blob/master/unsupported-features.md">UNSUPPORTED FEATURES</a>`;
 
 // for TypeScript
 declare var jQuery: JQueryStatic;
