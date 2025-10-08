@@ -4,7 +4,7 @@ h1 {
   font-weight: normal;
   font-size: 20pt;
   font-family: georgia, serif;
-  line-height: 1em;  /* enforce single spacing so that Georgia works */
+  line-height: 1em; /* enforce single spacing so that Georgia works */
 
   margin-top: 0px;
   margin-bottom: 8px;
@@ -20,7 +20,6 @@ h2 {
   margin-bottom: 20px;
 }
 
-
 body {
   background-color: white;
   font-family: verdana, arial, helvetica, sans-serif;
@@ -30,7 +29,7 @@ body {
 a,
 a:visited,
 a:hover {
-  color: #3D58A2;
+  color: #3d58a2;
 }
 
 span {
@@ -47,7 +46,8 @@ table#pyOutputPane {
   padding: 10px;
 }
 
-#pyInputPane, #loadingPane {
+#pyInputPane,
+#loadingPane {
   margin-top: 10px;
   margin-bottom: 20px;
 
@@ -160,10 +160,9 @@ button.surveyBtnBig {
   margin-right: 4px;
 }
 
-
 #syncBtn {
- font-size: 8pt;
- margin-left: 0px;
+  font-size: 8pt;
+  margin-left: 0px;
 }
 
 #experimentalHeader {
@@ -179,8 +178,9 @@ button.surveyBtnBig {
 }
 
 /* necessary for CodeMirror error line highlighting to work! */
-.CodeMirror .errorLine { background: #ffff3f !important; }
-
+.CodeMirror .errorLine {
+  background: #ffff3f !important;
+}
 
 /* from http://rog.ie/blog/css-star-rater */
 .star-rating {
@@ -192,7 +192,7 @@ button.surveyBtnBig {
   height: 20px;
   overflow: hidden;
   position: relative;
-  background: url('data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB3aWR0aD0iMjBweCIgaGVpZ2h0PSIyMHB4IiB2aWV3Qm94PSIwIDAgMjAgMjAiIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAwIDIwIDIwIiB4bWw6c3BhY2U9InByZXNlcnZlIj48cG9seWdvbiBmaWxsPSIjREREREREIiBwb2ludHM9IjEwLDAgMTMuMDksNi41ODMgMjAsNy42MzkgMTUsMTIuNzY0IDE2LjE4LDIwIDEwLDE2LjU4MyAzLjgyLDIwIDUsMTIuNzY0IDAsNy42MzkgNi45MSw2LjU4MyAiLz48L3N2Zz4=');
+  background: url("data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB3aWR0aD0iMjBweCIgaGVpZ2h0PSIyMHB4IiB2aWV3Qm94PSIwIDAgMjAgMjAiIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAwIDIwIDIwIiB4bWw6c3BhY2U9InByZXNlcnZlIj48cG9seWdvbiBmaWxsPSIjREREREREIiBwb2ludHM9IjEwLDAgMTMuMDksNi41ODMgMjAsNy42MzkgMTUsMTIuNzY0IDE2LjE4LDIwIDEwLDE2LjU4MyAzLjgyLDIwIDUsMTIuNzY0IDAsNy42MzkgNi45MSw2LjU4MyAiLz48L3N2Zz4=");
   background-size: contain;
 }
 .star-rating i {
@@ -203,7 +203,7 @@ button.surveyBtnBig {
   height: 100%;
   width: 20%;
   z-index: 1;
-  background: url('data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB3aWR0aD0iMjBweCIgaGVpZ2h0PSIyMHB4IiB2aWV3Qm94PSIwIDAgMjAgMjAiIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAwIDIwIDIwIiB4bWw6c3BhY2U9InByZXNlcnZlIj48cG9seWdvbiBmaWxsPSIjRkZERjg4IiBwb2ludHM9IjEwLDAgMTMuMDksNi41ODMgMjAsNy42MzkgMTUsMTIuNzY0IDE2LjE4LDIwIDEwLDE2LjU4MyAzLjgyLDIwIDUsMTIuNzY0IDAsNy42MzkgNi45MSw2LjU4MyAiLz48L3N2Zz4=');
+  background: url("data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IiB3aWR0aD0iMjBweCIgaGVpZ2h0PSIyMHB4IiB2aWV3Qm94PSIwIDAgMjAgMjAiIGVuYWJsZS1iYWNrZ3JvdW5kPSJuZXcgMCAwIDIwIDIwIiB4bWw6c3BhY2U9InByZXNlcnZlIj48cG9seWdvbiBmaWxsPSIjRkZERjg4IiBwb2ludHM9IjEwLDAgMTMuMDksNi41ODMgMjAsNy42MzkgMTUsMTIuNzY0IDE2LjE4LDIwIDEwLDE2LjU4MyAzLjgyLDIwIDUsMTIuNzY0IDAsNy42MzkgNi45MSw2LjU4MyAiLz48L3N2Zz4=");
   background-size: contain;
 }
 .star-rating input {
@@ -235,7 +235,6 @@ button.surveyBtnBig {
   width: 100%;
 }
 
-
 #syntaxErrBubbleContents {
   font-size: 9.5pt;
   cursor: default;
@@ -266,7 +265,8 @@ button.surveyBtnBig {
   padding: 2px;
 }
 
-#syntaxErrSubmitBtn, #syntaxErrCloseBtn {
+#syntaxErrSubmitBtn,
+#syntaxErrCloseBtn {
   margin-right: 8px;
 }
 
@@ -275,13 +275,13 @@ button.surveyBtnBig {
 }
 
 #testCasesPane {
- margin-top: 5px;
- margin-bottom: 25px;
+  margin-top: 5px;
+  margin-bottom: 25px;
 }
 
 #exampleSnippets {
- border-top: 1px solid #ccc;
- margin-top: 15px;
+  border-top: 1px solid #ccc;
+  margin-top: 15px;
 }
 
 #showExampleLink {
@@ -289,40 +289,40 @@ button.surveyBtnBig {
 }
 
 #instructionsPane {
- margin-bottom: 10px;
+  margin-bottom: 10px;
 }
 
 /* for SyntaxErrorSurveyBubble */
 
 textarea.bubbleInputText {
   font-family: verdana, arial, helvetica, sans-serif;
-	font-size: 9pt;
-	line-height: 1.3em;
+  font-size: 9pt;
+  line-height: 1.3em;
 }
 
 .qtip-content {
-	color: #333;
-	background-color: #ffffff;
+  color: #333;
+  background-color: #ffffff;
 
-	max-width: 390px;
-	width: 390px;
+  max-width: 390px;
+  width: 390px;
 
-	border: 2px solid #e93f34;
+  border: 2px solid #e93f34;
 
   cursor: pointer;
 
-	*border-right-width: 2px;
-	*border-bottom-width: 2px;
+  *border-right-width: 2px;
+  *border-bottom-width: 2px;
 
-	-webkit-border-radius: 5px;
-	-moz-border-radius: 5px;
-	border-radius: 5px;
+  -webkit-border-radius: 5px;
+  -moz-border-radius: 5px;
+  border-radius: 5px;
 
-	-webkit-box-shadow: 2px 2px 3px 0px rgba(0, 0, 0, 0.2);
-	-moz-box-shadow: 2px 2px 3px 0px rgba(0, 0, 0, 0.2);
-	box-shadow: 2px 2px 3px 0px rgba(0, 0, 0, 0.2);
+  -webkit-box-shadow: 2px 2px 3px 0px rgba(0, 0, 0, 0.2);
+  -moz-box-shadow: 2px 2px 3px 0px rgba(0, 0, 0, 0.2);
+  box-shadow: 2px 2px 3px 0px rgba(0, 0, 0, 0.2);
 
-	-webkit-background-clip: padding-box;
-	-moz-background-clip: padding;
-	background-clip: padding-box;
+  -webkit-background-clip: padding-box;
+  -moz-background-clip: padding;
+  background-clip: padding-box;
 }

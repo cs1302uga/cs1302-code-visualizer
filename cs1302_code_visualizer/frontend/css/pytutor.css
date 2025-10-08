@@ -51,7 +51,7 @@ div.ExecutionVisualizer table.visualizer td.vizLayoutTd {
 
 div.ExecutionVisualizer td#stack_td,
 div.ExecutionVisualizer td#heap_td {
-  vertical-align:top;
+  vertical-align: top;
   font-size: 10pt; /* don't make fonts in the heap so big! */
 }
 
@@ -84,10 +84,12 @@ div.ExecutionVisualizer div#pyCodeOutputDiv {
 }
 
 div.ExecutionVisualizer table#pyCodeOutput {
-  font-family: Andale mono, monospace;
+  font-family:
+    Andale mono,
+    monospace;
   /*font-size:12pt;*/
-  font-size:11pt;
-  line-height:1.1em;
+  font-size: 11pt;
+  line-height: 1.1em;
 
   border-collapse: separate; /* some crazy CSS voodoo that needs to be
                                 there so that SVG arrows to the left
@@ -185,7 +187,6 @@ div.ExecutionVisualizer textarea#vizDescriptionEditor {
   resize: none;
 }
 
-
 div.ExecutionVisualizer #errorOutput {
   color: #e93f34; /* should match brightRed JavaScript variable */
   font-size: 11pt;
@@ -216,20 +217,20 @@ div.ExecutionVisualizer #pyStdout {
   border: 1px solid #999999;
   font-size: 10pt;
   padding: 3px;
-  font-family: Andale mono, monospace;
+  font-family:
+    Andale mono,
+    monospace;
 
   overflow: auto; /* to look pretty on IE */
   /* make sure textarea doesn't grow and stretch */
   resize: none;
 }
 
-
 div.ExecutionVisualizer .vizFrame {
   margin-bottom: 20px;
   padding-left: 8px;
   border-left: 2px solid #cccccc;
 }
-
 
 /* Rendering of primitive types */
 
@@ -238,13 +239,15 @@ div.ExecutionVisualizer .importedObj {
 }
 
 div.ExecutionVisualizer .nullObj {
-/*  font-size: 8pt; */
+  /*  font-size: 8pt; */
 }
 
 div.ExecutionVisualizer .stringObj,
 div.ExecutionVisualizer .customObj,
 div.ExecutionVisualizer .funcObj {
-  font-family: Andale mono, monospace;
+  font-family:
+    Andale mono,
+    monospace;
   white-space: nowrap;
 }
 
@@ -268,7 +271,6 @@ div.ExecutionVisualizer table.tupleTbl,
 div.ExecutionVisualizer table.setTbl {
   background-color: #ffffc6;
 }
-
 
 div.ExecutionVisualizer table.listTbl {
   border: 0px solid black;
@@ -295,12 +297,10 @@ div.ExecutionVisualizer table.tupleTbl {
   border-right: 1px solid #555555; /* must match td.tupleHeader border */
 }
 
-
 div.ExecutionVisualizer table.listTbl td.listElt {
   border-bottom: 1px solid #555555; /* must match td.listHeader border */
   border-left: 1px solid #555555; /* must match td.listHeader border */
 }
-
 
 /* for C and C++ visualizations */
 
@@ -364,7 +364,6 @@ div.ExecutionVisualizer table.cArrayTbl td.cMultidimArrayElt {
   vertical-align: bottom;
 }
 
-
 div.ExecutionVisualizer .cdataHeader {
   font-size: 6pt;
   color: #555;
@@ -378,7 +377,6 @@ div.ExecutionVisualizer .cdataElt {
 div.ExecutionVisualizer .cdataUninit {
   color: #888;
 }
-
 
 div.ExecutionVisualizer table.tupleTbl td.tupleElt {
   border-left: 1px solid #555555; /* must match td.tupleHeader border */
@@ -414,7 +412,6 @@ div.ExecutionVisualizer table.setTbl td.setElt {
   padding: 8px;
 }
 
-
 div.ExecutionVisualizer table.dictTbl,
 div.ExecutionVisualizer table.instTbl,
 div.ExecutionVisualizer table.classTbl {
@@ -433,7 +430,6 @@ div.ExecutionVisualizer table.classTbl td.classVal,
 div.ExecutionVisualizer td.funcCod {
   background-color: #ffffc6;
 }
-
 
 div.ExecutionVisualizer table.dictTbl td.dictKey,
 div.ExecutionVisualizer table.instTbl td.instKey,
@@ -541,9 +537,10 @@ div.ExecutionVisualizer div.highlightedStackFrame {
   border-left: 1px solid #a6b3b6;
 }
 
-
 div.ExecutionVisualizer div.stackFrameHeader {
-  font-family: Andale mono, monospace;
+  font-family:
+    Andale mono,
+    monospace;
   font-size: 10pt;
   margin-top: 4px;
   margin-bottom: 3px;
@@ -570,7 +567,6 @@ div.ExecutionVisualizer td.stackFrameValue {
 }
 
 div.ExecutionVisualizer .stackFrameVarTable tr {
-
 }
 
 div.ExecutionVisualizer .stackFrameVarTable {
@@ -676,7 +672,6 @@ div.ExecutionVisualizer .ui-slider .ui-slider-handle {
   border: 1px solid #999;
 }
 
-
 /* for annotation bubbles */
 
 /* For styling tricks, see: http://css-tricks.com/textarea-tricks/ */
@@ -714,11 +709,11 @@ div.ExecutionVisualizer div#vizHeader {
 
 /* prev then curr, so curr gets precedence when both apply */
 div.ExecutionVisualizer .highlight-prev {
-  background-color: #F0F0EA;
+  background-color: #f0f0ea;
 }
 
 div.ExecutionVisualizer .highlight-cur {
-  background-color: #FFFF66;
+  background-color: #ffff66;
 }
 
 div.ExecutionVisualizer .highlight-legend {
@@ -739,7 +734,7 @@ div.ExecutionVisualizer .highlight-legend {
 div.ExecutionVisualizer a,
 div.ExecutionVisualizer a:visited,
 div.ExecutionVisualizer a:hover {
-  color: #3D58A2;
+  color: #3d58a2;
 }
 
 div.ExecutionVisualizer div#rawUserInputDiv {
@@ -762,7 +757,7 @@ div.ExecutionVisualizer .pycrazy-highlight-prev {
 }
 
 div.ExecutionVisualizer .pycrazy-highlight-cur {
-  background-color: #FFFF66;
+  background-color: #ffff66;
   /* aligned slightly higher than border-bottom */
   /*
   text-decoration: none;
@@ -771,12 +766,11 @@ div.ExecutionVisualizer .pycrazy-highlight-cur {
 }
 
 div.ExecutionVisualizer .pycrazy-highlight-prev-and-cur {
-  background-color: #FFFF66;
+  background-color: #ffff66;
 
   text-decoration: none;
   border-bottom: 1px solid #999999;
 }
-
 
 #optTabularView thead.stepTableThead {
   background-color: #bbb;
@@ -792,7 +786,6 @@ div.ExecutionVisualizer .pycrazy-highlight-prev-and-cur {
 #uiControlsPane {
   font-size: 8pt;
 }
-
 
 /* BEGIN Java frontend by David Pritchard and Will Gwozdz */
 
@@ -876,67 +869,72 @@ div.ExecutionVisualizer {
   --value-border-radius: var(--object-border-radius);
 }
 
-div.ExecutionVisualizer, div.ExecutionVisualizer * {
-    font-family: "Recursive", monospace !important;
-    font-variation-settings: "MONO" 1 !important;
-    font-optical-sizing: auto !important;
-    font-smooth: auto !important;
-    -webkit-font-smoothing: auto !important;
+div.ExecutionVisualizer,
+div.ExecutionVisualizer * {
+  font-family: "Recursive", monospace !important;
+  font-variation-settings: "MONO" 1 !important;
+  font-optical-sizing: auto !important;
+  font-smooth: auto !important;
+  -webkit-font-smoothing: auto !important;
 }
 
 div.ExecutionVisualizer .stackFrame {
-    border-left: 1px solid #a6b3b6 !important;
-    border-right: 1px solid #a6b3b6 !important;
+  border-left: 1px solid #a6b3b6 !important;
+  border-right: 1px solid #a6b3b6 !important;
 }
 
 div.ExecutionVisualizer .stackFrameHeader {
-    font-size: small !important;
+  font-size: small !important;
 }
 
-div.ExecutionVisualizer .instTbl, div.ExecutionVisualizer .listTbl {
-    border: var(--object-border) !important;
-    border-radius: var(--object-border-radius) !important;
-    background-color: var(--object-background-color) !important;
-    border-spacing: unset !important;
+div.ExecutionVisualizer .instTbl,
+div.ExecutionVisualizer .listTbl {
+  border: var(--object-border) !important;
+  border-radius: var(--object-border-radius) !important;
+  background-color: var(--object-background-color) !important;
+  border-spacing: unset !important;
 }
 
 div.ExecutionVisualizer .stackFrameVarTable {
-    background-color: revert !important;
+  background-color: revert !important;
 }
 
-div.ExecutionVisualizer .instKey, div.ExecutionVisualizer .stackFrameVar {
-    font-size: small !important;
-    border: transparent !important;
-    padding: 1px !important;
-    padding-left: 6px !important;
-    padding-right: 6px !important;
+div.ExecutionVisualizer .instKey,
+div.ExecutionVisualizer .stackFrameVar {
+  font-size: small !important;
+  border: transparent !important;
+  padding: 1px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
 }
 
 div.ExecutionVisualizer .javaStackVarThis {
   color: #de4b58;
 }
 
-div.ExecutionVisualizer .instVal, div.ExecutionVisualizer .listElt, div.ExecutionVisualizer .stackFrameValue {
-    border: var(--value-border) !important;
-    border-radius: var(--value-border-radius) !important;
-    background-color: var(--value-background-color) !important;
-    padding: 1px !important;
-    padding-left: 6px !important;
-    padding-right: 6px !important;
-    font-size: x-small !important;
-    min-width: 1.25rem !important;
+div.ExecutionVisualizer .instVal,
+div.ExecutionVisualizer .listElt,
+div.ExecutionVisualizer .stackFrameValue {
+  border: var(--value-border) !important;
+  border-radius: var(--value-border-radius) !important;
+  background-color: var(--value-background-color) !important;
+  padding: 1px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  font-size: x-small !important;
+  min-width: 1.25rem !important;
 }
 
 div.ExecutionVisualizer .listHeader {
-    font-size: xx-small !important;
-    border: transparent !important;
+  font-size: xx-small !important;
+  border: transparent !important;
 }
 
 div.ExecutionVisualizer .nullObj {
-    font-size: x-small !important;
+  font-size: x-small !important;
 }
 
 div.ExecutionVisualizer .instTbl:not(:has(.instKey)) {
-    background-color: var(--value-background-color) !important;
+  background-color: var(--value-background-color) !important;
 }
 /* /Dr. Cotterell's style changes */

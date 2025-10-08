@@ -20,8 +20,8 @@ appropriate academic integrity standards.</p>
 Copyright &copy; <a href="http://www.pgbovine.net/">Philip Guo</a>.  All rights reserved.
 </p>`;
 
-
-export var footerHtml = `
+export var footerHtml =
+  `
 <p style="margin-top: 20px; margin-bottom: 30px;"><a href="https://github.com/pgbovine/OnlinePythonTutor/blob/master/unsupported-features.md" target="_blank">unsupported features</a> |
 <a href="https://www.youtube.com/watch?v=80ztTXP90Vs&list=PLzV58Zm8FuBL2WxxZKGZ6j1dH8NKb_HYI&index=5" target="_blank">setting breakpoints</a> |
 <a href="https://www.youtube.com/watch?v=Mxt9HZWgwAM&list=PLzV58Zm8FuBL2WxxZKGZ6j1dH8NKb_HYI&index=6" target="_blank">hiding variables</a> |
@@ -67,10 +67,10 @@ JavaScript ES6 and TypeScript 1.4.1 (Node.js v6.0.0), Ruby 2 (MRI 2.2.2), C and 
 
 ` + privacyAndEndingHTML;
 
-
 export var nullTraceErrorLst = [
   "Unknown error: The server is OVERLOADED or your code has UNSUPPORTED FEATURES.",
-  "Try again later. This site is free with NO available technical support. [#NullTrace]"
+  "Try again later. This site is free with NO available technical support. [#NullTrace]",
 ];
 
-export var unsupportedFeaturesStr = 'see <a target="_blank" href="https://github.com/pgbovine/OnlinePythonTutor/blob/master/unsupported-features.md">UNSUPPORTED FEATURES</a>';
+export var unsupportedFeaturesStr =
+  'see <a target="_blank" href="https://github.com/pgbovine/OnlinePythonTutor/blob/master/unsupported-features.md">UNSUPPORTED FEATURES</a>';
