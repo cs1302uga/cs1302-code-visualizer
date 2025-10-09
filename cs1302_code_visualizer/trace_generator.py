@@ -100,15 +100,27 @@ def download_jdk():
                 f"Cannot automatically download a JDK for your computer's architecture ({m} {os}). Please download and provide one yourself."
             )
 
-    # lts_jdk_num = requests.get(
-    #     "https://api.adoptium.net/v3/info/available_releases"
-    # ).json()["most_recent_lts"]
+    resp = requests.get(
+        "https://api.adoptium.net/v3/info/available_releases"
+    )
+    resp.raise_for_status()
 
-    lts_jdk_num = "21"  # TODO: FIX
+    lts_jdk_num = resp.json()["most_recent_lts"]
+
     resp = requests.get(
         f"https://api.adoptium.net/v3/binary/latest/{lts_jdk_num}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse",
         stream=True,
     )
+
+    if (resp.status_code == 404):
+        # fall back to JDK 21
+        fallback_jdk_num = "21"
+        resp = requests.get(
+            f"https://api.adoptium.net/v3/binary/latest/{fallback_jdk_num}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse",
+            stream=True,
+        )
+
+    resp.raise_for_status()
 
     with tempfile.NamedTemporaryFile() as temp_file:
         with temp_file.file as f:
@@ -140,8 +152,7 @@ def ensure_jdk_installed(
 ) -> Path:
     # 1. check if javac is on the path and version 21 or greater
     java21_found: bool = False
-    which_java: str | None = shutil.which("java")
-    if which_java:
+    if which_java := shutil.which("java"):
         java_exe: Path = Path(which_java).resolve()
         java_props: str = subprocess.check_output(
             [
@@ -168,7 +179,10 @@ def ensure_jdk_installed(
         # otherwise, we have to download a jdk
         install_dir = Path(install_dir)
         logger.debug(f"No existing JDK installation found at {install_dir}")
-        download_jdk()
+        try:
+            download_jdk()
+        except Exception as e:
+            raise Exception("Failed to download JDK") from e
         return cache_dir / "jdk"
 
 
