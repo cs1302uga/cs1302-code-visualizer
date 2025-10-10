@@ -964,9 +964,14 @@ export class ExecutionVisualizer {
         return [false]; // didn't handle
 
       var label = obj[0].toLowerCase();
-      var visibleLabel = { list: "array", queue: "queue", stack: "stack" }[
-        label
-      ];
+      let maybeListType = myViz
+        .trimTypePrefix(myViz.curTrace[stepNum]?.heap_types?.[objID])
+        .concat(" instance");
+      var visibleLabel = {
+        list: maybeListType || "array",
+        queue: "queue",
+        stack: "stack",
+      }[label];
 
       if (obj.length == 1) {
         d3DomElement.append(
@@ -1354,6 +1359,22 @@ class DataVisualizer {
 
   height() {
     return this.domRoot.find("#dataViz").height();
+  }
+
+  trimTypePrefix(type: string): string {
+    let prefixes: string[] | null = this.params.stripTypePrefixes;
+
+    if (!prefixes) {
+      return type;
+    }
+
+    for (const typePrefix of prefixes) {
+      if (type.startsWith(typePrefix)) {
+        return type.replace(typePrefix, "");
+      }
+    }
+
+    return type;
   }
 
   // create a unique CSS ID for a heap object, which should include both
@@ -2416,7 +2437,7 @@ class DataVisualizer {
       .data(function (d, i) {
         let typeHtml =
           myViz.params.includeTypes && curEntry.ordered_globals_types
-            ? `<div class="fieldTypeLabel">${htmlsanitize(curEntry.ordered_globals_types?.[i])}</div>`
+            ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(curEntry.ordered_globals_types?.[i]))}</div>`
             : "";
         return [typeHtml + d, d];
       });
@@ -2744,7 +2765,7 @@ class DataVisualizer {
           else {
             let typeHtml =
               myViz.params.includeTypes && d.type
-                ? `<div class="fieldTypeLabel">${htmlsanitize(d.type)}</div>`
+                ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(d.type))}</div>`
                 : "";
             let varNameHtml =
               varname === "this"
@@ -3740,7 +3761,7 @@ class DataVisualizer {
             var attrnameStr = htmlspecialchars(kvPair[0]);
             let typeHtml =
               myViz.params.includeTypes && types
-                ? `<div class="fieldTypeLabel">${htmlsanitize(types[Number(ind) - 2])}</div>`
+                ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(types[Number(ind) - 2]))}</div>`
                 : "";
             keyTd.append(typeHtml);
             keyTd.append('<span class="keyObj">' + attrnameStr + "</span>");

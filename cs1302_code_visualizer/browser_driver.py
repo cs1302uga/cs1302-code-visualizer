@@ -6,6 +6,7 @@ import fileinput
 import argparse
 import logging
 import shutil
+import json
 
 from textwrap import dedent, indent
 from contextlib import contextmanager
@@ -73,7 +74,9 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
         driver.implicitly_wait(4)
         return driver
     except Exception:
-        logger.exception(f"Unable to instantiate Selenium's webdriver: {options=}; {service=}")
+        logger.exception(
+            f"Unable to instantiate Selenium's webdriver: {options=}; {service=}"
+        )
 
 
 def tidy_set_window_size_for_element(
@@ -128,7 +131,6 @@ def tidy_set_window_size_for_element(
         element.location["y"] + element.size["height"] + offset_size["height"],
     )  # + 50
 
-
     logger.debug(f"{new_width=}")
     logger.debug(f"{new_height=}")
 
@@ -150,6 +152,7 @@ def online_python_tutor_frontend(
     dpi: int = 1,
     include_types: bool = True,
     text_memory_labels: bool = True,
+    strip_type_prefixes: list[str] = [],
 ):
     """TODO."""
     frontend_path = (this_files_dir / "frontend" / "render-trace.html").as_uri()
@@ -164,6 +167,7 @@ def online_python_tutor_frontend(
         "tracePath": trace_file.name,
         "includeTypes": str(include_types).lower(),
         "textMemoryLabels": str(text_memory_labels).lower(),
+        "stripTypePrefixes": json.dumps(strip_type_prefixes),
     }
 
     frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
@@ -234,6 +238,7 @@ def generate_image(
     format: str = "PNG",
     include_types: bool = True,
     text_memory_labels: bool = False,
+    strip_type_prefixes: list[str] = [],
 ) -> bytes:
     """Generate an image of the final state of an execution trace file.
 
@@ -245,6 +250,7 @@ def generate_image(
         format: The image output format. This gets passed directly into PIL's ``Image.save()``.
         include_types: Whether or not type tags should be included in this visualization.
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
+        strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
 
     Return:
         The bytes of the generated image in the format specified by the ``format`` argument.
@@ -258,6 +264,7 @@ def generate_image(
         dpi=dpi,
         include_types=include_types,
         text_memory_labels=text_memory_labels,
+        strip_type_prefixes=strip_type_prefixes,
     ) as frontend:
 
         driver: webdriver.Chrome = frontend["driver"]

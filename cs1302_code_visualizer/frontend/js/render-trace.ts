@@ -10,6 +10,13 @@ $(document).ready(function () {
   const includeTypes = urlParams.get("includeTypes")?.toLowerCase() !== "false";
   const textMemoryLabels =
     urlParams.get("textMemoryLabels")?.toLowerCase() !== "false";
+  let stripTypePrefixes = [];
+  try {
+    let maybePrefixArray = JSON.parse(urlParams.get("stripTypePrefixes"));
+    if (Array.isArray(maybePrefixArray)) {
+      stripTypePrefixes = maybePrefixArray;
+    }
+  } catch (e) {}
 
   let frontendOptions = {
     jumpToEnd: true,
@@ -18,6 +25,7 @@ $(document).ready(function () {
     lang: "java",
     includeTypes: includeTypes,
     textualMemoryLabels: textMemoryLabels,
+    stripTypePrefixes: stripTypePrefixes,
   };
 
   fetch("file://" + tracePath)

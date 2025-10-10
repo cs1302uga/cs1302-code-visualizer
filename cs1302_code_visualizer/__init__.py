@@ -23,25 +23,27 @@ def render_images(
     remove_main_args: bool = True,
     include_types: bool = True,
     text_memory_labels: bool = False,
+    strip_type_prefixes: list[str] = [],
 ) -> dict[int, bytes]:
     """Visualize the state of a Java program at given breakpoints.
-    java_source:        The Java source code to visualize.
-    breakpoints:        The source lines at which an execution snapshot should be taken. If a line is
-                        executed multiple times, the last execution is the one visualized. If a breakpoint
-                        cannot be created on a line, it will not be included in this function's output.
-    java_home:          A path to a JDK 21+ installation home. If not provided, a JDK will be fetched
-                        automatically.
-    timeout_secs:       Maximum execution time for the Java source's trace generation, or no limit if
-                        None.
-    dpi:                A positive, integer multiplicative factor for the output image's resolution.
-    format:             The image output format. This gets passed directly into PIL's Image.save() method,
-                        refer to that method's documentation for acceptable values.
-    inline_strings:     True if strings should be inlined in the visualization, false if they should be
-                        rendered seperately on the heap.
-    remove_main_args:   False if the visualization should include the main method's `args` parameter,
-                        True otherwise
-    include_types:      True if type tags should be included in this visualization, False otherwise.
-    text_memory_labels: True if object connections should be rendered as text labels, False otherwise.
+    java_source:         The Java source code to visualize.
+    breakpoints:         The source lines at which an execution snapshot should be taken. If a line is
+                         executed multiple times, the last execution is the one visualized. If a breakpoint
+                         cannot be created on a line, it will not be included in this function's output.
+    java_home:           A path to a JDK 21+ installation home. If not provided, a JDK will be fetched
+                         automatically.
+    timeout_secs:        Maximum execution time for the Java source's trace generation, or no limit if
+                         None.
+    dpi:                 A positive, integer multiplicative factor for the output image's resolution.
+    format:              The image output format. This gets passed directly into PIL's Image.save() method,
+                         refer to that method's documentation for acceptable values.
+    inline_strings:      True if strings should be inlined in the visualization, false if they should be
+                         rendered seperately on the heap.
+    remove_main_args:    False if the visualization should include the main method's `args` parameter,
+                         True otherwise
+    include_types:       True if type tags should be included in this visualization, False otherwise.
+    text_memory_labels:  True if object connections should be rendered as text labels, False otherwise.
+    strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
 
     out:                Mapping from breakpoint lines to visualization images.
 
@@ -70,6 +72,7 @@ def render_images(
             format=format,
             include_types=include_types,
             text_memory_labels=text_memory_labels,
+            strip_type_prefixes=strip_type_prefixes,
         )
     return out
 
@@ -87,6 +90,7 @@ def render_image(
     verbose: bool = False,
     include_types: bool = True,
     text_memory_labels: bool = False,
+    strip_type_prefixes: list[str] = [],
 ) -> bytes:
     """Visualize the state of a Java program just before exiting as an image.
 
@@ -121,6 +125,8 @@ def render_image(
         include_types: True if type tags should be included in this visualization, False otherwise.
 
         text_memory_labels: True if object connections should be rendered as text labels, False otherwise.
+
+        strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
 
     Return:
 
@@ -166,6 +172,7 @@ def render_image(
             format=format,
             include_types=include_types,
             text_memory_labels=text_memory_labels,
+            strip_type_prefixes=strip_type_prefixes,
         )
         return output
     except Exception as exc:
@@ -176,5 +183,7 @@ def render_image(
 
 def main() -> None:
     java_source: str = "".join(fileinput.input())
-    rendered_image: bytes = render_image(java_source, dpi=2)
+    rendered_image: bytes = render_image(
+        java_source, dpi=2, strip_type_prefixes=["java.util.", "java.lang."]
+    )
     stdout.buffer.write(rendered_image)
