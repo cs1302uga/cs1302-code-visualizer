@@ -43,8 +43,10 @@ def generate_trace(
     breakpoints: set[int] = set(),
 ) -> str:
     args = ["-s"] if inline_strings else []
+    if breakpoints:
+        args.append("-b")
     for breakpoint in breakpoints:
-        args.extend(["-b", str(breakpoint)])
+        args.append(str(breakpoint))
     if remove_main_args_parameter:
         args.append("--remove-main-args")
 
