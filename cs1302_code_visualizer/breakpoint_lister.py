@@ -47,10 +47,9 @@ def list_breakpoints(
 
     args: list[str] = []
 
+    args.append("list-breakpoints")
     if output_json:
-        args.extend(["-L"])  # --list-available-breakpoints-json
-    else:
-        args.extend(["-l"])  # --list-available-breakpoints
+        args.append("--json")
 
     return subprocess.check_output(
         (
