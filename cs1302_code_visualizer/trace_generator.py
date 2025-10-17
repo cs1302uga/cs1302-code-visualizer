@@ -56,6 +56,7 @@ def generate_trace(
                 str(java_home / "bin" / "java"),
                 "-jar",
                 str(cache_dir / "code-tracer.jar"),
+                "trace",
             ]
             + args
         ),
