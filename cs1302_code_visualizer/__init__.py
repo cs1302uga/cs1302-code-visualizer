@@ -1,5 +1,6 @@
 #!/bin/env python3
 
+from collections import defaultdict
 import fileinput
 
 import json
@@ -24,7 +25,8 @@ def render_images(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: list[str] = [],
-) -> dict[int, bytes]:
+    render_all_breakpoint_occurrences: bool = False,
+) -> dict[int, bytes] | dict[int, list[bytes]]:
     """Visualize the state of a Java program at given breakpoints.
     java_source:         The Java source code to visualize.
     breakpoints:         The source lines at which an execution snapshot should be taken. If a line is
@@ -38,14 +40,19 @@ def render_images(
     format:              The image output format. This gets passed directly into PIL's Image.save() method,
                          refer to that method's documentation for acceptable values.
     inline_strings:      True if strings should be inlined in the visualization, false if they should be
-                         rendered seperately on the heap.
+                         rendered separately on the heap.
     remove_main_args:    False if the visualization should include the main method's `args` parameter,
                          True otherwise
     include_types:       True if type tags should be included in this visualization, False otherwise.
     text_memory_labels:  True if object connections should be rendered as text labels, False otherwise.
     strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+    render_all_breakpoint_occurrences: If true, render each occurrence of a breakpoint as a separate image.
+                         This changes the return type of the function.
 
-    out:                Mapping from breakpoint lines to visualization images.
+    out:                 Mapping from a breakpoint line to a visualization image. If
+                         render_all_breakpoint_occurrences is true, then this instead returns a mapping from
+                         a breakpoint line to a list of visualization images (first occurrence first,
+                         last occurrence last).
 
     Note that exceptions may be raised if image generation fails.
     """
@@ -61,20 +68,38 @@ def render_images(
         inline_strings,
         remove_main_args,
         breakpoints,
+        accumulate_breakpoints=render_all_breakpoint_occurrences,
     )
 
-    traces: dict[str, dict] = json.loads(trace)
-    out = dict()
-    for line in traces:
-        out[int(line)] = browser_driver.generate_image(
-            json.dumps(traces[line]),
-            dpi=dpi,
-            format=format,
-            include_types=include_types,
-            text_memory_labels=text_memory_labels,
-            strip_type_prefixes=strip_type_prefixes,
-        )
-    return out
+    if render_all_breakpoint_occurrences:
+        traces_accumulated: dict[str, list[dict]] = json.loads(trace)
+        out = defaultdict(list)
+        for line in traces_accumulated:
+            for occurrence in traces_accumulated[line]:
+                out[int(line)].append(
+                    browser_driver.generate_image(
+                        json.dumps(occurrence),
+                        dpi=dpi,
+                        format=format,
+                        include_types=include_types,
+                        text_memory_labels=text_memory_labels,
+                        strip_type_prefixes=strip_type_prefixes,
+                    )
+                )
+        return out
+    else:
+        traces: dict[str, dict] = json.loads(trace)
+        out = dict()
+        for line in traces:
+            out[int(line)] = browser_driver.generate_image(
+                json.dumps(traces[line]),
+                dpi=dpi,
+                format=format,
+                include_types=include_types,
+                text_memory_labels=text_memory_labels,
+                strip_type_prefixes=strip_type_prefixes,
+            )
+        return out
 
 
 def render_image(
@@ -86,7 +111,7 @@ def render_image(
     format: str = "PNG",
     inline_strings: bool = False,
     remove_main_args: bool = True,
-    breakpoint_line: int = -1,
+    breakpoint_line: int | tuple[int, int] = -1,
     verbose: bool = False,
     include_types: bool = True,
     text_memory_labels: bool = False,
@@ -110,7 +135,7 @@ def render_image(
             refer to that method's documentation for acceptable values.
 
         inline_strings: True if strings should be inlined in the visualization, false if they should
-            be rendered seperately on the heap.
+            be rendered separately on the heap.
 
         remove_main_args: False if the visualization should include the main method's `args`
             parameter, True otherwise.
@@ -121,6 +146,9 @@ def render_image(
             that it is executed. The default value is -1, which indicates that that the
             visualization should depict what memory looks like just after the entire body of the
             main method has executed.
+
+            If a tuple (a,b) is passed, an image is generated at the b-th occurrence of the breakpoint at
+            line a. If there is no b-th occurrence, the last occurrence is used.
 
         include_types: True if type tags should be included in this visualization, False otherwise.
 
@@ -148,8 +176,20 @@ def render_image(
 
     trace: str = "{}"
 
-    try:
+    breakpoint_index: int | None = None
+    if isinstance(breakpoint_line, tuple) and list(map(type, breakpoint_line)) == [
+        int,
+        int,
+    ]:
+        breakpoints: set[int] = {breakpoint_line[0]}
+        breakpoint_index = breakpoint_line[1] - 1
+    else:
+        assert isinstance(
+            breakpoint_line, int
+        ), "breakpoint_line must be either an int or an (int, int)"
         breakpoints: set[int] = {breakpoint_line}
+
+    try:
         execution_trace: str = trace_generator.generate_trace(
             java_home,
             java_source,
@@ -157,11 +197,22 @@ def render_image(
             inline_strings,
             remove_main_args,
             breakpoints=breakpoints,
+            accumulate_breakpoints=breakpoint_index != None,
         )
-        traces: dict[str, dict] = json.loads(execution_trace)
-        for line in traces:
-            trace = json.dumps(traces[line])
-            break
+
+        traces: dict[str, list[dict]] = json.loads(execution_trace)
+        if breakpoint_index != None:
+            for line in traces:
+                if breakpoint_index in range(len(traces[line])):
+                    trace = json.dumps(traces[line][breakpoint_index])
+                else:
+                    trace = json.dumps(traces[line][-1])
+                break
+        else:
+            for line in traces:
+                trace = json.dumps(traces[line])
+                break
+
     except Exception as exc:
         raise Exception("Unable to generate execution trace!") from exc
 
@@ -184,6 +235,9 @@ def render_image(
 def main() -> None:
     java_source: str = "".join(fileinput.input())
     rendered_image: bytes = render_image(
-        java_source, dpi=2, strip_type_prefixes=["java.util.", "java.lang."]
+        java_source,
+        dpi=2,
+        strip_type_prefixes=["java.util.", "java.lang."],
+        breakpoint_line=(36, 9),
     )
     stdout.buffer.write(rendered_image)

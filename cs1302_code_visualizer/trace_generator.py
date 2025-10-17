@@ -41,6 +41,7 @@ def generate_trace(
     inline_strings: bool = True,
     remove_main_args_parameter: bool = True,
     breakpoints: set[int] = set(),
+    accumulate_breakpoints: bool = False,
 ) -> str:
     args = ["-s"] if inline_strings else []
     if breakpoints:
@@ -49,6 +50,8 @@ def generate_trace(
         args.append(str(breakpoint))
     if remove_main_args_parameter:
         args.append("--remove-main-args")
+    if accumulate_breakpoints:
+        args.append("--accumulate-breakpoints")
 
     return subprocess.check_output(
         (
@@ -103,9 +106,7 @@ def download_jdk():
                 f"Cannot automatically download a JDK for your computer's architecture ({m} {os}). Please download and provide one yourself."
             )
 
-    resp = requests.get(
-        "https://api.adoptium.net/v3/info/available_releases"
-    )
+    resp = requests.get("https://api.adoptium.net/v3/info/available_releases")
     resp.raise_for_status()
 
     lts_jdk_num = resp.json()["most_recent_lts"]
@@ -115,7 +116,7 @@ def download_jdk():
         stream=True,
     )
 
-    if (resp.status_code == 404):
+    if resp.status_code == 404:
         # fall back to JDK 21
         fallback_jdk_num = "21"
         resp = requests.get(
@@ -136,11 +137,11 @@ def download_jdk():
         elif os == "mac":
             with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
                 toplevel_dir = Path(tar.getnames()[0]) / "Contents" / "Home"
-                tar.extractall(cache_dir, numeric_owner=True, filter='tar')
+                tar.extractall(cache_dir, numeric_owner=True, filter="tar")
         else:
             with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
                 toplevel_dir = tar.getnames()[0]
-                tar.extractall(cache_dir, numeric_owner=True, filter='tar')
+                tar.extractall(cache_dir, numeric_owner=True, filter="tar")
 
     shutil.move(cache_dir / toplevel_dir, cache_dir / "jdk")
 
@@ -172,7 +173,7 @@ def ensure_jdk_installed(
             if stripped_line and stripped_line.startswith("java.home = "):
                 install_dir = Path(stripped_line.split(" = ")[1])
             elif stripped_line and stripped_line.startswith("java.version = "):
-                java_version = tuple(map(int, stripped_line.split(" = ")[1].split('.')))
+                java_version = tuple(map(int, stripped_line.split(" = ")[1].split(".")))
                 java21_found = java_version >= (21, 0, 0)
 
     if java21_found and jdk_exists(install_dir):
