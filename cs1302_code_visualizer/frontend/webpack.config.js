@@ -36,6 +36,7 @@ module.exports = {
 
   entry: {
     "render-trace": "./js/render-trace.ts",
+    "vis-module": "./js/CodeVisualizer.ts",
   },
 
   output: {
@@ -45,6 +46,10 @@ module.exports = {
     // https://webpack.github.io/docs/long-term-caching.html
     filename: "[name].bundle.js",
     sourceMapFilename: "[file].map",
+    library: {
+      name: "CodeVisualizer",
+      type: "umd",
+    },
   },
 
   module: {
