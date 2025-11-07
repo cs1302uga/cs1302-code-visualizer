@@ -1070,6 +1070,15 @@ export class ExecutionVisualizer {
         if ($(this).html() == "dict") $(this).html("symbol table");
         if ($(this).html() == "empty dict") $(this).html("empty symbol table");
       });
+
+      myViz.domRoot.find("#dataViz .heapObject")
+        .filter(function() {
+          return $(this).find(".typeLabel").text().includes("String instance");
+        })
+        .each(function() {
+          $(this).find(".instKey").remove();
+          $(this).find(".instVal").attr("style", (_,s) => (s || "") + "border: none !important;");
+        });
     });
 
     // java synthetics cause things which javascript doesn't like in an id

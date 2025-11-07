@@ -38,19 +38,6 @@ $(document).ready(function () {
       );
 
       document.fonts.addEventListener("loadingdone", () => {
-        Array.from(document.querySelectorAll("#dataViz .heapObject"))
-          .filter((element) =>
-            element
-              .querySelector(".typeLabel")
-              .textContent.includes("String instance"),
-          )
-          .forEach((element) => {
-            element.querySelector(".instKey").remove();
-            element
-              .querySelector<HTMLElement>(".instVal")
-              .style.setProperty("border-color", "transparent", "important");
-          });
-
         myViz.redrawConnectors();
 
         (window as any).optFrontend = myViz;
