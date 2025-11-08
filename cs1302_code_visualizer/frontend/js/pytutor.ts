@@ -965,7 +965,7 @@ export class ExecutionVisualizer {
 
       var label = obj[0].toLowerCase();
       let maybeListType = myViz
-        .trimTypePrefix(myViz.curTrace[stepNum]?.heap_types?.[objID])
+        .trimTypePrefix(myViz.curTrace[stepNum]?.heap_attrs?.[objID]?.type)
         .concat(" instance");
       var visibleLabel = {
         list: maybeListType || "array",
@@ -1071,13 +1071,16 @@ export class ExecutionVisualizer {
         if ($(this).html() == "empty dict") $(this).html("empty symbol table");
       });
 
-      myViz.domRoot.find("#dataViz .heapObject")
-        .filter(function() {
+      myViz.domRoot
+        .find("#dataViz .heapObject")
+        .filter(function () {
           return $(this).find(".typeLabel").text().includes("String instance");
         })
-        .each(function() {
+        .each(function () {
           $(this).find(".instKey").remove();
-          $(this).find(".instVal").attr("style", (_,s) => (s || "") + "border: none !important;");
+          $(this)
+            .find(".instVal")
+            .attr("style", (_, s) => (s || "") + "border: none !important;");
         });
     });
 
@@ -2444,9 +2447,10 @@ class DataVisualizer {
     var globalVarTableCells = globalVarTable
       .selectAll("td.stackFrameVar,td.stackFrameValue")
       .data(function (d, i) {
+        let type: string | undefined = curEntry.globals_attrs?.[d]?.type;
         let typeHtml =
-          myViz.params.includeTypes && curEntry.ordered_globals_types
-            ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(curEntry.ordered_globals_types?.[i]))}</div>`
+          myViz.params.includeTypes && type
+            ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(type))}</div>`
             : "";
         return [typeHtml + d, d];
       });
@@ -2726,7 +2730,7 @@ class DataVisualizer {
               return {
                 varname: varname,
                 frame: frame,
-                type: frame.ordered_varnames_types?.[i],
+                attrs: frame.locals_attrs?.[varname],
               };
             });
           }
@@ -2773,8 +2777,8 @@ class DataVisualizer {
             $(this).html('<span class="retval">Return<br/>value</span>');
           else {
             let typeHtml =
-              myViz.params.includeTypes && d.type
-                ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(d.type))}</div>`
+              myViz.params.includeTypes && d.attrs.type
+                ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(d.attrs.type))}</div>`
                 : "";
             let varNameHtml =
               varname === "this"
@@ -3736,7 +3740,7 @@ class DataVisualizer {
 
         var tbl = d3DomElement.children("table:last"); // tricky, there's more than 1 table if isPprintInstance is true
 
-        let types = myViz.curTrace[stepNum].heap_types?.[objID];
+        let types = myViz.curTrace[stepNum].heap_attrs?.[objID]?.type;
 
         $.each(obj, function (ind, kvPair) {
           if (ind < headerLength) return; // skip header tags
