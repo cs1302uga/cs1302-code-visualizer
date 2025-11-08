@@ -860,6 +860,10 @@ div.ExecutionVisualizer {
   -webkit-font-smoothing: auto !important;
 }
 
+.isFinal .stackFrameValue, .isFinal .instVal {
+  filter: brightness(85%);
+}
+
 :root {
   --object-background-color: #faebbf;
   --object-border: 1px solid black;

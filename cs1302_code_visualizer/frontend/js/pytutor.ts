@@ -2444,7 +2444,9 @@ class DataVisualizer {
     globalVarTable
       .enter()
       .append("tr")
-      .attr("class", "variableTr")
+      .attr("class", function(d, i) {
+        return "variableTr" + (curEntry.globals_attrs?.[d]?.final ? " isFinal" : "");
+      })
       .attr("id", function (d, i) {
         return myViz.owner.generateID(varnameToCssID("global__" + d + "_tr")); // make globally unique (within the page)
       });
@@ -2751,7 +2753,9 @@ class DataVisualizer {
     stackVarTable
       .enter()
       .append("tr")
-      .attr("class", "variableTr")
+      .attr("class", function(d, i) {
+        return "variableTr" + (d.attrs?.final ? " isFinal" : "");
+      })
       .attr("id", function (d, i) {
         return myViz.owner.generateID(
           varnameToCssID(d.frame.unique_hash + "__" + d.varname + "_tr"),
@@ -3193,6 +3197,9 @@ class DataVisualizer {
       }
     });
 
+    // TODO should this always be highlighted? globals are always accessible,
+    // and to me an arrow being highlighted means that you can follow it in
+    // the current context
     if (!frame_already_highlighted) {
       highlight_frame(myViz.owner.generateID("globals"));
     }
@@ -3745,7 +3752,8 @@ class DataVisualizer {
 
         var tbl = d3DomElement.children("table:last"); // tricky, there's more than 1 table if isPprintInstance is true
 
-        let types = myViz.curTrace[stepNum].heap_attrs?.[objID]?.type;
+        let attrs = myViz.curTrace[stepNum].heap_attrs?.[objID];
+        let types = attrs?.type;
 
         $.each(obj, function (ind, kvPair) {
           if (ind < headerLength) return; // skip header tags
@@ -3758,14 +3766,12 @@ class DataVisualizer {
             return; // get out!
           }
 
+          let isFinal = attrs?.final?.[Number(ind) - 2] === true;
           tbl.append(
-            '<tr class="' +
-              lab +
-              'Entry"><td class="' +
-              lab +
-              'Key"></td><td class="' +
-              lab +
-              'Val"></td></tr>',
+            `<tr class="${lab}Entry${isFinal ? " isFinal" : ""}">
+               <td class="${lab}Key"></td>
+               <td class="${lab}Val"></td>
+             </tr>`
           );
 
           var newRow = tbl.find("tr:last");
