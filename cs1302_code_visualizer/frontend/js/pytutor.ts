@@ -1286,6 +1286,11 @@ class DataVisualizer {
     this.params = this.owner.params;
     this.curTrace = this.owner.curTrace;
 
+    if (Array.isArray(this.params.stripTypePrefixes)) {
+      // sort so that we match the longest possible prefix first in the type strip method
+      this.params.stripTypePrefixes.sort().reverse();
+    }
+
     this.domRoot = domRoot;
     this.domRootD3 = domRootD3;
 
