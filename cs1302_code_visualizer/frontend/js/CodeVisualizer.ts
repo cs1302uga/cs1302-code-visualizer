@@ -25,6 +25,7 @@ export function create({
     lang: lang,
     includeTypes: options.includeTypes ?? false,
     textualMemoryLabels: options.textualMemoryLabels ?? false,
+    stripTypePrefixes: options.stripTypePrefixes ?? [],
     jumpToEnd: true,
     hideCode: true,
     disableHeapNesting: true,

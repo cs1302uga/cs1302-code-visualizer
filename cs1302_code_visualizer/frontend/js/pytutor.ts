@@ -1453,6 +1453,8 @@ class DataVisualizer {
         return "true";
       } else if (label === "False") {
         return "false";
+      } else if (label == "function") {
+        return "lambda";
       }
     } else if (this.params.lang === "c" || this.params.lang === "cpp") {
       if (label === "Global frame") {
@@ -2444,8 +2446,10 @@ class DataVisualizer {
     globalVarTable
       .enter()
       .append("tr")
-      .attr("class", function(d, i) {
-        return "variableTr" + (curEntry.globals_attrs?.[d]?.final ? " isFinal" : "");
+      .attr("class", function (d, i) {
+        return (
+          "variableTr" + (curEntry.globals_attrs?.[d]?.final ? " isFinal" : "")
+        );
       })
       .attr("id", function (d, i) {
         return myViz.owner.generateID(varnameToCssID("global__" + d + "_tr")); // make globally unique (within the page)
@@ -2753,7 +2757,7 @@ class DataVisualizer {
     stackVarTable
       .enter()
       .append("tr")
-      .attr("class", function(d, i) {
+      .attr("class", function (d, i) {
         return "variableTr" + (d.attrs?.final ? " isFinal" : "");
       })
       .attr("id", function (d, i) {
@@ -3771,7 +3775,7 @@ class DataVisualizer {
             `<tr class="${lab}Entry${isFinal ? " isFinal" : ""}">
                <td class="${lab}Key"></td>
                <td class="${lab}Val"></td>
-             </tr>`
+             </tr>`,
           );
 
           var newRow = tbl.find("tr:last");
@@ -3928,6 +3932,24 @@ class DataVisualizer {
         // compact form:
         d3DomElement.append('<pre class="funcCode">' + funcCode + "</pre>");
       }
+    } else if (obj[0] == "JAVA_LAMBDA") {
+      assert(obj.length == 2);
+      d3DomElement.append(
+        '<div class="typeLabel">' + typeLabelPrefix + "lambda" + "</div>",
+      );
+      let lambdaCode = obj[1];
+      // this is a little bit hacky but I think it's safe? you're not going to
+      // see something like java.lang. outside of the context of an FQN,
+      // or at least not often. this could do with a better implementation
+      // but I think this'll do for now.
+      this.params.stripTypePrefixes?.forEach(
+        (p) => (lambdaCode = lambdaCode.replaceAll(p, "")),
+      );
+      d3DomElement.append(
+        '<pre class="funcCode"><code class="language-java">' +
+          htmlsanitize(lambdaCode) +
+          "</code></pre>",
+      );
     } else if (obj[0] == "HEAP_PRIMITIVE") {
       assert(obj.length == 3);
 

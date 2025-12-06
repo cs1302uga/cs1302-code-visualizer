@@ -253,6 +253,7 @@ div.ExecutionVisualizer .funcObj {
 
 div.ExecutionVisualizer .funcCode {
   font-size: 8pt;
+  margin: 0;
 }
 
 div.ExecutionVisualizer .retval {
@@ -860,7 +861,8 @@ div.ExecutionVisualizer {
   -webkit-font-smoothing: auto !important;
 }
 
-.isFinal .stackFrameValue, .isFinal .instVal {
+.isFinal .stackFrameValue,
+.isFinal .instVal {
   filter: brightness(85%);
 }
 
