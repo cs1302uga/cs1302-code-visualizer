@@ -58,7 +58,6 @@ To see a list of available breakpoints (i.e., breakpoint line numbers) for Java
 program, use the `list_breakpoints` program (see `list_breakpoints --help` for
 available options):
 
-
 ```console
 $ uv run list_breakpoints < In.java
 ```
@@ -73,9 +72,10 @@ browser driver.
 
 The trace generator is essentially a Python wrapper around a Java tracer
 program. It:
-- downloads and installs both [the latest release of the
-  tracer](https://github.com/cs1302uga/cs1302-tracer/releases/latest) and the
-  latest release of the JDK
+
+- downloads and installs both the tracer (uses the URL given in `pyproject.toml`
+  if one is given, otherwise falls back to the latest release) and the latest
+  release of the JDK
 - executes the tracer on the input code
 - returns the output of the tracer
 
@@ -86,3 +86,7 @@ visualization.
 The browser driver creates a headless Chrome browser process using Selenium,
 loads the frontend with the trace, and then takes a screenshot of the
 visualization created by the frontend.
+
+When making a new release, make sure that the version of the tracer program that
+you want to use is specified in the `tool.cs1302-code-visualizer` object of
+`pyproject.toml`.

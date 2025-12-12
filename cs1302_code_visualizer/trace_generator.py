@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import fileinput
+import tomllib
+import hashlib
 import socket
 import json
 import shutil
@@ -190,6 +192,32 @@ def ensure_jdk_installed(
         return cache_dir / "jdk"
 
 
+def read_tracer_url_and_sum_from_toml() -> tuple[str, str] | None:
+    """
+    Load the tool.cs1302-code-visualizer.{tracer-url,tracer-sha256} fields from the project's pyproject.toml.
+
+    Returns a tuple where the first element is the URL and the second is the SHA256 sum, or None if reading the fields failed.
+    """
+    try:
+        with open(current_dir.parent / "pyproject.toml", "rb") as t:
+            pyproject = tomllib.load(t)
+            package_constants = pyproject.get("tool", {}).get(
+                "cs1302-code-visualizer", {}
+            )
+            tracer_url = package_constants.get("tracer-url")
+            if tracer_url is None or not isinstance(tracer_url, str):
+                return None
+            tracer_sha256 = package_constants.get("tracer-sha256")
+            if tracer_sha256 is None or not isinstance(tracer_sha256, str):
+                return None
+            return (
+                package_constants.get("tracer-url"),
+                package_constants.get("tracer-sha256"),
+            )
+    except Exception:
+        return None
+
+
 def ensure_code_tracer_installed(update_existing: bool = False):
     if (cache_dir / "code-tracer.jar").is_file():
         if not update_existing:
@@ -216,8 +244,11 @@ def ensure_code_tracer_installed(update_existing: bool = False):
         if "Last-Modified" in dl_info:
             headers["If-Modified-Since"] = dl_info["Last-Modified"]
 
+    tracer_url_and_sum = read_tracer_url_and_sum_from_toml()
+
     resp = requests.get(
-        "https://github.com/cs1302uga/cs1302-tracer/releases/latest/download/code-tracer.jar",
+        (tracer_url_and_sum and tracer_url_and_sum[0])
+        or "https://github.com/cs1302uga/cs1302-tracer/releases/latest/download/code-tracer.jar",
         headers=headers,
         stream=True,
     )
@@ -228,8 +259,14 @@ def ensure_code_tracer_installed(update_existing: bool = False):
     resp.raise_for_status()
 
     with tempfile.TemporaryFile() as temp_file:
+        sha256_hash = hashlib.sha256()
         for chunk in resp.iter_content(2**8):
             temp_file.write(chunk)
+            sha256_hash.update(chunk)
+        if tracer_url_and_sum and tracer_url_and_sum[1] != sha256_hash.hexdigest():
+            raise Exception(
+                f"Downloaded tracer JAR doesn't have the correct SHA256 sum. Expected: {tracer_url_and_sum[1]}, got {sha256_hash.hexdigest()}."
+            )
         temp_file.seek(0)
         with open(cache_dir / "code-tracer.jar", "wb") as jar_file:
             shutil.copyfileobj(temp_file, jar_file)
