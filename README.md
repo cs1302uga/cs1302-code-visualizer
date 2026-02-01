@@ -1,4 +1,4 @@
-# cs1302-code-visualizer
+# Code Visualizer (cs1302-code-visualizer)
 
 This project automates the creation of images that visualize a Java program's
 state. It also provides a Python interface for doing this.
