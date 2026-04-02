@@ -237,7 +237,6 @@ def main() -> None:
     rendered_image: bytes = render_image(
         java_source,
         dpi=2,
-        strip_type_prefixes=["java.util.", "java.lang."],
-        breakpoint_line=(36, 9),
+        strip_type_prefixes=["java.lang."],
     )
     stdout.buffer.write(rendered_image)
