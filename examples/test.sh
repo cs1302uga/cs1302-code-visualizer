@@ -10,7 +10,7 @@ open_file() {
         darwin*) # macOS
             (
                 set -x
-                open "${file}"
+                qlmanage -p Driver.java.png >/dev/null 2>&1
             )
             ;;
         linux*) # Linux (requires xdg-utils)
@@ -33,8 +33,8 @@ open_file() {
 
 (
     set -x
-    uv run generate_trace < ${INPUT_FILE} > ${TRACE_FILE}
-    uv run generate_visualization < ${TRACE_FILE} > ${IMAGE_FILE}
+    env CS1302_DEBUG=1 uv run generate_trace < ${INPUT_FILE} > ${TRACE_FILE}
+    env CS1302_DEBUG=1 uv run generate_visualization < ${TRACE_FILE} > ${IMAGE_FILE}
 )
 
 echo "Do you want to open ${IMAGE_FILE}?"

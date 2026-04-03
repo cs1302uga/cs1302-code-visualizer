@@ -108,7 +108,7 @@ wheels = [
 
 [[package]]
 name = "cs1302-code-visualizer"
-version = "0.2.1"
+version = "0.2.2"
 source = { editable = "." }
 dependencies = [
     { name = "halo" },
@@ -116,6 +116,11 @@ dependencies = [
     { name = "platformdirs" },
     { name = "requests" },
     { name = "selenium" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "types-selenium" },
 ]
 
 [package.metadata]
@@ -126,6 +131,9 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32.4" },
     { name = "selenium", specifier = ">=4.33.0" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "types-selenium", specifier = ">=3.141.9" }]
 
 [[package]]
 name = "h11"
@@ -373,6 +381,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d1/3c/8b4358e81f2f2cfe71b66a267f023a91db20a817b9425dd964873796980a/trio_websocket-0.12.2.tar.gz", hash = "sha256:22c72c436f3d1e264d0910a3951934798dcc5b00ae56fc4ee079d46c7cf20fae", size = 33549, upload-time = "2025-02-25T05:16:58.947Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/19/eb640a397bba49ba49ef9dbe2e7e5c04202ba045b6ce2ec36e9cadc51e04/trio_websocket-0.12.2-py3-none-any.whl", hash = "sha256:df605665f1db533f4a386c94525870851096a223adcb97f72a07e8b4beba45b6", size = 21221, upload-time = "2025-02-25T05:16:57.545Z" },
+]
+
+[[package]]
+name = "types-selenium"
+version = "3.141.9"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/8d/e9/4ff535ce02a2c7cbbe6f33ac2aabb3f284977f76609a19ad30edee727c55/types-selenium-3.141.9.tar.gz", hash = "sha256:0817ad9914f5d4c5b064ca2fbf694a1b4c668465a502bd3d1248d82e098132ce", size = 18495, upload-time = "2022-03-06T03:18:28.329Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4b/05/67524387f0b4968ff83462e8526913e563d51d4c0bacbb3a3095d9b11e46/types_selenium-3.141.9-py3-none-any.whl", hash = "sha256:83606e061154bc2241d6eba964263f9cf1dcaa6c7dfff0bb10d3abcfbdaefdc7", size = 39074, upload-time = "2022-03-06T03:18:26.997Z" },
 ]
 
 [[package]]

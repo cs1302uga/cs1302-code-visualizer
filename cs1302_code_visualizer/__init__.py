@@ -116,6 +116,7 @@ def render_image(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: list[str] = [],
+    include_enum_static_fields: bool = False,
 ) -> bytes:
     """Visualize the state of a Java program just before exiting as an image.
 
@@ -155,6 +156,9 @@ def render_image(
         text_memory_labels: True if object connections should be rendered as text labels, False otherwise.
 
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+
+        include_enum_static_fields: True if enum constants and $VALUES should be included in the
+            global static fields list, False otherwise.
 
     Return:
 
@@ -198,6 +202,7 @@ def render_image(
             remove_main_args,
             breakpoints=breakpoints,
             accumulate_breakpoints=breakpoint_index != None,
+            include_enum_static_fields=include_enum_static_fields,
         )
 
         traces: dict[str, list[dict]] = json.loads(execution_trace)

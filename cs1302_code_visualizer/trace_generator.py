@@ -13,6 +13,7 @@ import platform
 import sys
 import subprocess
 import logging
+from typing import Any, cast
 import platformdirs
 import requests
 import zipfile
@@ -40,10 +41,11 @@ def generate_trace(
     java_home: Path,
     java_program: str,
     timeout_secs: float | None = None,
-    inline_strings: bool = True,
+    inline_strings: bool = False,
     remove_main_args_parameter: bool = True,
     breakpoints: set[int] = set(),
     accumulate_breakpoints: bool = False,
+    keep_enum_static_fields: bool = False,
 ) -> str:
     args = ["-s"] if inline_strings else []
     if breakpoints:
@@ -55,7 +57,7 @@ def generate_trace(
     if accumulate_breakpoints:
         args.append("--accumulate-breakpoints")
 
-    return subprocess.check_output(
+    trace: str = subprocess.check_output(
         (
             [
                 str(java_home / "bin" / "java"),
@@ -69,6 +71,16 @@ def generate_trace(
         timeout=timeout_secs,
         text=True,
     )
+
+    trace_json: dict[str, Any] = json.loads(trace)
+
+    if not keep_enum_static_fields:
+        enum_types: list[str] = get_enum_types(trace_json)
+        enum_globals: list[str] = get_enum_globals(trace_json, enum_types)
+        delete_globals(trace_json, enum_globals)
+
+    trace = json.dumps(trace_json)
+    return trace
 
 
 def jdk_exists(maybe_java_home: str | PathLike[str]) -> bool:
@@ -275,6 +287,39 @@ def ensure_code_tracer_installed(update_existing: bool = False):
         json.dump(dict(resp.headers), dl_info_file)
 
 
+def get_enum_types(trace_json: dict[str, Any]) -> list[str]:
+    enum_types: list[str] = []
+    for trace_event in trace_json.get("trace", cast(list[dict[str, Any]], [])):
+        for global_field in trace_event.get("globals", cast(list[str], [])):
+            if global_field.endswith(".$VALUES"):
+                enum_types.append(global_field.removesuffix(".$VALUES"))
+    return enum_types
+
+
+def get_enum_globals(
+    trace_json: dict[str, Any], enum_types: list[str] = []
+) -> list[str]:
+    enum_types: list[str] = enum_types if enum_types else get_enum_types(trace_json)
+    enum_globals: list[str] = []
+    for trace_event in trace_json.get("trace", cast(list[dict[str, Any]], [])):
+        for global_field in trace_event.get("globals", cast(list[str], [])):
+            for enum_type in enum_types:
+                if global_field.startswith(f"{enum_type}."):
+                    enum_globals.append(global_field)
+    return enum_globals
+
+
+def delete_globals(trace_json: dict[str, Any], global_keys: list[str] = []) -> None:
+    for trace_event in trace_json.get("trace", cast(list[dict[str, Any]], [])):
+        for global_key in global_keys:
+            # NOTE: do not remove the associated objects in the heap
+            #       so that they can still be rendered, if needed
+            #       when the trace is visualized
+            del trace_event["globals"][global_key]
+            del trace_event["globals_attrs"][global_key]
+            trace_event["ordered_globals"].remove(global_key)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Java program trace generator and visualizer"
@@ -312,6 +357,19 @@ def main():
             "Path to the home of a JDK 21+ installation. If not provided, "
             "the script will attempt to download one itself."
         ),
+    )
+
+    parser.add_argument(
+        "--keep-enum-static-fields",
+        help=(
+            "Keep enum constants and $VALUES in the global static fields list. "
+            "They are removed from the global static fields list by default "
+            "to reduce clutter. "
+            "The associated objects in the heap are always included in the "
+            "resulting trace, regardless of whether this option is set, so that "
+            "they can be referred to elsewhere in the trace, as needed."
+        ),
+        action="store_true",
     )
 
     args = parser.parse_args()
@@ -361,7 +419,9 @@ def main():
                 java_home,
                 java_input,
                 args.trace_timeout,
+                keep_enum_static_fields=args.keep_enum_static_fields,
             )
+
     except CalledProcessError as e:
         logger.exception(
             "Trace generation failed with exit code %d and output:", e.returncode
