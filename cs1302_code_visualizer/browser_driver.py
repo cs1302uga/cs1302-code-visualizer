@@ -52,13 +52,15 @@ DISABLE_HEADLESS_MODE: bool = os.getenv("CS1302_HEADLESS", "").strip().lower() i
 WEBDRIVER_SHARED_INSTANCES: dict[int, webdriver.Chrome] = dict()
 WEBDRIVER_INSTANCES: set[webdriver.Chrome | webdriver.Remote] = set()
 
-logging.getLogger("selenium").setLevel(logging.DEBUG)
-logging.getLogger("selenium.webdriver.remote").setLevel(logging.DEBUG)
-logging.getLogger("selenium.webdriver.common").setLevel(logging.DEBUG)
 
 if DEBUG_MODE:
+    # our logger
     logger.setLevel(logging.DEBUG)
     logger.addHandler(logging.StreamHandler())
+    # selenium loggers
+    logging.getLogger("selenium").setLevel(logging.DEBUG)
+    logging.getLogger("selenium.webdriver.remote").setLevel(logging.DEBUG)
+    logging.getLogger("selenium.webdriver.common").setLevel(logging.DEBUG)
 
 
 logger.debug(f"{DEBUG_MODE=}")
