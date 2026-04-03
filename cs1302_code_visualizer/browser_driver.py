@@ -49,10 +49,6 @@ DISABLE_HEADLESS_MODE: bool = os.getenv("CS1302_HEADLESS", "").strip().lower() i
     "true",
 ]
 
-WEBDRIVER_SHARED_INSTANCES: dict[int, webdriver.Chrome] = dict()
-WEBDRIVER_INSTANCES: set[webdriver.Chrome | webdriver.Remote] = set()
-
-
 if DEBUG_MODE:
     # our logger
     logger.setLevel(logging.DEBUG)
@@ -100,32 +96,22 @@ def new_webdriver(dpi: int = 1) -> webdriver.Chrome:
     Return:
         The webdriver used to display the frontend.
     """
-    driver: webdriver.Chrome | None = WEBDRIVER_SHARED_INSTANCES.get(dpi)
+    logger.debug(f"creating new webdriver instance for {dpi=}")
 
-    if driver:
-        logger.debug(f"reusing the existing webdriver instance for {dpi=}")
+    options: Options = new_webdriver_options(dpi)
+    service: Service = Service()
+
+    try:
+        driver: webdriver.Chrome = webdriver.Chrome(options=options, service=service)
+        driver.implicitly_wait(4)
         return driver
-
-    else:
-        logger.debug(f"creating new webdriver instance for {dpi=}")
-
-        options: Options = new_webdriver_options(dpi)
-        service: Service = Service()
-
-        try:
-            driver: webdriver.Chrome = webdriver.Chrome(
-                options=options, service=service
-            )
-            driver.implicitly_wait(4)
-            WEBDRIVER_SHARED_INSTANCES[dpi] = driver
-            return driver
-        except Exception:
-            logger.exception(
-                f"Unable to instantiate Selenium's webdriver: {options=}; {service=}"
-            )
+    except Exception:
+        logger.exception(
+            f"Unable to instantiate Selenium's webdriver: {options=}; {service=}"
+        )
 
 
-def get_webdriver(dpi: int = 1) -> webdriver.Remote:
+def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
     """Get the webdriver used to display the frontend.
 
     Args:
@@ -134,23 +120,7 @@ def get_webdriver(dpi: int = 1) -> webdriver.Remote:
     Return:
         The webdriver used to display the frontend.
     """
-    shared_driver: webdriver.Chrome = new_webdriver(dpi)
-    remote_driver: webdriver.Remote = webdriver.Remote(
-        command_executor=shared_driver.command_executor,
-        options=new_webdriver_options(dpi),
-    )
-    remote_driver.close()
-    remote_driver.session_id = shared_driver.session_id
-    WEBDRIVER_INSTANCES.add(shared_driver)
-    WEBDRIVER_INSTANCES.add(remote_driver)
-    return remote_driver
-
-
-@atexit.register
-def list_webdriver_instances() -> None:
-    for webdriver_instance in WEBDRIVER_INSTANCES:
-        logger.debug(f"quitting {webdriver_instance=}")
-        webdriver_instance.quit()
+    return new_webdriver(dpi)
 
 
 def tidy_set_window_size_for_element(driver: webdriver, element: WebElement) -> None:
@@ -219,10 +189,7 @@ def online_python_tutor_frontend(
     driver = get_webdriver(dpi=dpi)
     trace_file = NamedTemporaryFile()
     wait = WebDriverWait(driver, 10)
-
     logger.debug(f"webdriver: {pformat(driver.capabilities)}")
-
-    # driver.switch_to.window(driver.window_handles[0])
 
     with open(trace_file.name, "w") as f:
         print(trace, file=f)
@@ -254,6 +221,7 @@ def online_python_tutor_frontend(
         yield frontend
     finally:
         trace_file.close()
+        driver.quit()
 
 
 def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> str:
