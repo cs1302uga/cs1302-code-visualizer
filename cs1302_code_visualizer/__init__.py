@@ -202,7 +202,7 @@ def render_image(
             remove_main_args,
             breakpoints=breakpoints,
             accumulate_breakpoints=breakpoint_index != None,
-            include_enum_static_fields=include_enum_static_fields,
+            keep_enum_static_fields=include_enum_static_fields,
         )
 
         traces: dict[str, list[dict]] = json.loads(execution_trace)
