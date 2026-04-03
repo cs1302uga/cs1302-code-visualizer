@@ -4,12 +4,33 @@ from collections import defaultdict
 import fileinput
 
 import json
+import os
 from pathlib import Path
 from sys import stdout
 import logging
 
 from . import browser_driver
 from . import trace_generator
+
+logger: logging.Logger = logging.getLogger(__name__)
+
+# Enable DEBUG_MODE with
+# CS1302_DEBUG=1
+# CS1302_DEBUG=True
+DEBUG_MODE: bool = os.getenv("CS1302_DEBUG", "").strip().lower() in ["1", "true"]
+
+# Disable DSIABLE_HEADLESS_MODE with
+# CS1302_DISABLE_HEADLESS=1
+# CS1302_DISABLE_HEADLESS=True
+DISABLE_HEADLESS_MODE: bool = os.getenv("CS1302_HEADLESS", "").strip().lower() in [
+    "1",
+    "true",
+]
+
+if DEBUG_MODE:
+    # our logger
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(logging.StreamHandler())
 
 
 def render_images(
@@ -75,6 +96,7 @@ def render_images(
         include_enum_static_fields=include_enum_static_fields,
     )
 
+    logger.debug(f"{render_all_breakpoint_occurrences=}")
     if render_all_breakpoint_occurrences:
         traces_accumulated: dict[str, list[dict]] = json.loads(trace)
         out = defaultdict(list)
@@ -210,6 +232,9 @@ def render_image(
         )
 
         traces: dict[str, list[dict]] = json.loads(execution_trace)
+
+        logging.debug(f"TRACES: {traces=}")
+
         if breakpoint_index != None:
             for line in traces:
                 if breakpoint_index in range(len(traces[line])):
@@ -233,6 +258,7 @@ def render_image(
             include_types=include_types,
             text_memory_labels=text_memory_labels,
             strip_type_prefixes=strip_type_prefixes,
+            breakpoint=None,
         )
         return output
     except Exception as exc:
@@ -247,5 +273,8 @@ def main() -> None:
         java_source,
         dpi=2,
         strip_type_prefixes=["java.lang."],
+        inline_strings=False,
+        include_types=True,
+        include_enum_static_fields=False,
     )
     stdout.buffer.write(rendered_image)

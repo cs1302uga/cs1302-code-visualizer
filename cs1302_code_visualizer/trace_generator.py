@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import fileinput
+from re import DEBUG
 import tomllib
 import hashlib
 import socket
@@ -23,9 +24,29 @@ from subprocess import CalledProcessError
 from pathlib import Path
 from halo import Halo as spinner
 from os import PathLike
+from pprint import pformat
 
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+
+# Enable DEBUG_MODE with
+# CS1302_DEBUG=1
+# CS1302_DEBUG=True
+DEBUG_MODE: bool = os.getenv("CS1302_DEBUG", "").strip().lower() in ["1", "true"]
+
+# Disable DSIABLE_HEADLESS_MODE with
+# CS1302_DISABLE_HEADLESS=1
+# CS1302_DISABLE_HEADLESS=True
+DISABLE_HEADLESS_MODE: bool = os.getenv("CS1302_HEADLESS", "").strip().lower() in [
+    "1",
+    "true",
+]
+
+if DEBUG_MODE:
+    # our logger
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(logging.StreamHandler())
 
 current_dir: Path = Path(os.path.dirname(__file__)).resolve()
 
@@ -43,7 +64,7 @@ def generate_trace(
     timeout_secs: float | None = None,
     inline_strings: bool = False,
     remove_main_args_parameter: bool = True,
-    breakpoints: set[int] = set(),
+    breakpoints: set[int] = {-1},
     accumulate_breakpoints: bool = False,
     include_enum_static_fields: bool = False,
 ) -> str:
@@ -72,12 +93,14 @@ def generate_trace(
         text=True,
     )
 
+    # return trace
     trace_json: dict[str, Any] = json.loads(trace)
 
     # cleanup/remove enum constants and $VALUES from global static fields list
-    enum_types: list[str] = get_enum_types(trace_json)
-    enum_globals: list[str] = get_enum_globals(trace_json, enum_types)
-    delete_globals(trace_json, enum_globals)
+    for line, trace_value in trace_json.items():
+        enum_types: list[str] = get_enum_types(trace_value)
+        enum_globals: list[str] = get_enum_globals(trace_value, enum_types)
+        delete_globals(trace_value, enum_globals)
 
     trace = json.dumps(trace_json)
     return trace
@@ -375,7 +398,7 @@ def main():
     args = parser.parse_args()
 
     if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
+        DEBUG_MODE = True
 
     if args.jdk != None and jdk_exists(args.jdk):
         java_home = Path(args.jdk)
@@ -420,6 +443,7 @@ def main():
                 java_input,
                 args.trace_timeout,
                 include_enum_static_fields=args.include_enum_static_fields,
+                breakpoints={-1},
             )
 
     except CalledProcessError as e:

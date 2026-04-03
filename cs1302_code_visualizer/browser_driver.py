@@ -267,6 +267,7 @@ def generate_image(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: list[str] = [],
+    breakpoint: int = -1,
 ) -> bytes:
     """Generate an image of the final state of an execution trace file.
 
@@ -287,8 +288,13 @@ def generate_image(
 
     # print(f"#dataViz.outerHTML={generate_html(trace, dpi=dpi)}", file=sys.stderr)
 
+    trace_json = json.loads(trace)
+    if str(breakpoint) in trace_json:
+        trace_json = trace_json.get(str(breakpoint))
+        trace = json.dumps(trace_json)
+
     with online_python_tutor_frontend(
-        trace,
+        trace=trace,
         dpi=dpi,
         include_types=include_types,
         text_memory_labels=text_memory_labels,
