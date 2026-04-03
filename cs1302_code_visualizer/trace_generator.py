@@ -425,8 +425,8 @@ def main():
     except CalledProcessError as e:
         logger.exception("Trace generation failed!")
         logger.error(f"EXIT STATUS: {e.returncode}")
-        logger.error(f"STDOUT: {e.stdout}"}
-        logger.error(f"STDERR: {e.stderr}"}
+        logger.error(f"STDOUT: {e.stdout}")
+        logger.error(f"STDERR: {e.stderr}")
         exit(1)
 
     if args.output is None:
