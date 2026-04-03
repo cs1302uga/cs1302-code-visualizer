@@ -220,6 +220,8 @@ def online_python_tutor_frontend(
 
     logger.debug(f"webdriver: {pformat(driver.capabilities)}")
 
+    # driver.switch_to.window(driver.window_handles[0])
+
     with open(trace_file.name, "w") as f:
         print(trace, file=f)
 
@@ -250,7 +252,6 @@ def online_python_tutor_frontend(
         yield frontend
     finally:
         trace_file.close()
-        driver.close()
 
 
 def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> str:
