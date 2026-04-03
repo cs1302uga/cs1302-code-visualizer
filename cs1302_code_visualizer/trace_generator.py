@@ -45,7 +45,7 @@ def generate_trace(
     remove_main_args_parameter: bool = True,
     breakpoints: set[int] = set(),
     accumulate_breakpoints: bool = False,
-    keep_enum_static_fields: bool = False,
+    include_enum_static_fields: bool = False,
 ) -> str:
     args = ["-s"] if inline_strings else []
     if breakpoints:
@@ -74,7 +74,7 @@ def generate_trace(
 
     trace_json: dict[str, Any] = json.loads(trace)
 
-    if not keep_enum_static_fields:
+    if not include_enum_static_fields:
         enum_types: list[str] = get_enum_types(trace_json)
         enum_globals: list[str] = get_enum_globals(trace_json, enum_types)
         delete_globals(trace_json, enum_globals)
@@ -419,13 +419,14 @@ def main():
                 java_home,
                 java_input,
                 args.trace_timeout,
-                keep_enum_static_fields=args.keep_enum_static_fields,
+                include_enum_static_fields=args.include_enum_static_fields,
             )
 
     except CalledProcessError as e:
-        logger.exception(
-            "Trace generation failed with exit code %d and output:", e.returncode
-        )
+        logger.exception("Trace generation failed!")
+        logger.error(f"EXIT STATUS: {e.returncode}")
+        logger.error(f"STDOUT: {e.stdout}"}
+        logger.error(f"STDERR: {e.stderr}"}
         exit(1)
 
     if args.output is None:
