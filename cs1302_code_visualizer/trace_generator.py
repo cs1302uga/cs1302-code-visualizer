@@ -360,9 +360,9 @@ def main():
     )
 
     parser.add_argument(
-        "--keep-enum-static-fields",
+        "--include-enum-static-fields",
         help=(
-            "Keep enum constants and $VALUES in the global static fields list. "
+            "Include enum constants and $VALUES in the global static fields list. "
             "They are removed from the global static fields list by default "
             "to reduce clutter. "
             "The associated objects in the heap are always included in the "
