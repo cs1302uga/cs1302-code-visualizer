@@ -26,6 +26,7 @@ def render_images(
     text_memory_labels: bool = False,
     strip_type_prefixes: list[str] = [],
     render_all_breakpoint_occurrences: bool = False,
+    include_enum_static_fields: bool = False,
 ) -> dict[int, bytes] | dict[int, list[bytes]]:
     """Visualize the state of a Java program at given breakpoints.
     java_source:         The Java source code to visualize.
@@ -53,6 +54,8 @@ def render_images(
                          render_all_breakpoint_occurrences is true, then this instead returns a mapping from
                          a breakpoint line to a list of visualization images (first occurrence first,
                          last occurrence last).
+    include_enum_static_fields: True if enum constants and $VALUES should be included in the
+                         global static fields list, False otherwise.
 
     Note that exceptions may be raised if image generation fails.
     """
@@ -69,6 +72,7 @@ def render_images(
         remove_main_args,
         breakpoints,
         accumulate_breakpoints=render_all_breakpoint_occurrences,
+        include_enum_static_fields=include_enum_static_fields,
     )
 
     if render_all_breakpoint_occurrences:
