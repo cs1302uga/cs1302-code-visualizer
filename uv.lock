@@ -111,11 +111,13 @@ name = "cs1302-code-visualizer"
 version = "0.3.5"
 source = { editable = "." }
 dependencies = [
+    { name = "colorama" },
     { name = "halo" },
     { name = "pillow" },
     { name = "platformdirs" },
     { name = "requests" },
     { name = "selenium" },
+    { name = "termcolor" },
 ]
 
 [package.dev-dependencies]
@@ -125,11 +127,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "colorama", specifier = ">=0.4.6" },
     { name = "halo", specifier = ">=0.0.31" },
     { name = "pillow", specifier = ">=11.2.1" },
     { name = "platformdirs", specifier = ">=4.3.8" },
     { name = "requests", specifier = ">=2.32.4" },
     { name = "selenium", specifier = ">=4.33.0" },
+    { name = "termcolor", specifier = ">=3.3.0" },
 ]
 
 [package.metadata.requires-dev]

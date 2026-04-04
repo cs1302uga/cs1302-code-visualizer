@@ -18,11 +18,13 @@ license-files = [
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "colorama>=0.4.6",
     "halo>=0.0.31",
     "pillow>=11.2.1",
     "platformdirs>=4.3.8",
     "requests>=2.32.4",
     "selenium>=4.33.0",
+    "termcolor>=3.3.0",
 ]
 
 [tool.cs1302-code-visualizer]
