@@ -22,6 +22,7 @@ dependencies = [
     "halo>=0.0.31",
     "pillow>=11.2.1",
     "platformdirs>=4.3.8",
+    "pydantic>=2.12.5",
     "requests>=2.32.4",
     "selenium>=4.33.0",
     "termcolor>=3.3.0",
@@ -37,11 +38,27 @@ generate_visualization = "cs1302_code_visualizer.browser_driver:main"
 list_breakpoints = "cs1302_code_visualizer.breakpoint_lister:main"
 render_image = "cs1302_code_visualizer:main"
 
+[tool.ruff]
+line-length = 88
+indent-width = 4
+
+[tool.ruff.lint]
+select = ["D", "E4", "E7", "E9", "F"]
+extend-select = ["D400"]
+ignore = ["D417"]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "basedpyright>=1.39.0",
+    "ruff>=0.15.9",
     "types-selenium>=3.141.9",
 ]

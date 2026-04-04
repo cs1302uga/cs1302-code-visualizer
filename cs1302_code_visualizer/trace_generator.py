@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import fileinput
-from re import DEBUG
 import tomllib
 import hashlib
 import socket
@@ -348,33 +347,33 @@ def main():
         description="Java program trace generator and visualizer"
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--trace-timeout",
         help="Max execution time (in seconds) of the trace execution.",
         type=float,
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--verbose",
         "-v",
         help="Enable output from logger.",
         action="store_true",
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--input",
         "-i",
         help="Path to Java source file to be traced, or `-` for stdin.",
         default="-",
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--output",
         "-o",
         help="Output path. If not provided, traces are printed to standard output.",
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--jdk",
         help=(
             "Path to the home of a JDK 21+ installation. If not provided, "
@@ -382,7 +381,7 @@ def main():
         ),
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--include-enum-static-fields",
         help=(
             "Include enum constants and $VALUES in the global static fields list. "
@@ -397,6 +396,9 @@ def main():
 
     args = parser.parse_args()
 
+    # if "verbose" in args:
+    #     pass
+    
     if args.verbose:
         DEBUG_MODE = True
 
