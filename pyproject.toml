@@ -1,6 +1,6 @@
 [project]
 name = "cs1302-code-visualizer"
-version = "0.3.7"
+version = "0.3.8"
 description = "Visualize Java program memory state and output a screenshot."
 authors = [
     {name = "Gabe Livengood", email = "timothy.livengood@uga.edu"},
@@ -60,5 +60,4 @@ build-backend = "hatchling.build"
 dev = [
     "basedpyright>=1.39.0",
     "ruff>=0.15.9",
-    "types-selenium>=3.141.9",
 ]
