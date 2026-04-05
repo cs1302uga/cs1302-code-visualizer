@@ -99,16 +99,15 @@ def new_webdriver(dpi: int = 1) -> webdriver.Chrome:
     logger.debug(f"creating new webdriver instance for {dpi=}")
 
     options: Options = new_webdriver_options(dpi)
-    service: Service = Service()
 
-    try:
-        driver: webdriver.Chrome = webdriver.Chrome(options=options, service=service)
+    if executable_path := shutil.which("chromedriver"):
+        driver = webdriver.Chrome(options=options, executable_path=executable_path)
         driver.implicitly_wait(4)
         return driver
-    except Exception:
-        logger.exception(
-            f"Unable to instantiate Selenium's webdriver: {options=}; {service=}"
-        )
+    else:
+        driver = webdriver.Chrome(options=options)
+        driver.implicitly_wait(4)
+        return driver
 
 
 def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
