@@ -2,6 +2,8 @@
 
 from pprint import pformat
 from textwrap import indent
+
+import math
 import colorama
 import termcolor
 
@@ -77,14 +79,17 @@ class CodeVisTraceGeneratorError(Exception):
             ]
         )
 
+        note_lines: list[str] = note.splitlines()
+        line_number_width: int = math.floor(math.log10(len(note_lines))) + 3
+            
         rich_note = "".join(
             [
-                (colorama.Style.DIM + f"{i:2} " if src else " " * 2)
+                (colorama.Style.DIM + f"{i:{line_number_width}} " if src else " " * 2)
                 + colorama.Style.NORMAL
                 + colorama.Fore.BLUE
                 + line
                 + "\n"
-                for i, line in enumerate(note.splitlines(), start=1)
+                for i, line in enumerate(note_lines, start=1)
             ]
         )
 
