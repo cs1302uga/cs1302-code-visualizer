@@ -129,7 +129,7 @@ wheels = [
 
 [[package]]
 name = "cs1302-code-visualizer"
-version = "0.3.9"
+version = "0.3.10"
 source = { editable = "." }
 dependencies = [
     { name = "colorama" },
