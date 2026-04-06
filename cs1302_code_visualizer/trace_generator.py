@@ -1,38 +1,44 @@
 #!/usr/bin/env python3
 
-import fileinput
-import tomllib
-import hashlib
-import socket
-import json
-import shutil
-import tempfile
 import argparse
+import fileinput
+import hashlib
+import io
+import json
+import logging
 import os
 import platform
-import sys
-import subprocess
-import logging
-from typing import Any, cast
 import platformdirs
 import requests
-import zipfile
+import shutil
+import socket
+import subprocess
+import sys
 import tarfile
+import tempfile
+import tomllib
+import zipfile
 
+from typing import Any, cast
+from contextlib import redirect_stderr, redirect_stdout
 from subprocess import CalledProcessError
 from pathlib import Path
 from halo import Halo as spinner
 from os import PathLike
 from pprint import pformat
 
+from cs1302_code_visualizer.errors import CodeVisTraceGeneratorError
+
 
 logger: logging.Logger = logging.getLogger(__name__)
+logger.addHandler(logging.StreamHandler(sys.stderr))
 
 
 # Enable DEBUG_MODE with
 # CS1302_DEBUG=1
 # CS1302_DEBUG=True
 DEBUG_MODE: bool = os.getenv("CS1302_DEBUG", "").strip().lower() in ["1", "true"]
+
 
 # Disable DSIABLE_HEADLESS_MODE with
 # CS1302_DISABLE_HEADLESS=1
@@ -42,12 +48,15 @@ DISABLE_HEADLESS_MODE: bool = os.getenv("CS1302_HEADLESS", "").strip().lower() i
     "true",
 ]
 
+
 if DEBUG_MODE:
-    # our logger
     logger.setLevel(logging.DEBUG)
-    logger.addHandler(logging.StreamHandler())
+else:
+    logger.setLevel(logging.INFO)
+    
 
 current_dir: Path = Path(os.path.dirname(__file__)).resolve()
+
 
 cache_dir: Path = Path(
     platformdirs.user_cache_dir(
@@ -67,30 +76,59 @@ def generate_trace(
     accumulate_breakpoints: bool = False,
     include_enum_static_fields: bool = False,
 ) -> str:
-    args = ["-s"] if inline_strings else []
-    if breakpoints:
-        args.append("-b")
-    for breakpoint in breakpoints:
-        args.append(str(breakpoint))
-    if remove_main_args_parameter:
-        args.append("--remove-main-args")
-    if accumulate_breakpoints:
-        args.append("--accumulate-breakpoints")
 
-    trace: str = subprocess.check_output(
-        (
-            [
-                str(java_home / "bin" / "java"),
-                "-jar",
-                str(cache_dir / "code-tracer.jar"),
-                "trace",
-            ]
-            + args
-        ),
-        input=java_program,
-        timeout=timeout_secs,
-        text=True,
-    )
+    cli_args: list[str] = ["-v"]
+    
+    if len(breakpoints) > 0:
+        cli_args.append("-b")
+        for breakpoint in breakpoints:
+            cli_args.append(str(breakpoint))
+
+    if inline_strings:
+        cli_args.append("--inline-strings")
+        
+    if remove_main_args_parameter:
+        cli_args.append("--remove-main-args")
+        
+    if accumulate_breakpoints:
+        cli_args.append("--accumulate-breakpoints")
+
+    extra_errors = io.StringIO()
+    extra_output= io.StringIO()    
+    trace: str = "(none)"
+    
+    try:
+        trace_command: list[str] = [
+            str(java_home / "bin" / "java"),
+            "-jar",
+            str(cache_dir / "code-tracer.jar"),
+            "trace"
+        ] + cli_args
+
+        process = subprocess.run(
+            trace_command,
+            input=java_program,
+            timeout=timeout_secs,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        
+        trace = process.stdout
+            
+    except CalledProcessError as cpe:
+        logger.debug(f"EXIT STATUS: {cpe.returncode}")
+        logger.debug(f"STDOUT: {cpe.stdout}")
+        logger.debug(f"STDERR: {cpe.stderr}")
+
+        extra_errors_str = extra_errors.getvalue()
+        extra_output_str = extra_output.getvalue()
+
+        raise CodeVisTraceGeneratorError.from_cpe(
+            cpe=cpe,
+            source_code=java_program,
+            cli_args=cli_args,
+        )
 
     # return trace
     trace_json: dict[str, Any] = json.loads(trace)
@@ -356,7 +394,7 @@ def main():
     _ = parser.add_argument(
         "--verbose",
         "-v",
-        help="Enable output from logger.",
+        help="Enable more output from logger.",
         action="store_true",
     )
 
@@ -412,7 +450,7 @@ def main():
         ensure_code_tracer_installed()
 
     # get java file from stdin
-    java_input = "".join(fileinput.input(args.input))
+    java_input = "".join(fileinput.input(args.input)).rstrip()
 
     # try:
     #     with spinner(text="Listing breakpoints...", stream=sys.stderr):
@@ -438,22 +476,16 @@ def main():
     #     )
     #     exit(1)
 
-    try:
-        with spinner(text="Generating execution trace...", stream=sys.stderr):
-            trace = generate_trace(
-                java_home,
-                java_input,
-                args.trace_timeout,
-                include_enum_static_fields=args.include_enum_static_fields,
-                breakpoints={-1},
-            )
 
-    except CalledProcessError as e:
-        logger.exception("Trace generation failed!")
-        logger.error(f"EXIT STATUS: {e.returncode}")
-        logger.error(f"STDOUT: {e.stdout}")
-        logger.error(f"STDERR: {e.stderr}")
-        exit(1)
+    with spinner(text="Generating execution trace...", stream=sys.stderr):
+        trace = generate_trace(
+            java_home,
+            java_input,
+            args.trace_timeout,
+            include_enum_static_fields=args.include_enum_static_fields,
+            breakpoints={-1},
+        )
+
 
     if args.output is None:
         print(trace)

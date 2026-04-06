@@ -107,8 +107,11 @@ class CodeVisTraceGeneratorError(Exception):
 
     @staticmethod
     def from_cpe(
-        cpe: CalledProcessError, source_code: src, cli_args: Namespace
+        cpe: CalledProcessError,
+        source_code: str,
+        cli_args: Namespace,
     ) -> CodeVisTraceGeneratorError:
+        
         exc = CodeVisTraceGeneratorError(
             source_code=source_code,
             cli_args=cli_args,
