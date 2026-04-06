@@ -81,13 +81,14 @@ class CodeVisTraceGeneratorError(Exception):
 
         note_lines: list[str] = note.splitlines()
         line_number_width: int = math.floor(math.log10(len(note_lines))) + 3
-            
+
         rich_note = "".join(
             [
                 (colorama.Style.DIM + f"{i:{line_number_width}} " if src else " " * 2)
                 + colorama.Style.NORMAL
                 + colorama.Fore.BLUE
                 + line
+                + colorama.Fore.RESET
                 + "\n"
                 for i, line in enumerate(note_lines, start=1)
             ]
@@ -116,7 +117,7 @@ class CodeVisTraceGeneratorError(Exception):
         source_code: str,
         cli_args: Namespace,
     ) -> CodeVisTraceGeneratorError:
-        
+
         exc = CodeVisTraceGeneratorError(
             source_code=source_code,
             cli_args=cli_args,
