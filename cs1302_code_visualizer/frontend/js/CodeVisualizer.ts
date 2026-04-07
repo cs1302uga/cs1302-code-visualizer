@@ -44,5 +44,13 @@ export function create({
 
   viz.updateOutput();
 
+  window.addEventListener("resize", (event) => {
+    viz.redrawConnectors();
+  });
+
+  document.addEventListener("DOMContentLoaded", (event) => {
+    viz.redrawConnectors();
+  });
+
   return viz;
 }

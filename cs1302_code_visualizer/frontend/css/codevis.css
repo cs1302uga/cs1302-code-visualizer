@@ -1,0 +1,91 @@
+div.ExecutionVisualizer {
+  padding: 0 !important;
+  font-family: "Recursive", monospace !important;
+  font-variation-settings: "MONO" 1 !important;
+  font-optical-sizing: auto !important;
+  font-smooth: auto !important;
+  -webkit-font-smoothing: auto !important;
+}
+
+.isFinal .stackFrameValue,
+.isFinal .instVal {
+  filter: brightness(85%);
+}
+
+:root {
+  --object-background-color: #faebbf;
+  --object-border: 1px solid black;
+  --object-border-radius: 0.2rem;
+  --value-background-color: #ffffc6;
+  --value-border: var(--object-border);
+  --value-border-radius: var(--object-border-radius);
+}
+
+div.ExecutionVisualizer,
+div.ExecutionVisualizer * {
+  font-family: "Recursive", monospace !important;
+  font-variation-settings: "MONO" 1 !important;
+  font-optical-sizing: auto !important;
+  font-smooth: auto !important;
+  -webkit-font-smoothing: auto !important;
+}
+
+div.ExecutionVisualizer .stackFrame {
+  border-left: 1px solid #a6b3b6 !important;
+  border-right: 1px solid #a6b3b6 !important;
+}
+
+div.ExecutionVisualizer .stackFrameHeader {
+  font-size: small !important;
+}
+
+div.ExecutionVisualizer .instTbl,
+div.ExecutionVisualizer .listTbl {
+  border: var(--object-border) !important;
+  border-radius: var(--object-border-radius) !important;
+  background-color: var(--object-background-color) !important;
+  border-spacing: unset !important;
+}
+
+div.ExecutionVisualizer .stackFrameVarTable {
+  background-color: revert !important;
+}
+
+div.ExecutionVisualizer .instKey,
+div.ExecutionVisualizer .stackFrameVar {
+  font-size: small !important;
+  border: transparent !important;
+  padding: 1px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+
+div.ExecutionVisualizer .javaStackVarThis {
+  color: #de4b58;
+}
+
+div.ExecutionVisualizer .instVal,
+div.ExecutionVisualizer .listElt,
+div.ExecutionVisualizer .stackFrameValue {
+  border: var(--value-border) !important;
+  border-radius: var(--value-border-radius) !important;
+  background-color: var(--value-background-color) !important;
+  padding: 1px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  font-size: x-small !important;
+  min-width: 1.25rem !important;
+}
+
+div.ExecutionVisualizer .listHeader {
+  font-size: xx-small !important;
+  border: transparent !important;
+}
+
+div.ExecutionVisualizer .nullObj {
+  font-size: x-small !important;
+}
+
+div.ExecutionVisualizer .instTbl:not(:has(.instKey)) {
+  background-color: var(--value-background-color) !important;
+}

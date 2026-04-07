@@ -1,0 +1,86 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <!--
+  Python Tutor: https://github.com/pgbovine/OnlinePythonTutor/
+  Copyright (C) Philip Guo (philip@pgbovine.net)
+  LICENSE: https://github.com/pgbovine/OnlinePythonTutor/blob/master/LICENSE.txt
+  -->
+
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-type" content="text/html; charset=UTF-8" />
+    <title>cs1302-code-visualizer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+    <link href="css/codevis.css" rel="stylesheet">
+    <script type="text/javascript" src="build/vis-module.bundle.js" charset="utf-8"></script>
+  </head>
+
+  <body class="container">
+
+    <header>
+      <h1>cs1302-code-visualizer</h1>
+    </header>
+
+    <main>
+
+      <h2>Quick Tester</h2>
+
+      <form class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label" for="code-trace-input">Code Trace Input (JSON):</label>
+          <textarea id="code-trace-input" class="form-control" name="code-trace-input" rows="10" cols="80" placeholder="Replace this with the JSON output produced by the code tracer..."></textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="code-trace-json">Code Trace Formatted (JSON):</label>
+          <textarea id="code-trace-json" class="form-control" name="code-trace-json" rows="10" cols="80" placeholder="This will be replaced with the formatted version of the JSON you provide..." readonly></textarea>
+        </div>
+        <div class="col-md6">
+          <button type="submit" class="btn btn-primary">Visualize!</button>
+          <button type="submit" class="btn btn-secondary">Clear</button>
+        </div>
+      </form>
+
+      <h2>Example 1</h2>
+      <div id="example-viz-1"></div>
+      <script>
+      (() => {
+          CodeVisualizer.create({
+              lang: "java",
+              trace: "eyJzdGRpbiI6ICIiLCAidHJhY2UiOiBbeyJnbG9iYWxzX2F0dHJzIjoge30sICJvcmRlcmVkX2dsb2JhbHMiOiBbXSwgInN0YWNrX3RvX3JlbmRlciI6IFt7InVuaXF1ZV9oYXNoIjogIjAiLCAicGFyZW50X2ZyYW1lX2lkX2xpc3QiOiBbXSwgImlzX2hpZ2hsaWdodGVkIjogdHJ1ZSwgImVuY29kZWRfbG9jYWxzIjogeyJhbGljZSI6IFsiUkVGIiwgODJdfSwgIm9yZGVyZWRfdmFybmFtZXMiOiBbImFsaWNlIl0sICJpc196b21iaWUiOiBmYWxzZSwgImlzX3BhcmVudCI6IGZhbHNlLCAibG9jYWxzX2F0dHJzIjogeyJhbGljZSI6IHsidHlwZSI6ICJQZXJzb24ifX0sICJmcmFtZV9pZCI6IDAsICJmdW5jX25hbWUiOiAibWFpbjo0In1dLCAic3Rkb3V0IjogIiIsICJoZWFwX2F0dHJzIjogeyI4MSI6IHsidHlwZSI6ICJqYXZhLmxhbmcuU3RyaW5nW10ifSwgIjgyIjogeyJ0eXBlIjogWyJqYXZhLmxhbmcuU3RyaW5nIiwgImludCJdfX0sICJsaW5lIjogNCwgImdsb2JhbHMiOiB7fSwgInN0ZGVyciI6ICIiLCAiZXZlbnQiOiAic3RlcF9saW5lIiwgImhlYXAiOiB7IjgxIjogWyJMSVNUIl0sICI4NSI6IFsiSU5TVEFOQ0UiLCAiU3RyaW5nIiwgWyJfX19OT19MQUJFTCFfX18iLCAiQWxpY2UiXV0sICI4MiI6IFsiSU5TVEFOQ0UiLCAiUGVyc29uIiwgWyJuYW1lIiwgWyJSRUYiLCA4NV1dLCBbImFnZSIsIDQyXV19LCAiZnVuY19uYW1lIjogIm1haW4ifV0sICJ1c2VybG9nIjogIiIsICJjb2RlIjogInB1YmxpYyBjbGFzcyBEcml2ZXIge1xuICAgIHB1YmxpYyBzdGF0aWMgdm9pZCBtYWluKFN0cmluZ1tdIGFyZ3MpIHtcbiAgICAgICAgUGVyc29uIGFsaWNlID0gbmV3IFBlcnNvbihcIkFsaWNlXCIsIDQyKTtcbiAgICB9IC8vIG1haW5cbn0gLy8gRHJpdmVyXG5cbnJlY29yZCBQZXJzb24oU3RyaW5nIG5hbWUsIGludCBhZ2UpIHsgfTtcbiJ9",
+              element: document.getElementById("example-viz-1"),
+              options: {
+                  includeTypes: true,
+                  stripTypePrefixes: [ "java.lang." ],
+              },
+          });
+      })();
+      </script>
+
+      <h2>Example 2</h2>
+      <div id="example-viz-2"></div>
+      <script>
+      (() => {
+          CodeVisualizer.create({
+              lang: "java",
+              trace: "eyJzdGRpbiI6ICIiLCAidHJhY2UiOiBbeyJnbG9iYWxzX2F0dHJzIjoge30sICJvcmRlcmVkX2dsb2JhbHMiOiBbXSwgInN0YWNrX3RvX3JlbmRlciI6IFt7InVuaXF1ZV9oYXNoIjogIjAiLCAicGFyZW50X2ZyYW1lX2lkX2xpc3QiOiBbXSwgImlzX2hpZ2hsaWdodGVkIjogdHJ1ZSwgImVuY29kZWRfbG9jYWxzIjogeyJtZWFsIjogWyJSRUYiLCA4OV19LCAib3JkZXJlZF92YXJuYW1lcyI6IFsibWVhbCJdLCAiaXNfem9tYmllIjogZmFsc2UsICJpc19wYXJlbnQiOiBmYWxzZSwgImxvY2Fsc19hdHRycyI6IHsibWVhbCI6IHsidHlwZSI6ICJNZWFsVHlwZSJ9fSwgImZyYW1lX2lkIjogMCwgImZ1bmNfbmFtZSI6ICJtYWluOjYifV0sICJzdGRvdXQiOiAiMTY5NDgxOTI1MFxuIiwgImhlYXBfYXR0cnMiOiB7Ijg4IjogeyJ0eXBlIjogImphdmEubGFuZy5TdHJpbmdbXSJ9LCAiODkiOiB7InR5cGUiOiBbImphdmEubGFuZy5TdHJpbmciLCAiaW50IiwgImludCJdfSwgIjkzIjogeyJ0eXBlIjogWyJqYXZhLmxhbmcuU3RyaW5nIiwgImludCIsICJpbnQiXX0sICI5NCI6IHsidHlwZSI6IFsiamF2YS5sYW5nLlN0cmluZyIsICJpbnQiLCAiaW50Il19LCAiOTUiOiB7InR5cGUiOiAiTWVhbFR5cGVbXSJ9fSwgImxpbmUiOiA2LCAiZ2xvYmFscyI6IHt9LCAic3RkZXJyIjogIiIsICJldmVudCI6ICJzdGVwX2xpbmUiLCAiaGVhcCI6IHsiOTkiOiBbIklOU1RBTkNFIiwgIlN0cmluZyIsIFsiX19fTk9fTEFCRUwhX19fIiwgIkxVTkNIIl1dLCAiODgiOiBbIkxJU1QiXSwgIjEwMCI6IFsiSU5TVEFOQ0UiLCAiU3RyaW5nIiwgWyJfX19OT19MQUJFTCFfX18iLCAiRElOTkVSIl1dLCAiODkiOiBbIklOU1RBTkNFIiwgIk1lYWxUeXBlIiwgWyJuYW1lIiwgWyJSRUYiLCA5OF1dLCBbIm9yZGluYWwiLCAwXSwgWyJoYXNoIiwgMTY5NDgxOTI1MF1dLCAiOTMiOiBbIklOU1RBTkNFIiwgIk1lYWxUeXBlIiwgWyJuYW1lIiwgWyJSRUYiLCA5OV1dLCBbIm9yZGluYWwiLCAxXSwgWyJoYXNoIiwgMF1dLCAiOTQiOiBbIklOU1RBTkNFIiwgIk1lYWxUeXBlIiwgWyJuYW1lIiwgWyJSRUYiLCAxMDBdXSwgWyJvcmRpbmFsIiwgMl0sIFsiaGFzaCIsIDBdXSwgIjk1IjogWyJMSVNUIiwgWyJSRUYiLCA4OV0sIFsiUkVGIiwgOTNdLCBbIlJFRiIsIDk0XV0sICI5OCI6IFsiSU5TVEFOQ0UiLCAiU3RyaW5nIiwgWyJfX19OT19MQUJFTCFfX18iLCAiQlJFQUtGQVNUIl1dfSwgImZ1bmNfbmFtZSI6ICJtYWluIn1dLCAidXNlcmxvZyI6ICIiLCAiY29kZSI6ICJwdWJsaWMgY2xhc3MgRHJpdmVyIHtcblxuICAgIHB1YmxpYyBzdGF0aWMgdm9pZCBtYWluKFN0cmluZ1tdIGFyZ3MpIHtcbiAgICAgICAgTWVhbFR5cGUgbWVhbCA9IE1lYWxUeXBlLkJSRUFLRkFTVDtcbiAgICAgICAgU3lzdGVtLm91dC5wcmludGxuKG1lYWwuaGFzaENvZGUoKSk7XG4gICAgfSAvLyBtYWluXG5cbn0gLy8gRHJpdmVyXG5cbmVudW0gRGF5IHtcbiAgICBTVU5EQVksIE1PTkRBWSwgVFVFU0RBWSwgV0VETkVTREFZLCBUSFVSU0RBWSwgRlJJREFZLCBTQVRVUkRBWTtcbn0gLy8gRGF5XG5cbmVudW0gTWVhbFR5cGUge1xuICAgIEJSRUFLRkFTVCwgTFVOQ0gsIERJTk5FUjtcbn0gLy8gTWVhbFR5cGVcbiJ9",
+              element: document.getElementById("example-viz-2"),
+              options: {
+                  includeTypes: true,
+                  stripTypePrefixes: [ "java.lang." ],
+              },
+          });
+      })();
+      </script>
+
+    </main>
+
+    <script>
+
+    </script>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+  </body>
+
+</html>

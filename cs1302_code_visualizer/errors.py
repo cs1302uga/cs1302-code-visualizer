@@ -1,66 +1,53 @@
-"""TODO."""
+"""Errors related to code visualization."""
 
-from pprint import pformat
-from textwrap import indent
+import inspect
 
-import math
-import colorama
-import termcolor
-
-from argparse import Namespace
 from subprocess import CalledProcessError
-from typing import Self
-
-colorama.init(
-    autoreset=True,
-    wrap=True,
-)
+from typing import cast
 
 
 class CodeVisError(Exception):
     """Represents an code visualization error."""
 
-    def __init__(self, message: str) -> Self:
+    def __init__(self, message: str) -> None:
         super().__init__(message)
 
 
 class CodeVisTraceGeneratorError(Exception):
-    """An error related to compiling and running the code being used
-    for a visualization.
-    """
+    """A code visualization error related to tracing the code."""
 
     def __init__(
         self,
         source_code: str,
-        cli_args: Namespace,
-        stdout: str,
-        stderr: str,
+        cli_args: list[str],
+        stdout: str | None,
+        stderr: str | None,
         exit_status: int,
-    ) -> Self:
+    ) -> None:
         super().__init__("Unable to generate code execution trace.")
-        self._source_code = source_code
-        self._cli_args = cli_args
-        self._stdout = stdout
-        self._stderr = stderr
-        self._exit_status = exit_status
+        self._source_code: str = source_code
+        self._cli_args: list[str] = cli_args
+        self._stdout: str = stdout if stdout is not None else ""
+        self._stderr: str = stderr if stderr is not None else ""
+        self._exit_status: int = exit_status
 
     @property
-    def source_code(self) -> src:
+    def source_code(self) -> str:
         """The source code that was being traced."""
         return self._source_code
 
     @property
-    def cli_args(self) -> Namespace:
+    def cli_args(self) -> list[str]:
         """The command-line arguments supplied to the trace generator."""
         return self._cli_args
 
     @property
-    def stdout(self) -> src:
+    def stdout(self) -> str:
         """The output that the trace generator sent to standard output."""
         return self._stdout
 
     @property
-    def stderr(self) -> src:
+    def stderr(self) -> str:
         """The output that the trace generator sent to standard error."""
         return self._stderr
 
@@ -69,73 +56,44 @@ class CodeVisTraceGeneratorError(Exception):
         """The exit status of trace generator."""
         return self._exit_status
 
-    @staticmethod
-    def _note_with_heading(heading: str, note: str, src: bool = False) -> str:
-        rich_heading = "".join(
-            [
-                colorama.Style.BRIGHT,
-                colorama.Fore.CYAN,
-                heading + ":",
-            ]
-        )
+    def with_property_notes(self: CodeVisTraceGeneratorError) -> CodeVisTraceGeneratorError:
+        """Return this CodeVisTraceGeneratorError with property notes added."""
 
-        note_lines: list[str] = note.splitlines()
-        line_number_width: int = math.floor(math.log10(len(note_lines))) + 3
+        def isproperty(obj: object) -> bool:
+            """Return `True` if `obj` is a `property`, else `False`."""
+            return isinstance(obj, property)
 
-        rich_note = "".join(
-            [
-                (colorama.Style.DIM + f"{i:{line_number_width}} " if src else " " * 2)
-                + colorama.Style.NORMAL
-                + colorama.Fore.BLUE
-                + line
-                + colorama.Fore.RESET
-                + "\n"
-                for i, line in enumerate(note_lines, start=1)
-            ]
-        )
+        members: list[tuple[str, property]] = inspect.getmembers(CodeVisTraceGeneratorError, isproperty)
 
-        return f"\n{rich_heading}\n{rich_note}".rstrip()
+        for name, member in members:
+            if doc := inspect.getdoc(member):
+                note_heading: str = doc.strip()[0:-1]
+                note_body: str = getattr(self, name, "<unknown note>")
+                note: str = note_heading + ":\n" + note_body
+                self.add_note(note)
 
-    def with_attribute_note(self, *names: str) -> CodeVisTraceGeneratorError:
-        for name in names:
-            attribute_note = getattr(self, name)
-            if not isinstance(attribute_note, str):
-                attribute_note = pformat(attribute_note)
-            if not len(attribute_note):
-                attribute_note: str = "None"
-            note: str = CodeVisTraceGeneratorError._note_with_heading(
-                heading=getattr(type(self), name).__doc__.strip()[0:-1],
-                note=attribute_note,
-                src=name in ["source_code"],
-            )
-            self.add_note(note)
         return self
 
     @staticmethod
     def from_cpe(
         cpe: CalledProcessError,
         source_code: str,
-        cli_args: Namespace,
+        cli_args: list[str],
     ) -> CodeVisTraceGeneratorError:
-
-        exc = CodeVisTraceGeneratorError(
+        """Return a CodeVisTraceGeneratorError for the supplied CalledProccessError."""
+        stdout: str | None = cast(str | None, cpe.stdout)
+        stderr: str | None = cast(str | None, cpe.stderr)
+        return CodeVisTraceGeneratorError(
             source_code=source_code,
             cli_args=cli_args,
-            stdout=cpe.stdout,
-            stderr=cpe.stderr,
+            stdout=stdout,
+            stderr=stderr,
             exit_status=cpe.returncode,
-        ).with_attribute_note(
-            "source_code",
-            "cli_args",
-            "stdout",
-            "stderr",
-            "exit_status",
-        )
-        return exc
+        ).with_property_notes()
 
 
 class CodeVisRenderError(Exception):
     """An error related to rendering the image for a visualization."""
 
-    def __init__(self, message: str) -> Self:
+    def __init__(self, message: str) -> None:
         super().__init__(message)

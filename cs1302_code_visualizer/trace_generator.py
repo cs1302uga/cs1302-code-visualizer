@@ -3,7 +3,6 @@
 import argparse
 import fileinput
 import hashlib
-import io
 import json
 import logging
 import os
@@ -19,13 +18,10 @@ import tempfile
 import tomllib
 import zipfile
 
-from typing import Any, cast
-from contextlib import redirect_stderr, redirect_stdout
+from typing import Any, Final, cast
 from subprocess import CalledProcessError
 from pathlib import Path
-from halo import Halo as spinner
 from os import PathLike
-from pprint import pformat
 
 from cs1302_code_visualizer.errors import CodeVisTraceGeneratorError
 
@@ -37,13 +33,13 @@ logger.addHandler(logging.StreamHandler(sys.stderr))
 # Enable DEBUG_MODE with
 # CS1302_DEBUG=1
 # CS1302_DEBUG=True
-DEBUG_MODE: bool = os.getenv("CS1302_DEBUG", "").strip().lower() in ["1", "true"]
+DEBUG_MODE: Final[bool] = os.getenv("CS1302_DEBUG", "").strip().lower() in ["1", "true"]
 
 
 # Disable DSIABLE_HEADLESS_MODE with
 # CS1302_DISABLE_HEADLESS=1
 # CS1302_DISABLE_HEADLESS=True
-DISABLE_HEADLESS_MODE: bool = os.getenv("CS1302_HEADLESS", "").strip().lower() in [
+DISABLE_HEADLESS_MODE: Final[bool] = os.getenv("CS1302_HEADLESS", "").strip().lower() in [
     "1",
     "true",
 ]
@@ -53,17 +49,23 @@ if DEBUG_MODE:
     logger.setLevel(logging.DEBUG)
 else:
     logger.setLevel(logging.INFO)
-    
-
-current_dir: Path = Path(os.path.dirname(__file__)).resolve()
 
 
-cache_dir: Path = Path(
+DEFAULT_BREAKPOINTS_SET: Final[set[int]] = { -1 }
+
+
+PACKAGE_DIR: Final[Path] = Path(os.path.dirname(__file__)).resolve()
+
+
+CACHE_DIR: Final[Path] = Path(
     platformdirs.user_cache_dir(
         "cs1302-code-visualizer",
         ensure_exists=True,
     )
 )
+
+
+JDK_CACHE_DIR: Final[Path] = CACHE_DIR / "jdk"
 
 
 def generate_trace(
@@ -72,13 +74,13 @@ def generate_trace(
     timeout_secs: float | None = None,
     inline_strings: bool = False,
     remove_main_args_parameter: bool = True,
-    breakpoints: set[int] = {-1},
+    breakpoints: set[int] = DEFAULT_BREAKPOINTS_SET,
     accumulate_breakpoints: bool = False,
     include_enum_static_fields: bool = False,
 ) -> str:
 
     cli_args: list[str] = ["-v"]
-    
+
     if len(breakpoints) > 0:
         cli_args.append("-b")
         for breakpoint in breakpoints:
@@ -86,22 +88,20 @@ def generate_trace(
 
     if inline_strings:
         cli_args.append("--inline-strings")
-        
+
     if remove_main_args_parameter:
         cli_args.append("--remove-main-args")
-        
+
     if accumulate_breakpoints:
         cli_args.append("--accumulate-breakpoints")
 
-    extra_errors = io.StringIO()
-    extra_output= io.StringIO()    
     trace: str = "(none)"
-    
+
     try:
         trace_command: list[str] = [
             str(java_home / "bin" / "java"),
             "-jar",
-            str(cache_dir / "code-tracer.jar"),
+            str(CACHE_DIR / "code-tracer.jar"),
             "trace"
         ] + cli_args
 
@@ -113,34 +113,28 @@ def generate_trace(
             capture_output=True,
             check=True,
         )
-        
+
         trace = process.stdout
-            
+
     except CalledProcessError as cpe:
-        logger.debug(f"EXIT STATUS: {cpe.returncode}")
-        logger.debug(f"STDOUT: {cpe.stdout}")
-        logger.debug(f"STDERR: {cpe.stderr}")
-
-        extra_errors_str = extra_errors.getvalue()
-        extra_output_str = extra_output.getvalue()
-
+        logger.exception("problem encountered while calling the trace generator")
         raise CodeVisTraceGeneratorError.from_cpe(
             cpe=cpe,
             source_code=java_program,
             cli_args=cli_args,
         )
 
-    # return trace
     trace_json: dict[str, Any] = json.loads(trace)
 
     # cleanup/remove enum constants and $VALUES from global static fields list
-    for line, trace_value in trace_json.items():
-        enum_types: list[str] = get_enum_types(trace_value)
-        enum_globals: list[str] = get_enum_globals(trace_value, enum_types)
-        delete_globals(trace_value, enum_globals)
+    if not include_enum_static_fields:
+        for line, trace_value in trace_json.items():
+            logger.debug(f"removing enum constants and $VALUES for line {line}")
+            enum_types: list[str] = get_enum_types(trace_value)
+            enum_globals: list[str] = get_enum_globals(trace_value, enum_types)
+            delete_globals(trace_value, enum_globals)
 
-    trace = json.dumps(trace_json)
-    return trace
+    return json.dumps(trace_json)
 
 
 def jdk_exists(maybe_java_home: str | PathLike[str]) -> bool:
@@ -155,7 +149,7 @@ def jdk_exists(maybe_java_home: str | PathLike[str]) -> bool:
 
 def download_jdk():
 
-    if (cache_dir / "jdk").exists():
+    if JDK_CACHE_DIR.exists():
         return
 
     match platform.system():
@@ -165,17 +159,16 @@ def download_jdk():
             os = "windows"
         case "Darwin":
             os = "mac"
-        case s:
-            raise Exception(
-                f"Cannot automatically download a JDK for your computer's platform ({s}). Please download and provide one yourself."
-            )
+        case str(s):
+            message: str = f"Cannot automatically download a JDK for your computer's platform ({s})."
+            raise Exception(message)
 
     match platform.machine().lower():
         case "amd64" | "x86_64":
             arch = "x64"
         case "aarch64" | "arm64":
             arch = "aarch64"
-        case m:
+        case str(m):
             raise Exception(
                 f"Cannot automatically download a JDK for your computer's architecture ({m} {os}). Please download and provide one yourself."
             )
@@ -203,31 +196,29 @@ def download_jdk():
     with tempfile.NamedTemporaryFile() as temp_file:
         with temp_file.file as f:
             for chunk in resp.iter_content(2**8):
-                f.write(chunk)
+                _ = f.write(chunk)
         if os == "windows":
             with zipfile.ZipFile(temp_file) as zip:
                 toplevel_dir = zip.namelist()[0]
-                zip.extractall(cache_dir)
+                zip.extractall(CACHE_DIR)
         elif os == "mac":
             with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
                 toplevel_dir = Path(tar.getnames()[0]) / "Contents" / "Home"
-                tar.extractall(cache_dir, numeric_owner=True, filter="tar")
+                tar.extractall(CACHE_DIR, numeric_owner=True, filter="tar")
         else:
             with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
                 toplevel_dir = tar.getnames()[0]
-                tar.extractall(cache_dir, numeric_owner=True, filter="tar")
+                tar.extractall(CACHE_DIR, numeric_owner=True, filter="tar")
 
-    shutil.move(cache_dir / toplevel_dir, cache_dir / "jdk")
+    _ = shutil.move(CACHE_DIR / toplevel_dir, CACHE_DIR / "jdk")
 
-    if not jdk_exists(str(cache_dir / "jdk")):
+    if not jdk_exists(str(CACHE_DIR / "jdk")):
         raise Exception(
             "Could not extract the JDK. Please download and provide one yourself."
         )
 
 
-def ensure_jdk_installed(
-    install_dir: str | PathLike[str] = str(cache_dir / "jdk"),
-) -> Path:
+def ensure_jdk_installed(install_dir: str | PathLike[str] = JDK_CACHE_DIR) -> Path:
     # 1. check if javac is on the path and version 21 or greater
     java21_found: bool = False
     if which_java := shutil.which("java"):
@@ -261,7 +252,7 @@ def ensure_jdk_installed(
             download_jdk()
         except Exception as e:
             raise Exception("Failed to download JDK") from e
-        return cache_dir / "jdk"
+        return CACHE_DIR / "jdk"
 
 
 def read_tracer_url_and_sum_from_toml() -> tuple[str, str] | None:
@@ -271,7 +262,7 @@ def read_tracer_url_and_sum_from_toml() -> tuple[str, str] | None:
     Returns a tuple where the first element is the URL and the second is the SHA256 sum, or None if reading the fields failed.
     """
     try:
-        with open(current_dir.parent / "pyproject.toml", "rb") as t:
+        with open(PACKAGE_DIR.parent / "pyproject.toml", "rb") as t:
             pyproject = tomllib.load(t)
             package_constants = pyproject.get("tool", {}).get(
                 "cs1302-code-visualizer", {}
@@ -290,8 +281,9 @@ def read_tracer_url_and_sum_from_toml() -> tuple[str, str] | None:
         return None
 
 
-def ensure_code_tracer_installed(update_existing: bool = False):
-    if (cache_dir / "code-tracer.jar").is_file():
+def ensure_code_tracer_installed(update_existing: bool = False) -> None:
+
+    if (CACHE_DIR / "code-tracer.jar").is_file():
         if not update_existing:
             return
         # make sure we have an internet connection before proceeding
@@ -301,16 +293,15 @@ def ensure_code_tracer_installed(update_existing: bool = False):
             sock.connect(("1.1.1.1", 53))
             sock.close()
         except socket.error:
-            logger.debug(
-                "The code tracer jar already exists, but we can't update it because we're offline. "
-                "Continuing with existing version."
-            )
+            logger.debug("The code tracer jar already exists, but we can't update it because we're offline.")
+            logger.debug("Continuing with existing tracer version.")
             return
 
-    dl_info_path = Path(cache_dir / "code_tracer_dl_headers.json")
+    dl_info_path = Path(CACHE_DIR / "code_tracer_dl_headers.json")
 
-    headers = {}
-    if (cache_dir / "code-tracer.jar").is_file() and dl_info_path.is_file():
+    headers: dict[str, str] = {}
+
+    if (CACHE_DIR / "code-tracer.jar").is_file() and dl_info_path.is_file():
         with open(dl_info_path, "r") as dl_info_file:
             dl_info = json.load(dl_info_file)
         if "Last-Modified" in dl_info:
@@ -333,14 +324,14 @@ def ensure_code_tracer_installed(update_existing: bool = False):
     with tempfile.TemporaryFile() as temp_file:
         sha256_hash = hashlib.sha256()
         for chunk in resp.iter_content(2**8):
-            temp_file.write(chunk)
+            _ = temp_file.write(chunk)
             sha256_hash.update(chunk)
         if tracer_url_and_sum and tracer_url_and_sum[1] != sha256_hash.hexdigest():
             raise Exception(
                 f"Downloaded tracer JAR doesn't have the correct SHA256 sum. Expected: {tracer_url_and_sum[1]}, got {sha256_hash.hexdigest()}."
             )
-        temp_file.seek(0)
-        with open(cache_dir / "code-tracer.jar", "wb") as jar_file:
+        _ = temp_file.seek(0)
+        with open(CACHE_DIR / "code-tracer.jar", "wb") as jar_file:
             shutil.copyfileobj(temp_file, jar_file)
 
     with open(dl_info_path, "w") as dl_info_file:
@@ -356,10 +347,12 @@ def get_enum_types(trace_json: dict[str, Any]) -> list[str]:
     return enum_types
 
 
+EMPTY_STR_LIST: Final[list[str]] = []
+
 def get_enum_globals(
-    trace_json: dict[str, Any], enum_types: list[str] = []
+    trace_json: dict[str, Any], enum_types: list[str] = EMPTY_STR_LIST
 ) -> list[str]:
-    enum_types: list[str] = enum_types if enum_types else get_enum_types(trace_json)
+    enum_types = list(enum_types) if enum_types else get_enum_types(trace_json)
     enum_globals: list[str] = []
     for trace_event in trace_json.get("trace", cast(list[dict[str, Any]], [])):
         for global_field in trace_event.get("globals", cast(list[str], [])):
@@ -369,7 +362,8 @@ def get_enum_globals(
     return enum_globals
 
 
-def delete_globals(trace_json: dict[str, Any], global_keys: list[str] = []) -> None:
+def delete_globals(trace_json: dict[str, Any], global_keys: list[str] = EMPTY_STR_LIST) -> None:
+    global_keys = list(global_keys)
     for trace_event in trace_json.get("trace", cast(list[dict[str, Any]], [])):
         for global_key in global_keys:
             # NOTE: do not remove the associated objects in the heap
@@ -434,64 +428,32 @@ def main():
 
     args = parser.parse_args()
 
-    # if "verbose" in args:
-    #     pass
-    
     if args.verbose:
-        DEBUG_MODE = True
+        logger.setLevel(logging.DEBUG)
 
     if args.jdk != None and jdk_exists(args.jdk):
         java_home = Path(args.jdk)
     else:
-        with spinner(text="Installing the JDK...", stream=sys.stderr):
-            java_home: Path = ensure_jdk_installed()
+        java_home: Path = ensure_jdk_installed()
 
-    with spinner(text="Downloading Java tracer...", stream=sys.stderr):
-        ensure_code_tracer_installed()
+    ensure_code_tracer_installed()
 
     # get java file from stdin
     java_input = "".join(fileinput.input(args.input)).rstrip()
 
-    # try:
-    #     with spinner(text="Listing breakpoints...", stream=sys.stderr):
-    #         list_breakpoints_output = subprocess.check_output(
-    #             (
-    #                 [
-    #                     str(java_home / "bin" / "java"),
-    #                     "-jar",
-    #                     str(cache_dir / "code-tracer.jar"),
-    #                 ]
-    #                 + args
-    #                 + ["-l"]
-    #             ),
-    #             input=java_input,
-    #             timeout=args.trace_timeout,
-    #             text=True,
-    #         )
-    #         logger.info(f"Available breakpoints:\n\n{list_breakpoints_output}")
-
-    # except CalledProcessError as e:
-    #     logger.exception(
-    #         "Trace generation failed with exit code %d and output:", e.returncode
-    #     )
-    #     exit(1)
-
-
-    with spinner(text="Generating execution trace...", stream=sys.stderr):
-        trace = generate_trace(
-            java_home,
-            java_input,
-            args.trace_timeout,
-            include_enum_static_fields=args.include_enum_static_fields,
-            breakpoints={-1},
-        )
-
+    trace = generate_trace(
+        java_home,
+        java_input,
+        args.trace_timeout,
+        include_enum_static_fields=args.include_enum_static_fields,
+        breakpoints=DEFAULT_BREAKPOINTS_SET,
+    )
 
     if args.output is None:
         print(trace)
     else:
         with open(args.output, "w") as f:
-            f.write(trace)
+            _ = f.write(trace)
 
 
 if __name__ == "__main__":
