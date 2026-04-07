@@ -3,6 +3,7 @@
 import inspect
 
 from subprocess import CalledProcessError
+import textwrap
 from typing import cast
 
 
@@ -67,9 +68,9 @@ class CodeVisTraceGeneratorError(Exception):
 
         for name, member in members:
             if doc := inspect.getdoc(member):
-                note_heading: str = doc.strip()[0:-1]
-                note_body: str = getattr(self, name, "<unknown note>")
-                note: str = note_heading + ":\n" + note_body
+                note_heading: str = str(doc.strip()[0:-1])
+                note_body: str = textwrap.indent(str(getattr(self, name, "<unknown note>")), " " * 2)
+                note: str = textwrap.indent("\n" + note_heading + ":\n\n" + note_body, " " * 2)
                 self.add_note(note)
 
         return self
