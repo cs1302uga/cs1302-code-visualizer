@@ -74,7 +74,7 @@ div.ExecutionVisualizer div#codeDisplayDiv {
 
 div.ExecutionVisualizer div#pyCodeOutputDiv {
   /*max-width: 550px;*/
-  max-height: 460px;
+  max-height: 1000px;
   /*max-height: 620px;*/
   overflow: auto;
   /*margin-bottom: 4px;*/
@@ -704,8 +704,8 @@ div.ExecutionVisualizer .vizTitleText {
 
 div.ExecutionVisualizer div#vizHeader {
   margin-bottom: 10px;
-  width: 700px;
-  max-width: 700px;
+  width: 1920px;
+  max-width: 1080px;
 }
 
 /* prev then curr, so curr gets precedence when both apply */
@@ -944,3 +944,15 @@ div.ExecutionVisualizer .instTbl:not(:has(.instKey)) {
   background-color: var(--value-background-color) !important;
 }
 /* /Dr. Cotterell's style changes */
+
+div.ExecutionVisualizer .fieldTypeLabel {
+    font-size: 8pt!important;
+}
+
+div.ExecutionVisualizer table {
+    border-collapse: separate;
+}
+
+div.ExecutionVisualizer div#heap {
+    padding-left: unset!important;
+}

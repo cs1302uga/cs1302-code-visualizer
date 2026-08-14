@@ -113,8 +113,8 @@ var tabAllRegex = new RegExp("\t", "g");
 export class ExecutionVisualizer {
   static curVisualizerID = 1;
 
-  static DEFAULT_EMBEDDED_CODE_DIV_WIDTH = 350;
-  static DEFAULT_EMBEDDED_CODE_DIV_HEIGHT = 400;
+  static DEFAULT_EMBEDDED_CODE_DIV_WIDTH = 1920;
+  static DEFAULT_EMBEDDED_CODE_DIV_HEIGHT = 1080;
 
   // always nest values of these types within objects to make the
   // visualization look cleaner:
@@ -473,7 +473,7 @@ export class ExecutionVisualizer {
     // both CodeDisplay and NavigationController
     this.domRoot
       .find("#vizLayoutTdFirst")
-      .append('<div id="codAndNav" style="width: 550px;"/>');
+      .append('<div id="codAndNav" style="width: 1920px;"/>');
     var base = this.domRoot.find("#vizLayoutTdFirst #codAndNav");
     var baseD3 = this.domRootD3.select("#vizLayoutTdFirst #codAndNav");
 
@@ -1359,7 +1359,7 @@ class DataVisualizer {
         [
           "Arrow",
           {
-            length: 10,
+            length: 5,
             width: 7,
             foldback: 0.55,
             location: 1 /* 1 = display at target */,
@@ -2972,7 +2972,7 @@ class DataVisualizer {
           if (srcAnchorLeft > dstHeapObjectLeft) {
             // an extra nudge of 32px matches up pretty well with the
             // current CSS padding around .toplevelHeapObject
-            var delta = srcAnchorLeft - dstHeapObjectLeft + 32;
+            var delta = srcAnchorLeft - dstHeapObjectLeft + 96;
 
             // set margin rather than padding so that arrows tips still end
             // at the left edge of the element.
@@ -2982,7 +2982,7 @@ class DataVisualizer {
             // 'margin-left', but somehow the results look different
             dstHeapObject.css("margin-left", "+=" + delta);
 
-            //console.log(srcRowID, 'nudged', dstRowID, 'by', delta);
+            console.log(srcRowID, 'nudged', dstRowID, 'by', delta);
 
             var cur_nudgee_set = nudger_to_nudged_rows[srcRowID];
             if (cur_nudgee_set === undefined) {

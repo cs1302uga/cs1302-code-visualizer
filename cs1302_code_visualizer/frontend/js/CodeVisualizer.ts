@@ -42,6 +42,16 @@ export function create({
     pyTutorOptions,
   );
 
+  const removeIds = [
+    "#vizLayoutTdFirst",
+    "#progOutputs",
+    "#selectiveHideStatus",
+  ];
+
+  removeIds
+    .map((rid) => element.querySelector(rid))
+    .forEach((rel) => rel.setAttribute("style", "display: none!important;"));
+
   viz.updateOutput();
 
   window.addEventListener("resize", (event) => {

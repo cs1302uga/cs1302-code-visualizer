@@ -130,9 +130,11 @@ def generate_trace(
     if not include_enum_static_fields:
         for line, trace_value in trace_json.items():
             logger.debug(f"removing enum constants and $VALUES for line {line}")
-            enum_types: list[str] = get_enum_types(trace_value)
-            enum_globals: list[str] = get_enum_globals(trace_value, enum_types)
-            delete_globals(trace_value, enum_globals)
+            items = trace_value if isinstance(trace_value, list) else [trace_value]
+            for item in items:
+                enum_types: list[str] = get_enum_types(item)
+                enum_globals: list[str] = get_enum_globals(item, enum_types)
+                delete_globals(item, enum_globals)
 
     return json.dumps(trace_json)
 

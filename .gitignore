@@ -11,3 +11,5 @@ wheels/
 # Cached backend files
 .backend_classes/
 .jdk8/
+.coverage
+.pytest_cache/

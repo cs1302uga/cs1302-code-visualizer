@@ -89,3 +89,24 @@ div.ExecutionVisualizer .nullObj {
 div.ExecutionVisualizer .instTbl:not(:has(.instKey)) {
   background-color: var(--value-background-color) !important;
 }
+
+div.ExecutionVisualizer td.instKey, div.ExecutionVisualizer td.stackFrameVar {
+    gap: 0.25rem;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    justify-content: end;
+}
+
+div.ExecutionVisualizer .fieldTypeLabel {
+    font-size: 8pt!important;
+}
+
+div.ExecutionVisualizer table {
+    border-collapse: separate;
+}
+
+div.ExecutionVisualizer div#heap {
+    padding-left: unset!important;
+}

@@ -73,12 +73,60 @@
       })();
       </script>
 
-    </main>
-
     <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const form = document.querySelector("form");
+      const inputArea = document.getElementById("code-trace-input");
+      const formattedArea = document.getElementById("code-trace-json");
+      const clearBtn = form.querySelector(".btn-secondary");
 
+      // Container for live quick tester visualizer output
+      const vizContainer = document.createElement("div");
+      vizContainer.id = "quick-tester-viz";
+      vizContainer.className = "mt-4 mb-5";
+      form.parentNode.insertBefore(vizContainer, form.nextSibling);
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const rawInput = inputArea.value.trim();
+        if (!rawInput) return;
+
+        try {
+          const parsed = JSON.parse(rawInput);
+          formattedArea.value = JSON.stringify(parsed, null, 2);
+          vizContainer.innerHTML = '<h3 class="h4 mb-3">Live Visualization</h3><div id="quick-viz-output"></div>';
+          
+          let tracePayload = rawInput;
+          if (typeof parsed === "object" && !parsed.trace) {
+            // handle line keyed trace JSON e.g. {"13": { ... }}
+            const keys = Object.keys(parsed);
+            if (keys.length > 0 && parsed[keys[0]].trace) {
+              tracePayload = JSON.stringify(parsed[keys[0]]);
+            }
+          }
+
+          CodeVisualizer.create({
+            lang: "java",
+            trace: btoa(tracePayload),
+            element: document.getElementById("quick-viz-output"),
+            options: {
+              includeTypes: true,
+              stripTypePrefixes: ["java.lang."]
+            }
+          });
+        } catch (err) {
+          alert("Invalid JSON trace format: " + err.message);
+        }
+      });
+
+      clearBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        inputArea.value = "";
+        formattedArea.value = "";
+        vizContainer.innerHTML = "";
+      });
+    });
     </script>
-
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
   </body>

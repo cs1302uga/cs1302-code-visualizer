@@ -1,12 +1,10 @@
-#!/bin/env python3
-
+import sys
 from collections import defaultdict
 import fileinput
 
 import json
 import os
 from pathlib import Path
-from sys import stdout
 import logging
 
 from . import browser_driver
@@ -268,7 +266,7 @@ def render_image(
 
 
 def main() -> None:
-    java_source: str = "".join(fileinput.input())
+    java_source: str = "".join(fileinput.input("-"))
     rendered_image: bytes = render_image(
         java_source,
         dpi=2,
@@ -277,4 +275,4 @@ def main() -> None:
         include_types=True,
         include_enum_static_fields=False,
     )
-    stdout.buffer.write(rendered_image)
+    sys.stdout.buffer.write(rendered_image)
