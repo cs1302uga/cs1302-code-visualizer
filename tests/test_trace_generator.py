@@ -4,6 +4,7 @@ import json
 import runpy
 import pytest
 import importlib
+import zipfile
 import tarfile
 from pathlib import Path
 from subprocess import CalledProcessError
@@ -60,15 +61,92 @@ def test_tracer_url_from_toml_none_sha(monkeypatch):
     monkeypatch.setattr("tomllib.load", lambda f: {"tool": {"cs1302-code-visualizer": {"tracer-url": "http://example.com", "tracer-sha256": None}}})
     assert read_tracer_url_and_sum_from_toml() is None
 
+def test_tracer_url_from_toml_exception(monkeypatch):
+    with patch("builtins.open", side_effect=Exception("Read error")):
+        assert read_tracer_url_and_sum_from_toml() is None
+
 def test_jdk_exists(java_home):
     assert jdk_exists(java_home)
     assert not jdk_exists("/invalid/nonexistent/path")
 
-def test_download_jdk_mocked(tmp_path, monkeypatch):
-    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.JDK_CACHE_DIR", tmp_path / "jdk_test")
-    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
+def test_download_jdk_already_exists(tmp_path, monkeypatch):
+    jdk_cache = tmp_path / "jdk"
+    jdk_cache.mkdir()
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.JDK_CACHE_DIR", jdk_cache)
+    download_jdk()  # returns immediately
 
-    # Mock Adoptium API responses
+def test_download_jdk_unsupported_platform(tmp_path, monkeypatch):
+    fake_cache = tmp_path / "nonexistent"
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.JDK_CACHE_DIR", fake_cache)
+    monkeypatch.setattr("platform.system", lambda: "FreeBSD")
+    with pytest.raises(Exception, match="Cannot automatically download a JDK for your computer's platform"):
+        download_jdk()
+
+def test_download_jdk_unsupported_arch(tmp_path, monkeypatch):
+    fake_cache = tmp_path / "nonexistent"
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.JDK_CACHE_DIR", fake_cache)
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("platform.machine", lambda: "mips64")
+    with pytest.raises(Exception, match="Cannot automatically download a JDK for your computer's architecture"):
+        download_jdk()
+
+def test_download_jdk_linux_x64(tmp_path, monkeypatch):
+    fake_cache = tmp_path / "cache_linux"
+    fake_cache.mkdir()
+    fake_jdk = fake_cache / "jdk_test"
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.JDK_CACHE_DIR", fake_jdk)
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", fake_cache)
+    monkeypatch.setattr("platform.system", lambda: "Linux")
+    monkeypatch.setattr("platform.machine", lambda: "x86_64")
+
+    resp1 = MagicMock()
+    resp1.raise_for_status = MagicMock()
+    resp1.json.return_value = {"most_recent_lts": 21}
+
+    resp2 = MagicMock()
+    resp2.raise_for_status = MagicMock()
+    resp2.status_code = 404  # triggers 404 fallback path
+
+    resp3 = MagicMock()
+    resp3.raise_for_status = MagicMock()
+    resp3.status_code = 200
+    resp3.iter_content.return_value = [b"mock_data"]
+
+    call_count = 0
+    def mock_get(url, *args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if "available_releases" in url:
+            return resp1
+        if call_count == 2:
+            return resp2
+        return resp3
+
+    mock_tar = MagicMock()
+    mock_tar.getnames.return_value = ["jdk-21-linux"]
+    mock_tar_ctx = MagicMock()
+    mock_tar_ctx.__enter__.return_value = mock_tar
+
+    def mock_move(src, dst):
+        jdk_dir = Path(dst)
+        (jdk_dir / "bin").mkdir(parents=True, exist_ok=True)
+        (jdk_dir / "bin" / "java").touch()
+        (jdk_dir / "bin" / "javac").touch()
+
+    with patch("requests.get", side_effect=mock_get):
+        with patch("tarfile.open", return_value=mock_tar_ctx):
+            with patch("shutil.move", side_effect=mock_move):
+                download_jdk()
+
+def test_download_jdk_windows_amd64(tmp_path, monkeypatch):
+    fake_cache = tmp_path / "cache_win"
+    fake_cache.mkdir()
+    fake_jdk = fake_cache / "jdk_win"
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.JDK_CACHE_DIR", fake_jdk)
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", fake_cache)
+    monkeypatch.setattr("platform.system", lambda: "Windows")
+    monkeypatch.setattr("platform.machine", lambda: "amd64")
+
     resp1 = MagicMock()
     resp1.raise_for_status = MagicMock()
     resp1.json.return_value = {"most_recent_lts": 21}
@@ -76,29 +154,74 @@ def test_download_jdk_mocked(tmp_path, monkeypatch):
     resp2 = MagicMock()
     resp2.raise_for_status = MagicMock()
     resp2.status_code = 200
-    resp2.iter_content.return_value = [b"mock_binary_data"]
+    resp2.iter_content.return_value = [b"mock_zip_data"]
 
     def mock_get(url, *args, **kwargs):
         if "available_releases" in url:
             return resp1
         return resp2
 
-    # Create dummy JDK directory structure when shutil.move is called
+    mock_zip = MagicMock()
+    mock_zip.namelist.return_value = ["jdk-21-windows/"]
+    mock_zip_ctx = MagicMock()
+    mock_zip_ctx.__enter__.return_value = mock_zip
+
     def mock_move(src, dst):
         jdk_dir = Path(dst)
         (jdk_dir / "bin").mkdir(parents=True, exist_ok=True)
         (jdk_dir / "bin" / "java").touch()
         (jdk_dir / "bin" / "javac").touch()
 
+    with patch("requests.get", side_effect=mock_get):
+        with patch("zipfile.ZipFile", return_value=mock_zip_ctx):
+            with patch("shutil.move", side_effect=mock_move):
+                download_jdk()
+
+def test_download_jdk_extraction_failed(tmp_path, monkeypatch):
+    fake_cache = tmp_path / "cache_fail"
+    fake_cache.mkdir()
+    fake_jdk = fake_cache / "jdk_fail"
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.JDK_CACHE_DIR", fake_jdk)
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", fake_cache)
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+    monkeypatch.setattr("platform.machine", lambda: "arm64")
+
+    resp1 = MagicMock()
+    resp1.raise_for_status = MagicMock()
+    resp1.json.return_value = {"most_recent_lts": 21}
+    resp2 = MagicMock()
+    resp2.raise_for_status = MagicMock()
+    resp2.status_code = 200
+    resp2.iter_content.return_value = [b"data"]
+
+    def mock_get(url, *args, **kwargs):
+        if "available_releases" in url:
+            return resp1
+        return resp2
+
     mock_tar = MagicMock()
-    mock_tar.getnames.return_value = ["jdk-21.0.1+12/Contents/Home"]
+    mock_tar.getnames.return_value = ["jdk-21/Contents/Home"]
     mock_tar_ctx = MagicMock()
     mock_tar_ctx.__enter__.return_value = mock_tar
 
     with patch("requests.get", side_effect=mock_get):
         with patch("tarfile.open", return_value=mock_tar_ctx):
-            with patch("shutil.move", side_effect=mock_move):
-                download_jdk()
+            with patch("shutil.move", side_effect=lambda src, dst: None):  # don't create java binary
+                with pytest.raises(Exception, match="Could not extract the JDK"):
+                    download_jdk()
+
+def test_ensure_jdk_installed_success_download(tmp_path, monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda exe: None)
+    fake_jdk = tmp_path / "jdk"
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
+    res = ensure_jdk_installed(install_dir=tmp_path / "nonexistent")
+    assert res == fake_jdk
+
+def test_ensure_jdk_installed_download_error(tmp_path, monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda exe: None)
+    with patch("cs1302_code_visualizer.trace_generator.download_jdk", side_effect=Exception("Download failed")):
+        with pytest.raises(Exception, match="Failed to download JDK"):
+            ensure_jdk_installed(install_dir=tmp_path / "nonexistent")
 
 def test_ensure_code_tracer_installed():
     ensure_code_tracer_installed(update_existing=False)
@@ -158,6 +281,23 @@ def test_generate_trace_error_handling(java_home):
     assert err.exit_status != 0
     assert err.source_code == "invalid java code {{{"
 
+def test_generate_trace_multiple_breakpoints_cli(java_home):
+    with patch("subprocess.run") as mock_run:
+        mock_proc = MagicMock()
+        mock_proc.stdout = '{"9": {}, "11": {}}'
+        mock_run.return_value = mock_proc
+        _ = generate_trace(
+            java_home=java_home,
+            java_program=SAMPLE_ENUM_JAVA,
+            breakpoints={9, 11},
+        )
+        cmd = mock_run.call_args[0][0]
+        assert cmd.count("-b") == 2
+        b_idx_9 = cmd.index("9")
+        b_idx_11 = cmd.index("11")
+        assert cmd[b_idx_9 - 1] == "-b"
+        assert cmd[b_idx_11 - 1] == "-b"
+
 def test_generate_trace_flags(java_home):
     trace_raw = generate_trace(
         java_home=java_home,
@@ -215,6 +355,23 @@ def test_trace_generator_main_stdout(monkeypatch):
     generator_main()
     out = captured.getvalue()
     assert len(out) > 0
+
+def test_trace_generator_main_with_valid_jdk_arg(java_home, monkeypatch):
+    monkeypatch.setattr(sys, "stdin", io.StringIO(SAMPLE_ENUM_JAVA))
+    captured = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", captured)
+    monkeypatch.setattr("sys.argv", ["generate_trace", "--jdk", str(java_home)])
+    generator_main()
+    assert len(captured.getvalue()) > 0
+
+def test_trace_generator_main_invalid_jdk_path(java_home, monkeypatch):
+    monkeypatch.setattr(sys, "stdin", io.StringIO(SAMPLE_ENUM_JAVA))
+    captured = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", captured)
+    monkeypatch.setattr("sys.argv", ["generate_trace", "--jdk", "/invalid/nonexistent/path"])
+    with patch("cs1302_code_visualizer.trace_generator.ensure_jdk_installed", return_value=java_home):
+        generator_main()
+    assert len(captured.getvalue()) > 0
 
 def test_trace_generator_runpy_main(monkeypatch):
     monkeypatch.setattr(sys, "stdin", io.StringIO(SAMPLE_ENUM_JAVA))

@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import tomllib
 import zipfile
 
@@ -28,6 +29,9 @@ from cs1302_code_visualizer.errors import CodeVisTraceGeneratorError
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stderr))
+
+_TRACER_INSTALL_LOCK: Final[threading.Lock] = threading.Lock()
+_JDK_INSTALL_LOCK: Final[threading.Lock] = threading.Lock()
 
 
 # Enable DEBUG_MODE with
@@ -81,10 +85,8 @@ def generate_trace(
 
     cli_args: list[str] = ["-v"]
 
-    if len(breakpoints) > 0:
-        cli_args.append("-b")
-        for breakpoint in breakpoints:
-            cli_args.append(str(breakpoint))
+    for breakpoint in sorted(breakpoints):
+        cli_args.extend(["-b", str(breakpoint)])
 
     if inline_strings:
         cli_args.append("--inline-strings")
@@ -150,74 +152,74 @@ def jdk_exists(maybe_java_home: str | PathLike[str]) -> bool:
 
 
 def download_jdk():
+    with _JDK_INSTALL_LOCK:
+        if JDK_CACHE_DIR.exists():
+            return
 
-    if JDK_CACHE_DIR.exists():
-        return
+        match platform.system():
+            case "Linux":
+                os = "linux"
+            case "Windows":
+                os = "windows"
+            case "Darwin":
+                os = "mac"
+            case str(s):
+                message: str = f"Cannot automatically download a JDK for your computer's platform ({s})."
+                raise Exception(message)
 
-    match platform.system():
-        case "Linux":
-            os = "linux"
-        case "Windows":
-            os = "windows"
-        case "Darwin":
-            os = "mac"
-        case str(s):
-            message: str = f"Cannot automatically download a JDK for your computer's platform ({s})."
-            raise Exception(message)
+        match platform.machine().lower():
+            case "amd64" | "x86_64":
+                arch = "x64"
+            case "aarch64" | "arm64":
+                arch = "aarch64"
+            case str(m):
+                raise Exception(
+                    f"Cannot automatically download a JDK for your computer's architecture ({m} {os}). Please download and provide one yourself."
+                )
 
-    match platform.machine().lower():
-        case "amd64" | "x86_64":
-            arch = "x64"
-        case "aarch64" | "arm64":
-            arch = "aarch64"
-        case str(m):
-            raise Exception(
-                f"Cannot automatically download a JDK for your computer's architecture ({m} {os}). Please download and provide one yourself."
-            )
+        resp = requests.get("https://api.adoptium.net/v3/info/available_releases")
+        resp.raise_for_status()
 
-    resp = requests.get("https://api.adoptium.net/v3/info/available_releases")
-    resp.raise_for_status()
+        lts_jdk_num = resp.json()["most_recent_lts"]
 
-    lts_jdk_num = resp.json()["most_recent_lts"]
-
-    resp = requests.get(
-        f"https://api.adoptium.net/v3/binary/latest/{lts_jdk_num}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse",
-        stream=True,
-    )
-
-    if resp.status_code == 404:
-        # fall back to JDK 21
-        fallback_jdk_num = "21"
         resp = requests.get(
-            f"https://api.adoptium.net/v3/binary/latest/{fallback_jdk_num}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse",
+            f"https://api.adoptium.net/v3/binary/latest/{lts_jdk_num}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse",
             stream=True,
         )
 
-    resp.raise_for_status()
+        if resp.status_code == 404:
+            # fall back to JDK 21
+            fallback_jdk_num = "21"
+            resp = requests.get(
+                f"https://api.adoptium.net/v3/binary/latest/{fallback_jdk_num}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse",
+                stream=True,
+            )
 
-    with tempfile.NamedTemporaryFile() as temp_file:
-        with temp_file.file as f:
-            for chunk in resp.iter_content(2**8):
-                _ = f.write(chunk)
-        if os == "windows":
-            with zipfile.ZipFile(temp_file) as zip:
-                toplevel_dir = zip.namelist()[0]
-                zip.extractall(CACHE_DIR)
-        elif os == "mac":
-            with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
-                toplevel_dir = Path(tar.getnames()[0]) / "Contents" / "Home"
-                tar.extractall(CACHE_DIR, numeric_owner=True, filter="tar")
-        else:
-            with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
-                toplevel_dir = tar.getnames()[0]
-                tar.extractall(CACHE_DIR, numeric_owner=True, filter="tar")
+        resp.raise_for_status()
 
-    _ = shutil.move(CACHE_DIR / toplevel_dir, CACHE_DIR / "jdk")
+        with tempfile.NamedTemporaryFile() as temp_file:
+            with temp_file.file as f:
+                for chunk in resp.iter_content(2**8):
+                    _ = f.write(chunk)
+            if os == "windows":
+                with zipfile.ZipFile(temp_file) as zip:
+                    toplevel_dir = zip.namelist()[0]
+                    zip.extractall(CACHE_DIR)
+            elif os == "mac":
+                with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
+                    toplevel_dir = Path(tar.getnames()[0]) / "Contents" / "Home"
+                    tar.extractall(CACHE_DIR, numeric_owner=True, filter="tar")
+            else:
+                with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
+                    toplevel_dir = tar.getnames()[0]
+                    tar.extractall(CACHE_DIR, numeric_owner=True, filter="tar")
 
-    if not jdk_exists(str(CACHE_DIR / "jdk")):
-        raise Exception(
-            "Could not extract the JDK. Please download and provide one yourself."
-        )
+        _ = shutil.move(CACHE_DIR / toplevel_dir, CACHE_DIR / "jdk")
+
+        if not jdk_exists(str(CACHE_DIR / "jdk")):
+            raise Exception(
+                "Could not extract the JDK. Please download and provide one yourself."
+            )
 
 
 def ensure_jdk_installed(install_dir: str | PathLike[str] = JDK_CACHE_DIR) -> Path:
@@ -284,60 +286,64 @@ def read_tracer_url_and_sum_from_toml() -> tuple[str, str] | None:
 
 
 def ensure_code_tracer_installed(update_existing: bool = False) -> None:
+    with _TRACER_INSTALL_LOCK:
+        target_jar = CACHE_DIR / "code-tracer.jar"
+        if target_jar.is_file():
+            if not update_existing:
+                return
+            # make sure we have an internet connection before proceeding
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1)
+                sock.connect(("1.1.1.1", 53))
+                sock.close()
+            except socket.error:
+                logger.debug("The code tracer jar already exists, but we can't update it because we're offline.")
+                logger.debug("Continuing with existing tracer version.")
+                return
 
-    if (CACHE_DIR / "code-tracer.jar").is_file():
-        if not update_existing:
+        dl_info_path = Path(CACHE_DIR / "code_tracer_dl_headers.json")
+
+        headers: dict[str, str] = {}
+
+        if target_jar.is_file() and dl_info_path.is_file():
+            with open(dl_info_path, "r") as dl_info_file:
+                dl_info = json.load(dl_info_file)
+            if "Last-Modified" in dl_info:
+                headers["If-Modified-Since"] = dl_info["Last-Modified"]
+
+        tracer_url_and_sum = read_tracer_url_and_sum_from_toml()
+
+        resp = requests.get(
+            (tracer_url_and_sum and tracer_url_and_sum[0])
+            or "https://github.com/cs1302uga/cs1302-tracer/releases/latest/download/code-tracer.jar",
+            headers=headers,
+            stream=True,
+        )
+
+        if resp.status_code == 304:
             return
-        # make sure we have an internet connection before proceeding
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(1)
-            sock.connect(("1.1.1.1", 53))
-            sock.close()
-        except socket.error:
-            logger.debug("The code tracer jar already exists, but we can't update it because we're offline.")
-            logger.debug("Continuing with existing tracer version.")
-            return
 
-    dl_info_path = Path(CACHE_DIR / "code_tracer_dl_headers.json")
+        resp.raise_for_status()
 
-    headers: dict[str, str] = {}
+        tmp_jar_path = CACHE_DIR / f"code-tracer.jar.tmp.{os.getpid()}"
+        with open(tmp_jar_path, "wb") as jar_file:
+            sha256_hash = hashlib.sha256()
+            for chunk in resp.iter_content(2**8):
+                _ = jar_file.write(chunk)
+                sha256_hash.update(chunk)
 
-    if (CACHE_DIR / "code-tracer.jar").is_file() and dl_info_path.is_file():
-        with open(dl_info_path, "r") as dl_info_file:
-            dl_info = json.load(dl_info_file)
-        if "Last-Modified" in dl_info:
-            headers["If-Modified-Since"] = dl_info["Last-Modified"]
-
-    tracer_url_and_sum = read_tracer_url_and_sum_from_toml()
-
-    resp = requests.get(
-        (tracer_url_and_sum and tracer_url_and_sum[0])
-        or "https://github.com/cs1302uga/cs1302-tracer/releases/latest/download/code-tracer.jar",
-        headers=headers,
-        stream=True,
-    )
-
-    if resp.status_code == 304:
-        return
-
-    resp.raise_for_status()
-
-    with tempfile.TemporaryFile() as temp_file:
-        sha256_hash = hashlib.sha256()
-        for chunk in resp.iter_content(2**8):
-            _ = temp_file.write(chunk)
-            sha256_hash.update(chunk)
         if tracer_url_and_sum and tracer_url_and_sum[1] != sha256_hash.hexdigest():
+            if tmp_jar_path.exists():
+                tmp_jar_path.unlink()
             raise Exception(
                 f"Downloaded tracer JAR doesn't have the correct SHA256 sum. Expected: {tracer_url_and_sum[1]}, got {sha256_hash.hexdigest()}."
             )
-        _ = temp_file.seek(0)
-        with open(CACHE_DIR / "code-tracer.jar", "wb") as jar_file:
-            shutil.copyfileobj(temp_file, jar_file)
 
-    with open(dl_info_path, "w") as dl_info_file:
-        json.dump(dict(resp.headers), dl_info_file)
+        tmp_jar_path.replace(target_jar)
+
+        with open(dl_info_path, "w") as dl_info_file:
+            json.dump(dict(resp.headers), dl_info_file)
 
 
 def get_enum_types(trace_json: dict[str, Any]) -> list[str]:
