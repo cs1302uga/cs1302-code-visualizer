@@ -1,20 +1,22 @@
 """Errors related to code visualization."""
 
-import inspect
+from __future__ import annotations
 
-from subprocess import CalledProcessError
+import inspect
 import textwrap
+from subprocess import CalledProcessError
 from typing import cast
 
 
 class CodeVisError(Exception):
-    """Represents an code visualization error."""
+    """Represents a code visualization error."""
 
     def __init__(self, message: str) -> None:
+        """Initialize a CodeVisError with a message."""
         super().__init__(message)
 
 
-class CodeVisTraceGeneratorError(Exception):
+class CodeVisTraceGeneratorError(CodeVisError):
     """A code visualization error related to tracing the code."""
 
     def __init__(
@@ -25,6 +27,7 @@ class CodeVisTraceGeneratorError(Exception):
         stderr: str | None,
         exit_status: int,
     ) -> None:
+        """Initialize a CodeVisTraceGeneratorError."""
         super().__init__("Unable to generate code execution trace.")
         self._source_code: str = source_code
         self._cli_args: list[str] = cli_args
@@ -64,12 +67,16 @@ class CodeVisTraceGeneratorError(Exception):
             """Return `True` if `obj` is a `property`, else `False`."""
             return isinstance(obj, property)
 
-        members: list[tuple[str, property]] = inspect.getmembers(CodeVisTraceGeneratorError, isproperty)
+        members: list[tuple[str, property]] = inspect.getmembers(
+            CodeVisTraceGeneratorError, isproperty
+        )
 
         for name, member in members:
             if doc := inspect.getdoc(member):
-                note_heading: str = str(doc.strip()[0:-1])
-                note_body: str = textwrap.indent(str(getattr(self, name, "<unknown note>")), " " * 2)
+                note_heading: str = doc.strip().rstrip(".")
+                note_body: str = textwrap.indent(
+                    str(getattr(self, name, "<unknown note>")), " " * 2
+                )
                 note: str = textwrap.indent("\n" + note_heading + ":\n\n" + note_body, " " * 2)
                 self.add_note(note)
 
@@ -81,7 +88,7 @@ class CodeVisTraceGeneratorError(Exception):
         source_code: str,
         cli_args: list[str],
     ) -> CodeVisTraceGeneratorError:
-        """Return a CodeVisTraceGeneratorError for the supplied CalledProccessError."""
+        """Return a CodeVisTraceGeneratorError for the supplied CalledProcessError."""
         stdout: str | None = cast(str | None, cpe.stdout)
         stderr: str | None = cast(str | None, cpe.stderr)
         return CodeVisTraceGeneratorError(
@@ -93,8 +100,9 @@ class CodeVisTraceGeneratorError(Exception):
         ).with_property_notes()
 
 
-class CodeVisRenderError(Exception):
+class CodeVisRenderError(CodeVisError):
     """An error related to rendering the image for a visualization."""
 
     def __init__(self, message: str) -> None:
+        """Initialize a CodeVisRenderError with a message."""
         super().__init__(message)

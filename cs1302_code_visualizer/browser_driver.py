@@ -1,37 +1,32 @@
-#!/usr/bin/env python3
+"""Browser automation and screenshot rendering driver."""
 
-import atexit
-from typing import TYPE_CHECKING
-
-import os
-import sys
-import fileinput
-import importlib
 import argparse
-import logging
-import shutil
+import fileinput
 import json
-
-from textwrap import dedent, indent
+import logging
+import os
+import shutil
+import sys
+from collections.abc import Sequence
 from contextlib import contextmanager
+from importlib import metadata
+from io import BytesIO
 from pathlib import Path
-from typing import TypedDict
+from pprint import pformat
+from tempfile import NamedTemporaryFile
+from textwrap import dedent, indent
+from typing import Any, TypedDict
+from urllib.parse import urlencode
+
+from PIL import Image
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
-from io import BytesIO
-from pprint import pformat
-from PIL import Image
-from urllib.parse import urlencode
-from tempfile import _TemporaryFileWrapper, NamedTemporaryFile
-from uuid import UUID, uuid4
-
 
 logger: logging.Logger = logging.getLogger(__name__)
-
 
 this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
 
@@ -40,13 +35,16 @@ this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
 # CS1302_DEBUG=True
 DEBUG_MODE: bool = os.getenv("CS1302_DEBUG", "").strip().lower() in ["1", "true"]
 
-# Disable DSIABLE_HEADLESS_MODE with
-# CS1302_DISABLE_HEADLESS=1
-# CS1302_DISABLE_HEADLESS=True
-DISABLE_HEADLESS_MODE: bool = os.getenv("CS1302_HEADLESS", "").strip().lower() in [
-    "1",
-    "true",
-]
+def is_headless_enabled() -> bool:
+    """Return True if headless mode is active (the default), False if explicitly disabled."""
+    if os.getenv("CS1302_DISABLE_HEADLESS", "").strip().lower() in ["1", "true"]:
+        return False
+    if os.getenv("CS1302_HEADLESS", "").strip().lower() in ["0", "false"]:
+        return False
+    return True
+
+
+DISABLE_HEADLESS_MODE: bool = not is_headless_enabled()
 
 if DEBUG_MODE:
     # our logger
@@ -62,21 +60,24 @@ logger.debug(f"{DEBUG_MODE=}")
 logger.debug(f"{DISABLE_HEADLESS_MODE=}")
 
 for package in ["cs1302_code_visualizer", "selenium"]:
-    version = importlib.metadata.version(package)
+    version = metadata.version(package)
     logger.debug(f"{package}: {version}")
 
 
 def new_webdriver_options(dpi: int = 1) -> Options:
+    """Create Chrome options configured for headless rendering and DPI scaling."""
     options: Options = Options()
 
     if DEBUG_MODE:
         options.add_experimental_option("detach", True)
 
-    if not DISABLE_HEADLESS_MODE:
+    if is_headless_enabled():
         options.add_argument("--headless=new")
         options.add_argument("--start-maximized")
         options.add_argument("--screen-info={1920x1080}")
         options.add_argument("--window-size=1920,1080")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-dev-shm-usage")
 
     options.add_argument(f"--force-device-scale-factor={dpi}")
     options.add_argument("--allow-file-access-from-files")
@@ -120,30 +121,18 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
     return new_webdriver(dpi)
 
 
-def tidy_set_window_size_for_element(driver: webdriver, element: WebElement) -> None:
+def tidy_set_window_size_for_element(driver: webdriver.Remote, element: WebElement) -> None:
     """Set the driver's window size for the target element."""
-
     driver.set_window_size(
-        element.location["x"] + element.size["width"],
-        element.location["y"] + element.size["height"],
+        int(element.location["x"] + element.size["width"]),
+        int(element.location["y"] + element.size["height"]),
     )
 
     window_size: dict[str, int] = driver.get_window_size()
 
-    bounds_size: dict[str, int] = {
-        "width": driver.execute_script(
-            "return document.documentElement.getBoundingClientRect().width;"
-        ),
-        "height": driver.execute_script(
-            "return document.documentElement.getBoundingClientRect().height;"
-        ),
-    }
-
     client_size: dict[str, int] = {
         "width": driver.execute_script("return document.documentElement.clientWidth;"),
-        "height": driver.execute_script(
-            "return document.documentElement.clientHeight;"
-        ),
+        "height": driver.execute_script("return document.documentElement.clientHeight;"),
     }
 
     offset_size: dict[str, int] = {
@@ -151,25 +140,31 @@ def tidy_set_window_size_for_element(driver: webdriver, element: WebElement) -> 
         "height": window_size["height"] - client_size["height"],
     }
 
-    new_width = max(
-        element.location["x"] + element.size["width"],
-        element.location["x"] + element.size["width"] + offset_size["width"],
-    )  # + 50
+    new_width = int(
+        max(
+            element.location["x"] + element.size["width"],
+            element.location["x"] + element.size["width"] + offset_size["width"],
+        )
+    )
 
-    new_height = max(
-        element.location["y"] + element.size["height"],
-        element.location["y"] + element.size["height"] + offset_size["height"],
-    )  # + 50
+    new_height = int(
+        max(
+            element.location["y"] + element.size["height"],
+            element.location["y"] + element.size["height"] + offset_size["height"],
+        )
+    )
 
     driver.set_window_size(new_width, new_height)
 
 
 class OnlinePythonTutor(TypedDict):
-    driver: webdriver.Remote
+    """Dictionary container holding frontend web driver and element handles."""
+
+    driver: webdriver.Chrome
     vizDiv: WebElement
     dataViz: WebElement
-    traceFile: _TemporaryFileWrapper
-    wait: WebDriverWait
+    traceFile: Any
+    wait: WebDriverWait[webdriver.Chrome]
 
 
 @contextmanager
@@ -179,45 +174,49 @@ def online_python_tutor_frontend(
     dpi: int = 1,
     include_types: bool = True,
     text_memory_labels: bool = True,
-    strip_type_prefixes: list[str] = [],
+    strip_type_prefixes: Sequence[str] | None = None,
 ):
-    """TODO."""
+    """Context manager for interacting with the OnlinePythonTutor frontend in Chrome."""
+    prefixes = list(strip_type_prefixes) if strip_type_prefixes is not None else []
     frontend_path = (this_files_dir / "frontend" / "render-trace.html").as_uri()
     driver = get_webdriver(dpi=dpi)
-    trace_file = NamedTemporaryFile()
-    wait = WebDriverWait(driver, 10)
-    logger.debug(f"webdriver: {pformat(driver.capabilities)}")
-
-    with open(trace_file.name, "w") as f:
-        print(trace, file=f)
-
-    frontend_query: dict = {
-        "tracePath": trace_file.name,
-        "includeTypes": str(include_types).lower(),
-        "textMemoryLabels": str(text_memory_labels).lower(),
-        "stripTypePrefixes": json.dumps(strip_type_prefixes),
-    }
-
-    frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
-
-    driver.get(frontend_uri)
-
-    vizDiv = driver.find_element(By.ID, "visualizerDiv")
-    dataViz = driver.find_element(By.ID, "dataViz")
-
-    driver.find_element(By.ID, "screenshotReadyIndicator")
-
-    frontend: OnlinePythonTutor = OnlinePythonTutor(
-        driver=driver,
-        vizDiv=vizDiv,
-        dataViz=dataViz,
-        wait=wait,
-    )
-
     try:
-        yield frontend
+        trace_file = NamedTemporaryFile()
+        try:
+            wait: WebDriverWait[webdriver.Chrome] = WebDriverWait(driver, 10)
+            logger.debug(f"webdriver: {pformat(driver.capabilities)}")
+
+            with open(trace_file.name, "w", encoding="utf-8") as f:
+                print(trace, file=f)
+
+            frontend_query: dict[str, str] = {
+                "tracePath": trace_file.name,
+                "includeTypes": str(include_types).lower(),
+                "textMemoryLabels": str(text_memory_labels).lower(),
+                "stripTypePrefixes": json.dumps(prefixes),
+            }
+
+            frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
+
+            driver.get(frontend_uri)
+
+            vizDiv = driver.find_element(By.ID, "visualizerDiv")
+            dataViz = driver.find_element(By.ID, "dataViz")
+
+            _ = driver.find_element(By.ID, "screenshotReadyIndicator")
+
+            frontend: OnlinePythonTutor = {
+                "driver": driver,
+                "vizDiv": vizDiv,
+                "dataViz": dataViz,
+                "traceFile": trace_file,
+                "wait": wait,
+            }
+
+            yield frontend
+        finally:
+            trace_file.close()
     finally:
-        trace_file.close()
         driver.quit()
 
 
@@ -245,7 +244,7 @@ def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> s
                 <div class="ExecutionVisualizer">
                     <div class="visualizer">
                         <div class="vizLayoutTd" id="vizLayoutTdSecond">
-                            {indent(dataViz," " * 4 * 5)}
+                            {indent(dataViz, " " * 4 * 5)}
                         </div>
                     </div>
                 </div>
@@ -263,8 +262,8 @@ def generate_image(
     format: str = "PNG",
     include_types: bool = True,
     text_memory_labels: bool = False,
-    strip_type_prefixes: list[str] = [],
-    breakpoint: int = -1,
+    strip_type_prefixes: Sequence[str] | None = None,
+    breakpoint: int | None = -1,
 ) -> bytes:
     """Generate an image of the final state of an execution trace file.
 
@@ -277,16 +276,14 @@ def generate_image(
         include_types: Whether or not type tags should be included in this visualization.
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        breakpoint: Breakpoint line to visualize.
 
     Return:
         The bytes of the generated image in the format specified by the ``format`` argument.
 
     """
-
-    # print(f"#dataViz.outerHTML={generate_html(trace, dpi=dpi)}", file=sys.stderr)
-
-    trace_json = json.loads(trace)
-    if str(breakpoint) in trace_json:
+    trace_json: Any = json.loads(trace)
+    if isinstance(trace_json, dict) and breakpoint is not None and str(breakpoint) in trace_json:
         trace_json = trace_json.get(str(breakpoint))
         trace = json.dumps(trace_json)
 
@@ -297,28 +294,33 @@ def generate_image(
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
     ) as frontend:
-
         driver: webdriver.Chrome = frontend["driver"]
         viz: WebElement = frontend["dataViz"]
 
         tidy_set_window_size_for_element(driver, viz)
 
         (left, top, right, bottom) = (
-            viz.location["x"],
-            viz.location["y"],
-            viz.location["x"] + viz.size["width"],
-            viz.location["y"] + viz.size["height"],
+            int(viz.location["x"]),
+            int(viz.location["y"]),
+            int(viz.location["x"] + viz.size["width"]),
+            int(viz.location["y"] + viz.size["height"]),
         )
 
-        driver.execute_script("window.optFrontend.redrawConnectors()")
+        _ = driver.execute_script("window.optFrontend.redrawConnectors()")
 
         screenshot = driver.get_screenshot_as_png()
 
         # crop the screenshot down to the element borders
-        screenshot_bytes = BytesIO(screenshot)
+        screenshot_bytes = BytesIO()
         pil_img = Image.open(BytesIO(screenshot))
 
-        pil_img = pil_img.crop(tuple(dpi * x for x in [left, top, right, bottom]))
+        crop_box: tuple[float, float, float, float] = (
+            float(dpi * left),
+            float(dpi * top),
+            float(dpi * right),
+            float(dpi * bottom),
+        )
+        pil_img = pil_img.crop(crop_box)
 
         pil_img.save(
             screenshot_bytes,
@@ -328,18 +330,19 @@ def generate_image(
         return screenshot_bytes.getvalue()
 
 
-def main():
+def main() -> None:
+    """Command-line entry point for generating screenshot from Java execution trace."""
     parser = argparse.ArgumentParser(
         description="Generate a screenshot from a Java execution trace"
     )
 
-    def require_geq_one(value):
+    def require_geq_one(value: str | float) -> float:
         number = float(value)
         if number < 1:
             raise argparse.ArgumentTypeError(f"Number {value} must be >= 1.")
         return number
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--dpi",
         help="DPI scale to apply to the screenshot.",
         type=require_geq_one,
@@ -353,7 +356,7 @@ def main():
     image_bytes = generate_image(stdin_data, dpi=args.dpi)
 
     # dump png to stdout, should be redirected to destination
-    sys.stdout.buffer.write(image_bytes)
+    _ = sys.stdout.buffer.write(image_bytes)
 
 
 if __name__ == "__main__":

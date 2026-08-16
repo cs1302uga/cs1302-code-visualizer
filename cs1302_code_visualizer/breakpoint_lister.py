@@ -1,25 +1,21 @@
-#!/usr/bin/env python3
+"""List available breakpoints for a Java source program."""
 
+import argparse
 import fileinput
 import json
-import argparse
-import os
-import sys
-import subprocess
 import logging
-from typing import Any
-import platformdirs
-
-from subprocess import CalledProcessError
+import subprocess
+import sys
 from pathlib import Path
-from halo import Halo as spinner
+from subprocess import CalledProcessError
+from typing import Any
+
+import platformdirs
+from rich.console import Console
 
 from . import trace_generator
 
-
 logger: logging.Logger = logging.getLogger(__name__)
-
-current_dir: Path = Path(os.path.dirname(__file__)).resolve()
 
 cache_dir: Path = Path(
     platformdirs.user_cache_dir(
@@ -36,7 +32,7 @@ def list_breakpoints(
     output_json: bool = False,
     verbose: bool = False,
 ) -> str:
-
+    """List available breakpoints for a Java source program as raw text or JSON string."""
     if not (java_home and trace_generator.jdk_exists(java_home)):
         java_home = trace_generator.ensure_jdk_installed()
 
@@ -65,12 +61,14 @@ def list_breakpoints(
         text=True,
     )
 
+
 def list_breakpoints_json(
     java_program: str,
     java_home: Path | None,
     timeout_secs: float | None = None,
     verbose: bool = False,
-) -> dict[str, Any]:
+) -> list[dict[str, Any]] | dict[str, Any]:
+    """List available breakpoints for a Java source program as parsed JSON object."""
     list_breakpoints_output = list_breakpoints(
         java_program=java_program,
         java_home=java_home,
@@ -80,45 +78,46 @@ def list_breakpoints_json(
     ).strip()
     return json.loads(list_breakpoints_output)
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="List available breakpoints for a Java program."
-    )
 
-    parser.add_argument(
+def main() -> None:
+    """Command-line entry point for listing Java breakpoints."""
+    console = Console(stderr=True)
+    parser = argparse.ArgumentParser(description="List available breakpoints for a Java program.")
+
+    _ = parser.add_argument(
         "--json",
         "-j",
         help="Output JSON.",
         action="store_true",
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--trace-timeout",
         help="Max execution time (in seconds) of the trace execution.",
         type=float,
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--verbose",
         "-v",
         help="Enable output from logger.",
         action="store_true",
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--input",
         "-i",
         help="Path to Java source file to be traced, or `-` for stdin.",
         default="-",
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--output",
         "-o",
         help="Output path. If not provided, traces are printed to standard output.",
     )
 
-    parser.add_argument(
+    _ = parser.add_argument(
         "--jdk",
         help=(
             "Path to the home of a JDK 21+ installation. If not provided, "
@@ -134,17 +133,17 @@ def main():
     if args.jdk is not None and trace_generator.jdk_exists(args.jdk):
         java_home = Path(args.jdk)
     else:
-        with spinner(text="Installing the JDK...", stream=sys.stderr):
-            java_home: Path = trace_generator.ensure_jdk_installed()
+        with console.status("Installing the JDK..."):
+            java_home = trace_generator.ensure_jdk_installed()
 
-    with spinner(text="Downloading Java tracer...", stream=sys.stderr):
+    with console.status("Downloading Java tracer..."):
         trace_generator.ensure_code_tracer_installed()
 
     # get java file from stdin
     java_input = "".join(fileinput.input(args.input))
 
     try:
-        with spinner(text="Generating execution trace...", stream=sys.stderr):
+        with console.status("Generating execution trace..."):
             list_breakpoints_output = list_breakpoints(
                 java_program=java_input,
                 java_home=java_home,
@@ -152,16 +151,14 @@ def main():
                 output_json=args.json,
             )
     except CalledProcessError as e:
-        logger.exception(
-            "Trace generation failed with exit code %d and output:", e.returncode
-        )
-        exit(1)
+        logger.exception("Trace generation failed with exit code %d and output:", e.returncode)
+        sys.exit(1)
 
     if args.output is None:
         print(list_breakpoints_output)
     else:
-        with open(args.output, "w") as f:
-            f.write(list_breakpoints_output)
+        with open(args.output, "w", encoding="utf-8") as f:
+            _ = f.write(list_breakpoints_output)
 
 
 if __name__ == "__main__":

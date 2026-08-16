@@ -1,14 +1,33 @@
+"""CS1302 Java Code Visualizer package."""
+
+import fileinput
+import json
+import logging
+import os
 import sys
 from collections import defaultdict
-import fileinput
-
-import json
-import os
+from collections.abc import Sequence
 from pathlib import Path
-import logging
+from typing import Any
 
-from . import browser_driver
-from . import trace_generator
+from . import browser_driver, trace_generator
+from .breakpoint_lister import list_breakpoints, list_breakpoints_json
+from .browser_driver import generate_image
+from .errors import CodeVisError, CodeVisRenderError, CodeVisTraceGeneratorError
+from .trace_generator import generate_trace
+
+__all__ = [
+    "CodeVisError",
+    "CodeVisRenderError",
+    "CodeVisTraceGeneratorError",
+    "generate_image",
+    "generate_trace",
+    "list_breakpoints",
+    "list_breakpoints_json",
+    "main",
+    "render_image",
+    "render_images",
+]
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -17,9 +36,9 @@ logger: logging.Logger = logging.getLogger(__name__)
 # CS1302_DEBUG=True
 DEBUG_MODE: bool = os.getenv("CS1302_DEBUG", "").strip().lower() in ["1", "true"]
 
-# Disable DSIABLE_HEADLESS_MODE with
-# CS1302_DISABLE_HEADLESS=1
-# CS1302_DISABLE_HEADLESS=True
+# Disable HEADLESS_MODE with
+# CS1302_HEADLESS=1
+# CS1302_HEADLESS=True
 DISABLE_HEADLESS_MODE: bool = os.getenv("CS1302_HEADLESS", "").strip().lower() in [
     "1",
     "true",
@@ -43,7 +62,7 @@ def render_images(
     remove_main_args: bool = True,
     include_types: bool = True,
     text_memory_labels: bool = False,
-    strip_type_prefixes: list[str] = [],
+    strip_type_prefixes: Sequence[str] | None = None,
     render_all_breakpoint_occurrences: bool = False,
     include_enum_static_fields: bool = False,
 ) -> dict[int, bytes] | dict[int, list[bytes]]:
@@ -96,11 +115,11 @@ def render_images(
 
     logger.debug(f"{render_all_breakpoint_occurrences=}")
     if render_all_breakpoint_occurrences:
-        traces_accumulated: dict[str, list[dict]] = json.loads(trace)
-        out = defaultdict(list)
+        traces_accumulated: dict[str, list[dict[str, Any]]] = json.loads(trace)
+        out_accumulated: dict[int, list[bytes]] = defaultdict(list)
         for line in traces_accumulated:
             for occurrence in traces_accumulated[line]:
-                out[int(line)].append(
+                out_accumulated[int(line)].append(
                     browser_driver.generate_image(
                         json.dumps(occurrence),
                         dpi=dpi,
@@ -110,12 +129,12 @@ def render_images(
                         strip_type_prefixes=strip_type_prefixes,
                     )
                 )
-        return out
+        return out_accumulated
     else:
-        traces: dict[str, dict] = json.loads(trace)
-        out = dict()
+        traces: dict[str, dict[str, Any]] = json.loads(trace)
+        out_single: dict[int, bytes] = dict()
         for line in traces:
-            out[int(line)] = browser_driver.generate_image(
+            out_single[int(line)] = browser_driver.generate_image(
                 json.dumps(traces[line]),
                 dpi=dpi,
                 format=format,
@@ -123,7 +142,7 @@ def render_images(
                 text_memory_labels=text_memory_labels,
                 strip_type_prefixes=strip_type_prefixes,
             )
-        return out
+        return out_single
 
 
 def render_image(
@@ -139,13 +158,12 @@ def render_image(
     verbose: bool = False,
     include_types: bool = True,
     text_memory_labels: bool = False,
-    strip_type_prefixes: list[str] = [],
+    strip_type_prefixes: Sequence[str] | None = None,
     include_enum_static_fields: bool = False,
 ) -> bytes:
     """Visualize the state of a Java program just before exiting as an image.
 
     Args:
-
         java_source: The Java source code to visualize.
 
         java_home: A path to a JDK 21+ installation home. If not provided, a JDK will be fetched
@@ -185,7 +203,6 @@ def render_image(
             global static fields list, False otherwise.
 
     Return:
-
         Raw bytes of the visualization image.
 
     Note that exceptions may be raised if image generation fails.
@@ -205,17 +222,18 @@ def render_image(
     trace: str = "{}"
 
     breakpoint_index: int | None = None
-    if isinstance(breakpoint_line, tuple) and list(map(type, breakpoint_line)) == [
-        int,
-        int,
-    ]:
+    if (
+        isinstance(breakpoint_line, tuple)
+        and len(breakpoint_line) == 2
+        and all(isinstance(x, int) for x in breakpoint_line)
+    ):
         breakpoints: set[int] = {breakpoint_line[0]}
         breakpoint_index = breakpoint_line[1] - 1
     else:
-        assert isinstance(
-            breakpoint_line, int
-        ), "breakpoint_line must be either an int or an (int, int)"
-        breakpoints: set[int] = {breakpoint_line}
+        assert isinstance(breakpoint_line, int), (
+            "breakpoint_line must be either an int or an (int, int)"
+        )
+        breakpoints = {breakpoint_line}
 
     try:
         execution_trace: str = trace_generator.generate_trace(
@@ -225,20 +243,23 @@ def render_image(
             inline_strings,
             remove_main_args,
             breakpoints=breakpoints,
-            accumulate_breakpoints=breakpoint_index != None,
+            accumulate_breakpoints=breakpoint_index is not None,
             include_enum_static_fields=include_enum_static_fields,
         )
 
-        traces: dict[str, list[dict]] = json.loads(execution_trace)
+        traces: dict[str, Any] = json.loads(execution_trace)
 
         logging.debug(f"TRACES: {traces=}")
 
-        if breakpoint_index != None:
+        if breakpoint_index is not None:
             for line in traces:
-                if breakpoint_index in range(len(traces[line])):
-                    trace = json.dumps(traces[line][breakpoint_index])
+                line_traces = traces[line]
+                if isinstance(line_traces, list) and breakpoint_index in range(len(line_traces)):
+                    trace = json.dumps(line_traces[breakpoint_index])
+                elif isinstance(line_traces, list) and line_traces:
+                    trace = json.dumps(line_traces[-1])
                 else:
-                    trace = json.dumps(traces[line][-1])
+                    trace = json.dumps(line_traces)
                 break
         else:
             for line in traces:
@@ -266,6 +287,7 @@ def render_image(
 
 
 def main() -> None:
+    """Read Java source from standard input and write rendered image to standard output."""
     java_source: str = "".join(fileinput.input("-"))
     rendered_image: bytes = render_image(
         java_source,
@@ -275,4 +297,4 @@ def main() -> None:
         include_types=True,
         include_enum_static_fields=False,
     )
-    sys.stdout.buffer.write(rendered_image)
+    _ = sys.stdout.buffer.write(rendered_image)

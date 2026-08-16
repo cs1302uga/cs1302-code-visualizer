@@ -9,6 +9,8 @@ def test_code_vis_error():
 def test_code_vis_render_error():
     err = CodeVisRenderError("Render failure")
     assert str(err) == "Render failure"
+    assert isinstance(err, CodeVisError)
+
 
 def test_code_vis_trace_generator_error():
     err = CodeVisTraceGeneratorError(
@@ -18,6 +20,7 @@ def test_code_vis_trace_generator_error():
         stderr="err",
         exit_status=1,
     )
+    assert isinstance(err, CodeVisError)
     assert err.source_code == "class Driver {}"
     assert err.cli_args == ["-v"]
     assert err.stdout == "out"
