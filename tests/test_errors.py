@@ -1,10 +1,16 @@
 import pytest
 from subprocess import CalledProcessError
-from cs1302_code_visualizer.errors import CodeVisError, CodeVisTraceGeneratorError, CodeVisRenderError
+from cs1302_code_visualizer.errors import (
+    CodeVisError,
+    CodeVisTraceGeneratorError,
+    CodeVisRenderError,
+)
+
 
 def test_code_vis_error():
     err = CodeVisError("Test message")
     assert str(err) == "Test message"
+
 
 def test_code_vis_render_error():
     err = CodeVisRenderError("Render failure")
@@ -27,6 +33,7 @@ def test_code_vis_trace_generator_error():
     assert err.stderr == "err"
     assert err.exit_status == 1
 
+
 def test_code_vis_trace_generator_error_null_streams():
     err = CodeVisTraceGeneratorError(
         source_code="class Driver {}",
@@ -37,6 +44,7 @@ def test_code_vis_trace_generator_error_null_streams():
     )
     assert err.stdout == ""
     assert err.stderr == ""
+
 
 def test_code_vis_trace_generator_error_from_cpe():
     cpe = CalledProcessError(1, ["java"], output="out", stderr="err")

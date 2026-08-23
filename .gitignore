@@ -13,3 +13,8 @@ wheels/
 .jdk8/
 .coverage
 .pytest_cache/
+
+# Local dependency cache and generated shims
+scripts/cache/
+scripts/shims/bin/
+scripts/installer/shims/bin/

@@ -35,6 +35,7 @@ this_files_dir = Path(os.path.realpath(os.path.dirname(__file__)))
 # CS1302_DEBUG=True
 DEBUG_MODE: bool = os.getenv("CS1302_DEBUG", "").strip().lower() in ["1", "true"]
 
+
 def is_headless_enabled() -> bool:
     """Return True if headless mode is active (the default), False if explicitly disabled."""
     if os.getenv("CS1302_DISABLE_HEADLESS", "").strip().lower() in ["1", "true"]:

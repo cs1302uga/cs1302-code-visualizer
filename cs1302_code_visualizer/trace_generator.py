@@ -125,6 +125,7 @@ def generate_trace(
     try:
         trace_command: list[str] = [
             str(java_home / "bin" / "java"),
+            "--enable-native-access=ALL-UNNAMED",
             "-jar",
             str(CACHE_DIR / "code-tracer.jar"),
             "trace",

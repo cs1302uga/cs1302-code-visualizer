@@ -14,13 +14,16 @@ public class Driver {
 record Person(String name, int age) {}
 """
 
+
 @pytest.fixture(scope="module")
 def java_home():
     return ensure_jdk_installed()
 
+
 def test_jdk_installation(java_home):
     assert java_home.exists()
     assert (java_home / "bin" / "java").is_file()
+
 
 def test_list_breakpoints(java_home):
     breakpoints = list_breakpoints_json(SAMPLE_JAVA, java_home)
@@ -28,11 +31,13 @@ def test_list_breakpoints(java_home):
     assert len(breakpoints) > 0
     assert any(b.get("validBreakpoint") for b in breakpoints)
 
+
 def test_generate_trace(java_home):
     trace_raw = generate_trace(java_home, SAMPLE_JAVA, breakpoints={-1})
     assert isinstance(trace_raw, str)
     trace_json = json.loads(trace_raw)
     assert "-1" in trace_json or len(trace_json) > 0
+
 
 def test_generate_image(java_home):
     trace_raw = generate_trace(java_home, SAMPLE_JAVA, breakpoints={-1})

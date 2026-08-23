@@ -1,6 +1,6 @@
 [project]
 name = "cs1302-code-visualizer"
-version = "0.4.1"
+version = "0.4.2"
 description = "Visualize Java program memory state and output a screenshot."
 authors = [
     {name = "Gabe Livengood", email = "timothy.livengood@uga.edu"},
@@ -18,20 +18,38 @@ license-files = [
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "click>=8.0.0",
+    "packaging>=24.0",
     "pillow>=11.2.1",
     "platformdirs>=4.3.8",
     "requests>=2.32.4",
     "rich>=14.3.3",
     "selenium>=4.33.0",
+    "typer>=0.12.0",
 ]
 
 [tool.cs1302-code-visualizer]
 tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v1.0.8/code-tracer.jar"
 tracer-sha256 = "a067c1c4cb101bcec54b4dc29976a18b77d3ae7b6834269bf48cac2bc795c077"
 
+[tool.cs1302book.system-dependencies]
+system-dependencies = [
+    "enchant>=2.8.0,<3",
+    "graphviz>=15.1.0",
+    "plantuml>=1.2026.1,<1.2027",
+    "jdk>=25,<26",
+    "uv>=0.11.0",
+]
+
 [project.scripts]
 generate_trace = "cs1302_code_visualizer.trace_generator:main"
 generate_visualization = "cs1302_code_visualizer.browser_driver:main"
+install-deps = "scripts.install_deps:main"
+install-enchant = "scripts.installer.enchant:main"
+install-graphviz = "scripts.installer.graphviz:main"
+install-jdk = "scripts.installer.jdk:main"
+install-plantuml = "scripts.installer.plantuml:main"
+install-uv = "scripts.installer.uv:main"
 list_breakpoints = "cs1302_code_visualizer.breakpoint_lister:main"
 render_image = "cs1302_code_visualizer:main"
 
@@ -65,6 +83,9 @@ max-line-length = 100
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore:.*found in sys.modules after import of package.*:RuntimeWarning",
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

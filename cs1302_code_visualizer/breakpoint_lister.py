@@ -51,6 +51,7 @@ def list_breakpoints(
         (
             [
                 str(java_home / "bin" / "java"),
+                "--enable-native-access=ALL-UNNAMED",
                 "-jar",
                 str(cache_dir / "code-tracer.jar"),
             ]
