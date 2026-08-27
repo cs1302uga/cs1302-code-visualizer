@@ -176,6 +176,7 @@ def online_python_tutor_frontend(
     include_types: bool = True,
     text_memory_labels: bool = True,
     strip_type_prefixes: Sequence[str] | None = None,
+    visualizer: str = "pytutor",
 ):
     """Context manager for interacting with the OnlinePythonTutor frontend in Chrome."""
     prefixes = list(strip_type_prefixes) if strip_type_prefixes is not None else []
@@ -195,16 +196,22 @@ def online_python_tutor_frontend(
                 "includeTypes": str(include_types).lower(),
                 "textMemoryLabels": str(text_memory_labels).lower(),
                 "stripTypePrefixes": json.dumps(prefixes),
+                "visualizer": visualizer,
             }
 
             frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
 
             driver.get(frontend_uri)
 
-            vizDiv = driver.find_element(By.ID, "visualizerDiv")
-            dataViz = driver.find_element(By.ID, "dataViz")
-
             _ = driver.find_element(By.ID, "screenshotReadyIndicator")
+            vizDiv = driver.find_element(By.ID, "visualizerDiv")
+            if visualizer == "json-pre":
+                try:
+                    dataViz = vizDiv.find_element(By.CSS_SELECTOR, "pre")
+                except Exception:
+                    dataViz = vizDiv
+            else:
+                dataViz = driver.find_element(By.ID, "dataViz")
 
             frontend: OnlinePythonTutor = {
                 "driver": driver,
@@ -265,6 +272,7 @@ def generate_image(
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
     breakpoint: int | None = -1,
+    visualizer: str = "pytutor",
 ) -> bytes:
     """Generate an image of the final state of an execution trace file.
 
@@ -278,6 +286,7 @@ def generate_image(
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
         breakpoint: Breakpoint line to visualize.
+        visualizer: The visualizer implementation to use ('pytutor' or 'json-pre').
 
     Return:
         The bytes of the generated image in the format specified by the ``format`` argument.
@@ -341,6 +350,7 @@ def generate_image(
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
+        visualizer=visualizer,
     ) as frontend:
         driver: webdriver.Chrome = frontend["driver"]
         viz: WebElement = frontend["dataViz"]
@@ -354,7 +364,8 @@ def generate_image(
             int(viz.location["y"] + viz.size["height"]),
         )
 
-        _ = driver.execute_script("window.optFrontend.redrawConnectors()")
+        if visualizer != "json-pre":
+            _ = driver.execute_script("window.optFrontend.redrawConnectors()")
 
         screenshot = driver.get_screenshot_as_png()
 
@@ -397,11 +408,22 @@ def main() -> None:
         default=1,
     )
 
+    _ = parser.add_argument(
+        "--visualizer",
+        help="Visualizer implementation to use ('pytutor' or 'json-pre').",
+        choices=["pytutor", "json-pre"],
+        default="pytutor",
+    )
+
     args = parser.parse_args()
 
     stdin_data = "".join(fileinput.input("-"))
 
-    image_bytes = generate_image(stdin_data, dpi=args.dpi)
+    image_bytes = generate_image(
+        stdin_data,
+        dpi=args.dpi,
+        visualizer=args.visualizer,
+    )
 
     # dump png to stdout, should be redirected to destination
     _ = sys.stdout.buffer.write(image_bytes)
