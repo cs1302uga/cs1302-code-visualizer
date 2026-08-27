@@ -315,9 +315,18 @@ def ensure_code_tracer_installed(update_existing: bool = False) -> None:
     """Ensure the code-tracer JAR is downloaded and validated against its SHA256 checksum."""
     with _TRACER_INSTALL_LOCK:
         target_jar = CACHE_DIR / "code-tracer.jar"
+        tracer_url_and_sum = read_tracer_url_and_sum_from_toml()
         if target_jar.is_file():
             if not update_existing:
-                return
+                if tracer_url_and_sum and tracer_url_and_sum[1]:
+                    try:
+                        with open(target_jar, "rb") as f:
+                            if hashlib.sha256(f.read()).hexdigest() == tracer_url_and_sum[1]:
+                                return
+                    except OSError:
+                        pass
+                else:
+                    return
             # make sure we have an internet connection before proceeding
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -336,10 +345,13 @@ def ensure_code_tracer_installed(update_existing: bool = False) -> None:
         headers: dict[str, str] = {}
 
         if target_jar.is_file() and dl_info_path.is_file():
-            with open(dl_info_path, "r") as dl_info_file:
-                dl_info = json.load(dl_info_file)
-            if "Last-Modified" in dl_info:
-                headers["If-Modified-Since"] = dl_info["Last-Modified"]
+            try:
+                with open(dl_info_path, "r") as dl_info_file:
+                    dl_info = json.load(dl_info_file)
+                if "Last-Modified" in dl_info:
+                    headers["If-Modified-Since"] = dl_info["Last-Modified"]
+            except (OSError, json.JSONDecodeError):
+                pass
 
         tracer_url_and_sum = read_tracer_url_and_sum_from_toml()
 

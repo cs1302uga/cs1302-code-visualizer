@@ -266,12 +266,42 @@ def test_ensure_code_tracer_installed():
     ensure_code_tracer_installed(update_existing=False)
 
 
-def test_ensure_code_tracer_installed_304(monkeypatch):
+def test_ensure_code_tracer_existing_hash_mismatch(tmp_path, monkeypatch):
+    import hashlib
+
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
+    old_jar = tmp_path / "code-tracer.jar"
+    old_jar.write_bytes(b"OLD_OUTDATED_JAR")
+
+    new_content = b"NEW_JAR_CONTENT"
+    new_hash = hashlib.sha256(new_content).hexdigest()
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.iter_content.return_value = [new_content]
+    mock_resp.headers = {}
+
+    with patch(
+        "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
+        return_value=("http://example.com/code-tracer.jar", new_hash),
+    ):
+        with patch("requests.get", return_value=mock_resp):
+            ensure_code_tracer_installed(update_existing=False)
+            assert old_jar.read_bytes() == new_content
+
+
+def test_ensure_code_tracer_installed_304(tmp_path, monkeypatch):
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
+    target_jar = tmp_path / "code-tracer.jar"
+    target_jar.touch()
+    dl_info = tmp_path / "code_tracer_dl_headers.json"
+    dl_info.write_text('{"Last-Modified": "Fri, 14 Aug 2026 00:00:00 GMT"}')
+
     mock_resp = MagicMock()
     mock_resp.status_code = 304
     with patch("requests.get", return_value=mock_resp):
-        with patch("pathlib.Path.is_file", return_value=True):
-            ensure_code_tracer_installed(update_existing=True)
+        ensure_code_tracer_installed(update_existing=True)
 
 
 def test_ensure_code_tracer_download_full(tmp_path, monkeypatch):
