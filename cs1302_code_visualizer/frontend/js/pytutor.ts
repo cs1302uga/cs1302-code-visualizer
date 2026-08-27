@@ -37,6 +37,7 @@ require("./lib/jquery.ba-bbq.js"); // contains slight pgbovine modifications
 require("./lib/jquery.ba-dotimeout.min.js"); // for $.doTimeout
 
 import "@fontsource/recursive";
+import { isModernTrace, convertModernTraceToOpt } from "./modernTraceAdapter";
 require("../css/pytutor");
 
 let unsupportedFeaturesStr = `see <a target="_blank" href="https://github.com/pgbovine/OnlinePythonTutor/blob/master/unsupported-features.md">UNSUPPORTED FEATURES</a>`;
@@ -263,6 +264,12 @@ export class ExecutionVisualizer {
   //          'py3anaconda' for Python 3 with Anaconda
   //          [default is Python-style labels]
   constructor(domRootID, dat, params) {
+    if (dat && dat["-1"]) {
+      dat = dat["-1"];
+    }
+    if (isModernTrace(dat)) {
+      dat = convertModernTraceToOpt(dat);
+    }
     this.curInputCode = dat.code.rtrim(); // kill trailing spaces
     this.params = params;
     this.curTrace = dat.trace;

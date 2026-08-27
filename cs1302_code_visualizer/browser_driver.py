@@ -285,7 +285,30 @@ def generate_image(
     """
     trace_json: Any = json.loads(trace)
     if isinstance(trace_json, dict):
-        if "trace" not in trace_json:
+        if "breakpoints" in trace_json and isinstance(trace_json["breakpoints"], dict):
+            bps = trace_json["breakpoints"]
+            if breakpoint is not None:
+                if isinstance(breakpoint, tuple) and len(breakpoint) == 2:
+                    bp_line, bp_idx = str(breakpoint[0]), breakpoint[1] - 1
+                    if bp_line in bps:
+                        val = bps[bp_line]
+                        trace_json["breakpoints"] = {
+                            bp_line: val[bp_idx]
+                            if isinstance(val, list) and 0 <= bp_idx < len(val)
+                            else val
+                        }
+                elif str(breakpoint) in bps:
+                    trace_json["breakpoints"] = {str(breakpoint): bps[str(breakpoint)]}
+            elif "-1" in bps:
+                trace_json["breakpoints"] = {"-1": bps["-1"]}
+            elif len(bps) == 1:
+                k, v = next(iter(bps.items()))
+                trace_json["breakpoints"] = {k: v}
+        elif (
+            "trace" not in trace_json
+            and "steps" not in trace_json
+            and trace_json.get("format") != "modern"
+        ):
             if breakpoint is not None:
                 if isinstance(breakpoint, tuple) and len(breakpoint) == 2:
                     bp_line, bp_idx = str(breakpoint[0]), breakpoint[1] - 1

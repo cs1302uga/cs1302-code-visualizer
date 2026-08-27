@@ -47,3 +47,58 @@ def test_generate_image(java_home):
     assert isinstance(img_bytes, bytes)
     assert len(img_bytes) > 0
     assert img_bytes[:8] == b"\x89PNG\r\n\x1a\n"  # PNG magic header
+
+
+def test_generate_image_modern_format(java_home):
+    trace_raw = generate_trace(
+        java_home,
+        SAMPLE_JAVA,
+        breakpoints={-1},
+        extra_tracer_args=["--format=modern"],
+    )
+    img_bytes = generate_image(trace_raw)
+    assert isinstance(img_bytes, bytes)
+    assert len(img_bytes) > 0
+    assert img_bytes[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_code_visualizer_json_pre(java_home):
+    import base64
+    from cs1302_code_visualizer.browser_driver import get_webdriver, this_files_dir
+
+    trace_raw = generate_trace(
+        java_home,
+        SAMPLE_JAVA,
+        breakpoints={-1},
+        extra_tracer_args=["--format=modern"],
+    )
+    b64_trace = "data:application/json;base64," + base64.b64encode(
+        trace_raw.encode("utf-8")
+    ).decode("utf-8")
+
+    driver = get_webdriver(dpi=1)
+    try:
+        html_uri = (this_files_dir / "frontend" / "codevis.html").as_uri()
+        driver.get(html_uri)
+        driver.execute_script(
+            """
+            const container = document.createElement("div");
+            container.id = "test-pre-container";
+            document.body.appendChild(container);
+            window.testViz = CodeVisualizer.create({
+                lang: "java",
+                trace: arguments[0],
+                element: container,
+                options: { visualizer: "json-pre" }
+            });
+            """,
+            b64_trace,
+        )
+        pre_code = driver.find_element(
+            "css selector", "#test-pre-container pre code.language-json"
+        )
+        assert pre_code is not None
+        assert "modern" in pre_code.text
+    finally:
+        driver.quit()
+
