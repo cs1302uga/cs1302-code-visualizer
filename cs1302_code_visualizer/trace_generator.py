@@ -81,6 +81,33 @@ CACHE_DIR: Final[Path] = Path(
 JDK_CACHE_DIR: Final[Path] = CACHE_DIR / "jdk"
 
 
+def normalize_heap_primitives(trace_obj: dict[str, Any]) -> None:
+    """Ensure all heap objects in a trace are formatted as lists for OnlinePythonTutor."""
+    for event in trace_obj.get("trace", []):
+        if not isinstance(event, dict):
+            continue
+        heap = event.get("heap", {})
+        heap_attrs = event.get("heap_attrs", {})
+        if not isinstance(heap, dict):
+            continue
+        for addr, obj in list(heap.items()):
+            if not isinstance(obj, list):
+                type_name = "Object"
+                if isinstance(heap_attrs, dict) and addr in heap_attrs and "type" in heap_attrs[addr]:
+                    t = heap_attrs[addr]["type"]
+                    if isinstance(t, str):
+                        type_name = t.split(".")[-1].split("<")[0]
+                elif isinstance(obj, int) and not isinstance(obj, bool):
+                    type_name = "Integer"
+                elif isinstance(obj, float):
+                    type_name = "Double"
+                elif isinstance(obj, bool):
+                    type_name = "Boolean"
+                elif isinstance(obj, str):
+                    type_name = "String"
+                heap[addr] = ["INSTANCE", type_name, ["value", obj]]
+
+
 def generate_trace(
     java_home: Path,
     java_program: str,
@@ -90,6 +117,8 @@ def generate_trace(
     breakpoints: set[int] = DEFAULT_BREAKPOINTS_SET,
     accumulate_breakpoints: bool = False,
     include_enum_static_fields: bool = False,
+    auto_detect: bool = False,
+    extra_tracer_args: Sequence[str] | None = None,
 ) -> str:
     """Generate an execution trace for a Java source program.
 
@@ -102,6 +131,8 @@ def generate_trace(
         breakpoints: Set of breakpoint line numbers.
         accumulate_breakpoints: Whether to accumulate multiple hits per breakpoint.
         include_enum_static_fields: Whether to keep enum constants in global static fields.
+        auto_detect: Whether to automatically detect and compile dependent source files.
+        extra_tracer_args: Additional CLI arguments to pass to code-tracer.
 
     Returns:
         JSON string representing the execution trace.
@@ -119,6 +150,12 @@ def generate_trace(
 
     if accumulate_breakpoints:
         cli_args.append("--accumulate-breakpoints")
+
+    if auto_detect:
+        cli_args.append("-a")
+
+    if extra_tracer_args:
+        cli_args.extend(extra_tracer_args)
 
     trace: str = "(none)"
 
@@ -152,15 +189,31 @@ def generate_trace(
 
     trace_json: dict[str, Any] = json.loads(trace)
 
-    # cleanup/remove enum constants and $VALUES from global static fields list
-    if not include_enum_static_fields:
+    # Normalize heap primitives across all traces
+    if "trace" in trace_json and isinstance(trace_json["trace"], list):
+        normalize_heap_primitives(trace_json)
+    else:
         for line, trace_value in trace_json.items():
-            logger.debug(f"removing enum constants and $VALUES for line {line}")
             items = trace_value if isinstance(trace_value, list) else [trace_value]
             for item in items:
-                enum_types: list[str] = get_enum_types(item)
-                enum_globals: list[str] = get_enum_globals(item, enum_types)
-                delete_globals(item, enum_globals)
+                if isinstance(item, dict):
+                    normalize_heap_primitives(item)
+
+    # cleanup/remove enum constants and $VALUES from global static fields list
+    if not include_enum_static_fields:
+        if "trace" in trace_json and isinstance(trace_json["trace"], list):
+            enum_types: list[str] = get_enum_types(trace_json)
+            enum_globals: list[str] = get_enum_globals(trace_json, enum_types)
+            delete_globals(trace_json, enum_globals)
+        else:
+            for line, trace_value in trace_json.items():
+                logger.debug(f"removing enum constants and $VALUES for line {line}")
+                items = trace_value if isinstance(trace_value, list) else [trace_value]
+                for item in items:
+                    if isinstance(item, dict):
+                        enum_types: list[str] = get_enum_types(item)
+                        enum_globals: list[str] = get_enum_globals(item, enum_types)
+                        delete_globals(item, enum_globals)
 
     return json.dumps(trace_json)
 
@@ -468,6 +521,13 @@ def main() -> None:
     )
 
     _ = parser.add_argument(
+        "-a",
+        "--auto-detect",
+        help="Automatically detect and compile dependencies in the source path or packages.",
+        action="store_true",
+    )
+
+    _ = parser.add_argument(
         "--include-enum-static-fields",
         help=(
             "Include enum constants and $VALUES in the global static fields list. "
@@ -480,7 +540,7 @@ def main() -> None:
         action="store_true",
     )
 
-    args = parser.parse_args()
+    args, extra_tracer_args = parser.parse_known_args()
 
     if args.verbose:
         logger.setLevel(logging.DEBUG)
@@ -501,6 +561,8 @@ def main() -> None:
         args.trace_timeout,
         include_enum_static_fields=args.include_enum_static_fields,
         breakpoints=DEFAULT_BREAKPOINTS_SET,
+        auto_detect=args.auto_detect,
+        extra_tracer_args=extra_tracer_args if extra_tracer_args else None,
     )
 
     if args.output is None:

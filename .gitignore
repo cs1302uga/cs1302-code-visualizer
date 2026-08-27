@@ -18,3 +18,9 @@ wheels/
 scripts/cache/
 scripts/shims/bin/
 scripts/installer/shims/bin/
+
+# OS and Editor files
+.DS_Store
+.java-version
+*.code-workspace
+

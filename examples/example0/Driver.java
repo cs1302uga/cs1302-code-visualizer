@@ -4,4 +4,4 @@ public class Driver {
     } // main
 } // Driver
 
-record Person(String name, int age) { };
+record Person(String name, int age) { }

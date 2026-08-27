@@ -29,17 +29,16 @@ if [ "$#" -eq 0 ]; then
     ARGS=("--open" "--rm-json" "--rm-image")
 fi
 
-for dir in example*/; do
-    if [ -d "${dir}" ]; then
-        if [ -f "${dir}/Driver.java" ]; then
-            echo "========================================"
-            echo "Running test in ${dir}..."
-            echo "========================================"
-            (
-                cd "${dir}"
-                ../test.sh "${ARGS[@]}" Driver.java
-            )
-        fi
+for i in {0..20}; do
+    dir="example${i}"
+    if [ -d "${dir}" ] && [ -f "${dir}/test.sh" ]; then
+        echo "========================================"
+        echo "Running test in ${dir}..."
+        echo "========================================"
+        (
+            cd "${dir}"
+            ./test.sh "${ARGS[@]}"
+        )
     fi
 done
 

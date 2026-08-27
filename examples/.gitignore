@@ -1,3 +1,5 @@
 *.trace.json
+*.json
 *.png
+bin/
 .DS_Store

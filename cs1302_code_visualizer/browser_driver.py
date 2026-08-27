@@ -284,9 +284,33 @@ def generate_image(
 
     """
     trace_json: Any = json.loads(trace)
-    if isinstance(trace_json, dict) and breakpoint is not None and str(breakpoint) in trace_json:
-        trace_json = trace_json.get(str(breakpoint))
-        trace = json.dumps(trace_json)
+    if isinstance(trace_json, dict):
+        if "trace" not in trace_json:
+            if breakpoint is not None:
+                if isinstance(breakpoint, tuple) and len(breakpoint) == 2:
+                    bp_line, bp_idx = str(breakpoint[0]), breakpoint[1] - 1
+                    if bp_line in trace_json:
+                        val = trace_json[bp_line]
+                        if isinstance(val, list):
+                            trace_json = val[bp_idx] if 0 <= bp_idx < len(val) else val[-1]
+                        else:
+                            trace_json = val
+                elif str(breakpoint) in trace_json:
+                    trace_json = trace_json.get(str(breakpoint))
+            elif "-1" in trace_json:
+                trace_json = trace_json.get("-1")
+            elif len(trace_json) == 1:
+                trace_json = next(iter(trace_json.values()))
+
+    # If trace_json is a list of traces (e.g. from --accumulate-breakpoints), take the last trace or specified hit
+    if isinstance(trace_json, list) and len(trace_json) > 0:
+        if isinstance(breakpoint, tuple) and len(breakpoint) == 2:
+            bp_idx = breakpoint[1] - 1
+            trace_json = trace_json[bp_idx] if 0 <= bp_idx < len(trace_json) else trace_json[-1]
+        else:
+            trace_json = trace_json[-1]
+
+    trace = json.dumps(trace_json)
 
     with online_python_tutor_frontend(
         trace=trace,

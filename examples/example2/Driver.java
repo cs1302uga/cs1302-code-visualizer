@@ -63,7 +63,7 @@ class Person {
     } // getFullName
 
     public String toString() {
-	return this.getFullName();
+        return this.getFullName();
     } // toString
     
 } // Person
@@ -107,4 +107,3 @@ class CourseOffering {
     } // toString
     
 } // CourseOffering
-

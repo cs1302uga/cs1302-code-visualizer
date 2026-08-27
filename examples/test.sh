@@ -4,6 +4,7 @@ OPEN_IMAGE=""
 RM_JSON=""
 RM_IMAGE=""
 INPUT_FILE=""
+EXTRA_TRACER_ARGS=()
 
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
@@ -38,7 +39,7 @@ while [[ "$#" -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            echo "Usage: $0 [options] <path-to-java-file>"
+            echo "Usage: $0 [options] <path-to-java-file> [extra-tracer-options...]"
             echo ""
             echo "Options:"
             echo "  -J, --rm-json            Automatically delete the generated JSON trace file"
@@ -52,14 +53,18 @@ while [[ "$#" -gt 0 ]]; do
             exit 0
             ;;
         *)
-            INPUT_FILE="$1"
+            if [ -z "${INPUT_FILE}" ]; then
+                INPUT_FILE="$1"
+            else
+                EXTRA_TRACER_ARGS+=("$1")
+            fi
             shift
             ;;
     esac
 done
 
 if [ -z "${INPUT_FILE}" ]; then
-    echo "Usage: $0 [options] <path-to-java-file>" >&2
+    echo "Usage: $0 [options] <path-to-java-file> [extra-tracer-options...]" >&2
     exit 1
 fi
 
@@ -111,7 +116,7 @@ open_file() {
 
 (
     set -x
-    uv run generate_trace < "${INPUT_FILE}" > "${TRACE_FILE}"
+    uv run generate_trace "${EXTRA_TRACER_ARGS[@]}" < "${INPUT_FILE}" > "${TRACE_FILE}"
     uv run generate_visualization < "${TRACE_FILE}" > "${IMAGE_FILE}"
 )
 

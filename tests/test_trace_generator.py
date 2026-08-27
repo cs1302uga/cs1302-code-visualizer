@@ -478,3 +478,23 @@ def test_trace_generator_runpy_main(monkeypatch):
     runpy.run_module("cs1302_code_visualizer.trace_generator", run_name="__main__")
     out = captured.getvalue()
     assert len(out) > 0
+
+
+def test_generate_trace_auto_detect_and_extra_args(java_home, monkeypatch):
+    mock_run = MagicMock()
+    mock_run.return_value.stdout = '{"trace": []}'
+
+    with patch("subprocess.run", mock_run):
+        res = generate_trace(
+            java_home,
+            SAMPLE_ENUM_JAVA,
+            auto_detect=True,
+            extra_tracer_args=["--format=modern", "-s", "src"],
+        )
+        assert res == '{"trace": []}'
+        args, kwargs = mock_run.call_args
+        cmd = args[0]
+        assert "-a" in cmd
+        assert "--format=modern" in cmd
+        assert "-s" in cmd
+        assert "src" in cmd
