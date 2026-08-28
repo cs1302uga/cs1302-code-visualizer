@@ -114,6 +114,26 @@ def test_driver_main_invalid_dpi(monkeypatch):
         driver_main()
 
 
+def test_driver_main_cli_breakpoint(sample_trace_json, monkeypatch):
+    monkeypatch.setattr(sys, "stdin", io.StringIO(sample_trace_json))
+    output_buffer = io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", MockStdout(output_buffer))
+    monkeypatch.setattr("sys.argv", ["generate_visualization", "-b", "6,1"])
+    with patch("cs1302_code_visualizer.browser_driver.generate_image", return_value=b"\x89PNG\r\n\x1a\n") as mock_gi:
+        driver_main()
+        assert mock_gi.call_args[1]["breakpoint"] == (6, 1)
+
+    monkeypatch.setattr("sys.argv", ["generate_visualization", "-b", "29"])
+    with patch("cs1302_code_visualizer.browser_driver.generate_image", return_value=b"\x89PNG\r\n\x1a\n") as mock_gi:
+        driver_main()
+        assert mock_gi.call_args[1]["breakpoint"] == 29
+
+    monkeypatch.setattr("sys.argv", ["generate_visualization", "-b", "29,"])
+    with patch("cs1302_code_visualizer.browser_driver.generate_image", return_value=b"\x89PNG\r\n\x1a\n") as mock_gi:
+        driver_main()
+        assert mock_gi.call_args[1]["breakpoint"] == 29
+
+
 def test_driver_runpy_main(sample_trace_json, monkeypatch):
     monkeypatch.setattr(sys, "stdin", io.StringIO(sample_trace_json))
     output_buffer = io.BytesIO()
@@ -191,6 +211,7 @@ def test_generate_image_breakpoint_resolution_branches(sample_trace_json):
                 t2 = json.dumps({"breakpoints": {"6": data}})
                 _ = generate_image(t2, breakpoint=(6, 1))
                 _ = generate_image(t2, breakpoint=6)
+                _ = generate_image(t2, breakpoint=999)  # len(bps) == 1 fallback
                 _ = generate_image(json.dumps({"breakpoints": {"-1": data}}), breakpoint=None)
                 _ = generate_image(json.dumps({"breakpoints": {"10": data}}), breakpoint=None)
 
@@ -200,6 +221,7 @@ def test_generate_image_breakpoint_resolution_branches(sample_trace_json):
                 _ = generate_image(t3, breakpoint=(6, 99))
                 _ = generate_image(json.dumps({"6": data}), breakpoint=(6, 1))
                 _ = generate_image(json.dumps({"6": data}), breakpoint=6)
+                _ = generate_image(json.dumps({"6": data}), breakpoint=999)  # len(trace_json) == 1 fallback
                 _ = generate_image(json.dumps({"-1": data}), breakpoint=None)
                 _ = generate_image(json.dumps({"10": data}), breakpoint=None)
 

@@ -27,6 +27,7 @@ This gallery showcases memory visualizations generated across all 21 example sui
 - [Example 18: Exception Handling & Stack Frame Unwinding](#example-18-exception-handling--stack-frame-unwinding)
 - [Example 19: Custom Generic Classes & Type Resolution](#example-19-custom-generic-classes--type-resolution)
 - [Example 20: Varargs & Synthesized Parameter Arrays](#example-20-varargs--synthesized-parameter-arrays)
+- [Example 21: Instance Method Execution & Active Call Stack Frames](#example-21-instance-method-execution--active-call-stack-frames)
 
 ---
 
@@ -228,3 +229,12 @@ This gallery showcases memory visualizations generated across all 21 example sui
 - **Concepts**: Varargs parameters (`int... values`), automatic compiler array synthesis on the heap.
 
 ![Example 20 Visualization](example20/cs1302/varargs/Driver.java.png)
+
+---
+
+## Example 21: Instance Method Execution & Active Call Stack Frames
+
+- **Source Code**: [Driver.java](example21/cs1302/banking/Driver.java)
+- **Concepts**: Instance method dispatch, multi-frame call stacks, implicit `this` reference binding, method parameter passing and local variables.
+
+![Example 21 Visualization](example21/cs1302/banking/Driver.java.png)

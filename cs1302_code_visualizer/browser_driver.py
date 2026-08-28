@@ -308,6 +308,9 @@ def generate_image(
                         }
                 elif str(breakpoint) in bps:
                     trace_json["breakpoints"] = {str(breakpoint): bps[str(breakpoint)]}
+                elif len(bps) == 1:
+                    k, v = next(iter(bps.items()))
+                    trace_json["breakpoints"] = {k: v}
             elif "-1" in bps:
                 trace_json["breakpoints"] = {"-1": bps["-1"]}
             elif len(bps) == 1:
@@ -329,6 +332,8 @@ def generate_image(
                             trace_json = val
                 elif str(breakpoint) in trace_json:
                     trace_json = trace_json.get(str(breakpoint))
+                elif len(trace_json) == 1:
+                    trace_json = next(iter(trace_json.values()))
             elif "-1" in trace_json:
                 trace_json = trace_json.get("-1")
             elif len(trace_json) == 1:
@@ -415,7 +420,26 @@ def main() -> None:
         default="pytutor",
     )
 
+    _ = parser.add_argument(
+        "-b",
+        "--breakpoint",
+        dest="breakpoint",
+        help="Breakpoint line to visualize (optional).",
+        default=None,
+    )
+
     args = parser.parse_args()
+
+    bp: int | tuple[int, int] | None = -1
+    if args.breakpoint is not None:
+        if "," in args.breakpoint:
+            parts = [int(p.strip()) for p in args.breakpoint.split(",") if p.strip()]
+            if len(parts) == 2:
+                bp = (parts[0], parts[1])
+            elif len(parts) == 1:
+                bp = parts[0]
+        else:
+            bp = int(args.breakpoint)
 
     stdin_data = "".join(fileinput.input("-"))
 
@@ -423,6 +447,7 @@ def main() -> None:
         stdin_data,
         dpi=args.dpi,
         visualizer=args.visualizer,
+        breakpoint=bp,
     )
 
     # dump png to stdout, should be redirected to destination

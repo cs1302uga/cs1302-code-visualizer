@@ -546,6 +546,15 @@ def main() -> None:
     )
 
     _ = parser.add_argument(
+        "-b",
+        "--breakpoint",
+        dest="breakpoints",
+        action="append",
+        type=str,
+        help="Breakpoint line(s) at which to capture a snapshot (e.g. -b 10 or -b 10,20).",
+    )
+
+    _ = parser.add_argument(
         "--type-style",
         choices=["fqn", "simple"],
         default="simple",
@@ -567,12 +576,21 @@ def main() -> None:
     # get java file from stdin
     java_input = "".join(fileinput.input(args.input)).rstrip()
 
+    parsed_breakpoints: set[int] = set()
+    if args.breakpoints:
+        for bp_str in args.breakpoints:
+            for item in bp_str.split(","):
+                item_trimmed = item.strip()
+                if item_trimmed:
+                    parsed_breakpoints.add(int(item_trimmed))
+    breakpoints = parsed_breakpoints if parsed_breakpoints else DEFAULT_BREAKPOINTS_SET
+
     trace = generate_trace(
         java_home,
         java_input,
         args.trace_timeout,
         include_enum_static_fields=args.include_enum_static_fields,
-        breakpoints=DEFAULT_BREAKPOINTS_SET,
+        breakpoints=breakpoints,
         auto_detect=args.auto_detect,
         type_style=args.type_style,
         extra_tracer_args=extra_tracer_args if extra_tracer_args else None,

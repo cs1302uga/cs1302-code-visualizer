@@ -645,3 +645,14 @@ def test_trace_generator_main_type_style(java_home, monkeypatch):
         generator_main()
         assert mock_gt.call_args[1]["type_style"] == "fqn"
 
+
+def test_trace_generator_main_breakpoints(java_home, monkeypatch):
+    monkeypatch.setattr(sys, "stdin", io.StringIO(SAMPLE_ENUM_JAVA))
+    captured = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", captured)
+    monkeypatch.setattr("sys.argv", ["generate_trace", "-b", "29,30", "-b", "35"])
+    with patch("cs1302_code_visualizer.trace_generator.generate_trace", return_value='{"trace": []}') as mock_gt:
+        generator_main()
+        assert mock_gt.call_args[1]["breakpoints"] == {29, 30, 35}
+
+
