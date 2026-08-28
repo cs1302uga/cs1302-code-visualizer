@@ -96,3 +96,27 @@ def test_init_main(monkeypatch):
     val = output_buffer.getvalue()
     assert len(val) > 0
     assert val[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_render_image_type_style():
+    img_simple = render_image(SAMPLE_JAVA, type_style="simple")
+    assert isinstance(img_simple, bytes)
+    img_fqn = render_image(SAMPLE_JAVA, type_style="fqn")
+    assert isinstance(img_fqn, bytes)
+
+
+def test_render_images_type_style():
+    res = render_images(SAMPLE_JAVA, breakpoints={4}, type_style="simple")
+    assert isinstance(res, dict)
+    assert 4 in res
+
+
+def test_render_image_tuple_breakpoint_non_list_trace():
+    with patch(
+        "cs1302_code_visualizer.trace_generator.generate_trace",
+        return_value=json.dumps({"4": {"trace": []}}),
+    ):
+        with patch("cs1302_code_visualizer.browser_driver.generate_image", return_value=b"PNGDATA"):
+            img = render_image(SAMPLE_JAVA, breakpoint_line=(4, 1))
+            assert img == b"PNGDATA"
+

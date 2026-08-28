@@ -65,6 +65,7 @@ def render_images(
     strip_type_prefixes: Sequence[str] | None = None,
     render_all_breakpoint_occurrences: bool = False,
     include_enum_static_fields: bool = False,
+    type_style: str = "simple",
 ) -> dict[int, bytes] | dict[int, list[bytes]]:
     """Visualize the state of a Java program at given breakpoints.
     java_source:         The Java source code to visualize.
@@ -87,6 +88,7 @@ def render_images(
     strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
     render_all_breakpoint_occurrences: If true, render each occurrence of a breakpoint as a separate image.
                          This changes the return type of the function.
+    type_style:          Type qualification style ('fqn' or 'simple').
 
     out:                 Mapping from a breakpoint line to a visualization image. If
                          render_all_breakpoint_occurrences is true, then this instead returns a mapping from
@@ -111,6 +113,7 @@ def render_images(
         breakpoints,
         accumulate_breakpoints=render_all_breakpoint_occurrences,
         include_enum_static_fields=include_enum_static_fields,
+        type_style=type_style,
     )
 
     logger.debug(f"{render_all_breakpoint_occurrences=}")
@@ -160,6 +163,7 @@ def render_image(
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
     include_enum_static_fields: bool = False,
+    type_style: str = "simple",
 ) -> bytes:
     """Visualize the state of a Java program just before exiting as an image.
 
@@ -245,6 +249,7 @@ def render_image(
             breakpoints=breakpoints,
             accumulate_breakpoints=breakpoint_index is not None,
             include_enum_static_fields=include_enum_static_fields,
+            type_style=type_style,
         )
 
         traces: dict[str, Any] = json.loads(execution_trace)

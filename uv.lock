@@ -295,7 +295,7 @@ wheels = [
 
 [[package]]
 name = "cs1302-code-visualizer"
-version = "0.4.2"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

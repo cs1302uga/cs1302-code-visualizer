@@ -7,6 +7,7 @@ import importlib
 import zipfile
 import tarfile
 from pathlib import Path
+import hashlib
 from subprocess import CalledProcessError
 from unittest.mock import patch, MagicMock
 
@@ -18,6 +19,7 @@ from cs1302_code_visualizer.trace_generator import (
     download_jdk,
     jdk_exists,
     read_tracer_url_and_sum_from_toml,
+    normalize_heap_primitives,
     get_enum_types,
     get_enum_globals,
     delete_globals,
@@ -498,3 +500,148 @@ def test_generate_trace_auto_detect_and_extra_args(java_home, monkeypatch):
         assert "--format=modern" in cmd
         assert "-s" in cmd
         assert "src" in cmd
+
+
+def test_normalize_heap_primitives():
+    # Non-dict event
+    t1 = {"trace": ["not_a_dict"]}
+    normalize_heap_primitives(t1)
+
+    # Non-dict heap
+    t2 = {"trace": [{"heap": "not_a_dict"}]}
+    normalize_heap_primitives(t2)
+
+    # Heap primitives of various types
+    t3 = {
+        "trace": [
+            {
+                "heap": {
+                    "101": 42,
+                    "102": 3.14,
+                    "103": True,
+                    "104": "text",
+                    "105": object(),
+                    "106": 99,
+                },
+                "heap_attrs": {
+                    "106": {"type": "java.lang.Integer"},
+                },
+            }
+        ]
+    }
+    normalize_heap_primitives(t3)
+    heap = t3["trace"][0]["heap"]
+    assert heap["101"] == ["INSTANCE", "Integer", ["value", 42]]
+    assert heap["102"] == ["INSTANCE", "Double", ["value", 3.14]]
+    assert heap["103"] == ["INSTANCE", "Boolean", ["value", True]]
+    assert heap["104"] == ["INSTANCE", "String", ["value", "text"]]
+    assert heap["105"] == ["INSTANCE", "Object", ["value", heap["105"][2][1]]]
+    assert heap["106"] == ["INSTANCE", "Integer", ["value", 99]]
+
+
+def test_ensure_code_tracer_installed_matching_hash(tmp_path, monkeypatch):
+    jar_file = tmp_path / "code-tracer.jar"
+    content = b"TESTJARCONTENT"
+    jar_file.write_bytes(content)
+    sha = hashlib.sha256(content).hexdigest()
+
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
+    with patch(
+        "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
+        return_value=("https://example.com/code-tracer.jar", sha),
+    ):
+        # Should return early without downloading
+        ensure_code_tracer_installed(update_existing=False)
+
+
+def test_ensure_code_tracer_installed_no_sha_in_toml(tmp_path, monkeypatch):
+    jar_file = tmp_path / "code-tracer.jar"
+    jar_file.write_bytes(b"TESTJARCONTENT")
+
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
+    with patch(
+        "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
+        return_value=None,
+    ):
+        # Should return early when update_existing=False and no sum
+        ensure_code_tracer_installed(update_existing=False)
+
+
+def test_ensure_code_tracer_installed_if_modified_since(tmp_path, monkeypatch):
+    jar_file = tmp_path / "code-tracer.jar"
+    jar_file.write_bytes(b"EXISTING")
+    dl_info = tmp_path / "code_tracer_dl_headers.json"
+    dl_info.write_text(json.dumps({"Last-Modified": "Wed, 21 Oct 2025 07:28:00 GMT"}))
+
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
+    with patch(
+        "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
+        return_value=("https://example.com/code-tracer.jar", None),
+    ):
+        with patch("socket.socket") as mock_sock:
+            mock_sock.return_value.connect.return_value = None
+            mock_resp = MagicMock()
+            mock_resp.status_code = 304
+            with patch("requests.get", return_value=mock_resp) as mock_get:
+                ensure_code_tracer_installed(update_existing=True)
+                assert mock_get.call_args[1]["headers"]["If-Modified-Since"] == "Wed, 21 Oct 2025 07:28:00 GMT"
+
+
+def test_ensure_code_tracer_installed_malformed_dl_info(tmp_path, monkeypatch):
+    jar_file = tmp_path / "code-tracer.jar"
+    jar_file.write_bytes(b"EXISTING")
+    dl_info = tmp_path / "code_tracer_dl_headers.json"
+    dl_info.write_text("INVALID JSON")
+
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
+    with patch(
+        "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
+        return_value=("https://example.com/code-tracer.jar", None),
+    ):
+        with patch("socket.socket") as mock_sock:
+            mock_sock.return_value.connect.return_value = None
+            mock_resp = MagicMock()
+            mock_resp.status_code = 304
+            with patch("requests.get", return_value=mock_resp) as mock_get:
+                ensure_code_tracer_installed(update_existing=True)
+                assert "If-Modified-Since" not in mock_get.call_args[1]["headers"]
+
+
+def test_ensure_code_tracer_installed_oserror_reading_jar(tmp_path, monkeypatch):
+    jar_file = tmp_path / "code-tracer.jar"
+    jar_file.write_bytes(b"EXISTING")
+
+    monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
+    with patch(
+        "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
+        return_value=("https://example.com/code-tracer.jar", "somehash"),
+    ):
+        with patch("builtins.open", side_effect=OSError("Read error")):
+            with patch("socket.socket") as mock_sock:
+                mock_sock.return_value.connect.return_value = None
+                mock_resp = MagicMock()
+                mock_resp.status_code = 304
+                with patch("requests.get", return_value=mock_resp):
+                    ensure_code_tracer_installed(update_existing=False)
+
+
+def test_generate_trace_type_style(java_home):
+    mock_run = MagicMock()
+    mock_run.return_value.stdout = '{"trace": []}'
+    with patch("subprocess.run", mock_run):
+        _ = generate_trace(java_home, SAMPLE_ENUM_JAVA, type_style="simple")
+        assert "--type-style=simple" in mock_run.call_args[0][0]
+
+        _ = generate_trace(java_home, SAMPLE_ENUM_JAVA, type_style="fqn")
+        assert "--type-style=fqn" in mock_run.call_args[0][0]
+
+
+def test_trace_generator_main_type_style(java_home, monkeypatch):
+    monkeypatch.setattr(sys, "stdin", io.StringIO(SAMPLE_ENUM_JAVA))
+    captured = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", captured)
+    monkeypatch.setattr("sys.argv", ["generate_trace", "--type-style", "fqn"])
+    with patch("cs1302_code_visualizer.trace_generator.generate_trace", return_value='{"trace": []}') as mock_gt:
+        generator_main()
+        assert mock_gt.call_args[1]["type_style"] == "fqn"
+

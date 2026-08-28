@@ -985,14 +985,17 @@ export class ExecutionVisualizer {
           '<div class="typeLabel">' +
             typeLabelPrefix +
             "empty " +
-            visibleLabel +
+            htmlsanitize(visibleLabel) +
             "</div>",
         );
         return [true]; //handled
       }
 
       d3DomElement.append(
-        '<div class="typeLabel">' + typeLabelPrefix + visibleLabel + "</div>",
+        '<div class="typeLabel">' +
+          typeLabelPrefix +
+          htmlsanitize(visibleLabel) +
+          "</div>",
       );
       d3DomElement.append('<table class="' + label + 'Tbl"></table>');
       var tbl = d3DomElement.children("table");
@@ -1386,19 +1389,23 @@ class DataVisualizer {
   }
 
   trimTypePrefix(type: string): string {
+    if (!type || typeof type !== "string") {
+      return type;
+    }
     let prefixes: string[] | null = this.params.stripTypePrefixes;
 
-    if (!prefixes) {
+    if (!prefixes || prefixes.length === 0) {
       return type;
     }
 
+    let result = type;
     for (const typePrefix of prefixes) {
-      if (type.startsWith(typePrefix)) {
-        return type.replace(typePrefix, "");
+      if (typePrefix) {
+        result = result.split(typePrefix).join("");
       }
     }
 
-    return type;
+    return result;
   }
 
   // create a unique CSS ID for a heap object, which should include both
@@ -3719,11 +3726,13 @@ class DataVisualizer {
 
       assert(obj.length >= headerLength);
 
+      let displayClass = htmlsanitize(myViz.trimTypePrefix(obj[1]));
+
       if (isInstance) {
         d3DomElement.append(
           '<div class="typeLabel">' +
             typeLabelPrefix +
-            obj[1] +
+            displayClass +
             " " +
             myViz.getRealLabel("instance") +
             "</div>",
@@ -3732,7 +3741,7 @@ class DataVisualizer {
         d3DomElement.append(
           '<div class="typeLabel">' +
             typeLabelPrefix +
-            obj[1] +
+            displayClass +
             " " +
             myViz.getRealLabel("instance") +
             "</div>",
@@ -3745,12 +3754,17 @@ class DataVisualizer {
       } else {
         var superclassStr = "";
         if (obj[2].length > 0) {
-          superclassStr += "[extends " + obj[2].join(", ") + "] ";
+          superclassStr +=
+            "[extends " +
+            obj[2]
+              .map((s: string) => htmlsanitize(myViz.trimTypePrefix(s)))
+              .join(", ") +
+            "] ";
         }
         d3DomElement.append(
           '<div class="typeLabel">' +
             typeLabelPrefix +
-            obj[1] +
+            displayClass +
             " class " +
             superclassStr +
             "</div>",

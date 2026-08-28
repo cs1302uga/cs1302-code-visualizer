@@ -1,0 +1,23 @@
+# Markdownlint configuration for cs1302-code-visualizer
+default: true
+
+# MD013: Line length - disabled for prose and documentation with URLs/code blocks
+MD013: false
+
+# MD033: Inline HTML - allow table formatting in README
+MD033:
+  allowed_elements:
+    - "table"
+    - "tr"
+    - "td"
+    - "th"
+    - "tbody"
+    - "thead"
+    - "img"
+    - "div"
+    - "span"
+    - "br"
+
+# MD024: Multiple headings with same content - allow under different parent headers
+MD024:
+  siblings_only: true

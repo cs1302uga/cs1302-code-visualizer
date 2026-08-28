@@ -1,6 +1,6 @@
 [project]
 name = "cs1302-code-visualizer"
-version = "0.4.2"
+version = "0.5.0"
 description = "Visualize Java program memory state and output a screenshot."
 authors = [
     {name = "Gabe Livengood", email = "timothy.livengood@uga.edu"},
@@ -29,8 +29,8 @@ dependencies = [
 ]
 
 [tool.cs1302-code-visualizer]
-tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v2.0.0/code-tracer.jar"
-tracer-sha256 = "446abe2b12becb1b3a9c398c66c025ba0455640420e550e53cb2c4ee9a5f014a"
+tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v2.3.0/code-tracer.jar"
+tracer-sha256 = "852f9b2f21093ec927743656266a66b0da6b9301f0d05fb7f85614a3b0e3e65d"
 
 [tool.cs1302book.system-dependencies]
 system-dependencies = [
@@ -83,9 +83,14 @@ max-line-length = 100
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov=cs1302_code_visualizer --cov-report=term-missing --cov-fail-under=100"
 filterwarnings = [
     "ignore:.*found in sys.modules after import of package.*:RuntimeWarning",
 ]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

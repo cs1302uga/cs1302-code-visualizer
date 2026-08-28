@@ -122,3 +122,91 @@ def test_driver_runpy_main(sample_trace_json, monkeypatch):
     runpy.run_module("cs1302_code_visualizer.browser_driver", run_name="__main__")
     val = output_buffer.getvalue()
     assert len(val) > 0
+
+
+def test_is_headless_enabled_env_vars(monkeypatch):
+    monkeypatch.setenv("CS1302_DISABLE_HEADLESS", "1")
+    monkeypatch.delenv("CS1302_HEADLESS", raising=False)
+    assert browser_driver.is_headless_enabled() is False
+
+    monkeypatch.delenv("CS1302_DISABLE_HEADLESS", raising=False)
+    monkeypatch.setenv("CS1302_HEADLESS", "0")
+    assert browser_driver.is_headless_enabled() is False
+
+
+def test_online_python_tutor_frontend_json_pre(sample_trace_json):
+    # Test json-pre visualizer option
+    with browser_driver.online_python_tutor_frontend(
+        sample_trace_json, visualizer="json-pre"
+    ) as frontend:
+        assert frontend["vizDiv"] is not None
+        assert frontend["dataViz"] is not None
+
+
+def test_online_python_tutor_frontend_json_pre_fallback(monkeypatch, sample_trace_json):
+    mock_driver = MagicMock()
+    mock_wait = MagicMock()
+    mock_elem = MagicMock()
+    mock_viz_div = MagicMock()
+    mock_viz_div.find_element.side_effect = Exception("No pre tag")
+
+    mock_driver.find_element.side_effect = lambda by, val: (
+        mock_elem if val == "screenshotReadyIndicator" else mock_viz_div
+    )
+    with patch("cs1302_code_visualizer.browser_driver.get_webdriver", return_value=mock_driver):
+        with browser_driver.online_python_tutor_frontend(
+            sample_trace_json, visualizer="json-pre"
+        ) as frontend:
+            assert frontend["dataViz"] == mock_viz_div
+
+
+def test_generate_image_breakpoint_resolution_branches(sample_trace_json):
+    data = json.loads(sample_trace_json)
+
+    mock_driver = MagicMock()
+    mock_driver.get_screenshot_as_png.return_value = b"\x89PNG\r\n\x1a\n"
+    mock_viz = MagicMock()
+    mock_viz.location = {"x": 0, "y": 0}
+    mock_viz.size = {"width": 100, "height": 100}
+
+    with patch("cs1302_code_visualizer.browser_driver.tidy_set_window_size_for_element"):
+        with patch("cs1302_code_visualizer.browser_driver.online_python_tutor_frontend") as mock_fe:
+            mock_ctx = MagicMock()
+            mock_ctx.__enter__.return_value = {
+                "driver": mock_driver,
+                "dataViz": mock_viz,
+                "wait": MagicMock(),
+            }
+            mock_fe.return_value = mock_ctx
+            with patch("PIL.Image.open") as mock_img_open:
+                mock_im = MagicMock()
+                mock_img_open.return_value = mock_im
+
+                # 1. Breakpoints dict with tuple (found list, in range & out of range)
+                t1 = json.dumps({"breakpoints": {"6": [data, data]}})
+                _ = generate_image(t1, breakpoint=(6, 1))
+                _ = generate_image(t1, breakpoint=(6, 99))  # out of bounds fallback
+
+                # 2. Breakpoints dict with tuple (not a list), int breakpoint, -1 in bps, len(bps)==1
+                t2 = json.dumps({"breakpoints": {"6": data}})
+                _ = generate_image(t2, breakpoint=(6, 1))
+                _ = generate_image(t2, breakpoint=6)
+                _ = generate_image(json.dumps({"breakpoints": {"-1": data}}), breakpoint=None)
+                _ = generate_image(json.dumps({"breakpoints": {"10": data}}), breakpoint=None)
+
+                # 3. Line-keyed traces without "breakpoints" key
+                t3 = json.dumps({"6": [data, data]})
+                _ = generate_image(t3, breakpoint=(6, 1))
+                _ = generate_image(t3, breakpoint=(6, 99))
+                _ = generate_image(json.dumps({"6": data}), breakpoint=(6, 1))
+                _ = generate_image(json.dumps({"6": data}), breakpoint=6)
+                _ = generate_image(json.dumps({"-1": data}), breakpoint=None)
+                _ = generate_image(json.dumps({"10": data}), breakpoint=None)
+
+                # 4. List of traces
+                t4 = json.dumps([data, data])
+                _ = generate_image(t4, breakpoint=(1, 1))
+                _ = generate_image(t4, breakpoint=(1, 99))
+                _ = generate_image(t4, breakpoint=None)
+
+

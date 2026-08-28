@@ -118,6 +118,7 @@ def generate_trace(
     accumulate_breakpoints: bool = False,
     include_enum_static_fields: bool = False,
     auto_detect: bool = False,
+    type_style: str | None = "simple",
     extra_tracer_args: Sequence[str] | None = None,
 ) -> str:
     """Generate an execution trace for a Java source program.
@@ -132,6 +133,7 @@ def generate_trace(
         accumulate_breakpoints: Whether to accumulate multiple hits per breakpoint.
         include_enum_static_fields: Whether to keep enum constants in global static fields.
         auto_detect: Whether to automatically detect and compile dependent source files.
+        type_style: Type qualification style ('fqn' or 'simple').
         extra_tracer_args: Additional CLI arguments to pass to code-tracer.
 
     Returns:
@@ -153,6 +155,9 @@ def generate_trace(
 
     if auto_detect:
         cli_args.append("-a")
+
+    if type_style:
+        cli_args.append(f"--type-style={type_style}")
 
     if extra_tracer_args:
         cli_args.extend(extra_tracer_args)
@@ -540,6 +545,13 @@ def main() -> None:
         action="store_true",
     )
 
+    _ = parser.add_argument(
+        "--type-style",
+        choices=["fqn", "simple"],
+        default="simple",
+        help="Type qualification style: fqn (fully-qualified) or simple (default: simple).",
+    )
+
     args, extra_tracer_args = parser.parse_known_args()
 
     if args.verbose:
@@ -562,6 +574,7 @@ def main() -> None:
         include_enum_static_fields=args.include_enum_static_fields,
         breakpoints=DEFAULT_BREAKPOINTS_SET,
         auto_detect=args.auto_detect,
+        type_style=args.type_style,
         extra_tracer_args=extra_tracer_args if extra_tracer_args else None,
     )
 

@@ -36,14 +36,14 @@ This program gets source code input from standard input and outputs image data
 to standard output. You should use shell input/output redirection.
 
 ```console
-$ uv run render_image < In.java > out.png
+uv run render_image < In.java > out.png
 ```
 
-To view the execution trace fora program, use the `generate_trace` program (see
+To view the execution trace for a program, use the `generate_trace` program (see
 `generate_trace --help` for available options):
 
 ```console
-$ uv run generate_trace < In.java > trace.json
+uv run generate_trace < In.java > trace.json
 ```
 
 To render a visualization using an existing execution trace for a Java program,
@@ -51,7 +51,7 @@ use the `generate_visualization` program (see `generate_visualization --help`
 for available options):
 
 ```console
-$ uv run generate_visualization < trace.java > out.png
+uv run generate_visualization < trace.json > out.png
 ```
 
 To see a list of available breakpoints (i.e., breakpoint line numbers) for Java
@@ -59,7 +59,7 @@ program, use the `list_breakpoints` program (see `list_breakpoints --help` for
 available options):
 
 ```console
-$ uv run list_breakpoints < In.java
+uv run list_breakpoints < In.java
 ```
 
 Usage information for the Python interface is provided as docstrings throughout

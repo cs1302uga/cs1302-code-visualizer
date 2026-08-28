@@ -220,14 +220,12 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): any {
             f.name,
             encodeValue(f.value),
           ]);
-          const displayType = objType.split(".").pop() || objType;
-          optStep.heap[idStr] = ["INSTANCE", displayType, ...fieldEntries];
+          optStep.heap[idStr] = ["INSTANCE", objType, ...fieldEntries];
           optStep.heap_attrs[idStr] = { type: objType };
         } else if (kind === "primitive") {
-          const displayType = objType.split(".").pop() || objType;
           optStep.heap[idStr] = [
             "INSTANCE",
-            displayType,
+            objType,
             ["value", encodeValue(heapObj.value)],
           ];
           optStep.heap_attrs[idStr] = { type: objType };
@@ -237,8 +235,7 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): any {
           const fields = heapObj.fields
             ? heapObj.fields.map((f) => [f.name, encodeValue(f.value)])
             : [];
-          const displayType = objType.split(".").pop() || objType;
-          optStep.heap[idStr] = ["INSTANCE", displayType, ...fields];
+          optStep.heap[idStr] = ["INSTANCE", objType, ...fields];
           optStep.heap_attrs[idStr] = { type: objType };
         }
       });
