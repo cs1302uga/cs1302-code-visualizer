@@ -1,22 +1,45 @@
+/**
+ * @fileoverview Main entry point for the Code Visualizer module.
+ * Provides the unified `create()` factory for initializing visualizers.
+ */
+
 import { ExecutionVisualizer } from "./pytutor";
 
+/**
+ * Supported execution languages.
+ */
 export type Lang = "java";
+
+/**
+ * Supported visualizer frontend presentation modes.
+ */
 export type VisualizerType = "pytutor" | "json-pre";
 
+/**
+ * Configuration options for visualizer instances.
+ */
 export interface Options {
   includeTypes?: boolean;
   textualMemoryLabels?: boolean;
   stripTypePrefixes?: string[];
   visualizer?: VisualizerType;
+  hideFields?: string[];
+  hideVars?: string[];
 }
 
+/**
+ * Parameters for the CodeVisualizer factory `create()` function.
+ */
 export interface CreateParams {
   lang: Lang;
-  trace: `data:application/json;base64,${string}`;
+  trace: string | object;
   element: HTMLElement;
   options?: Options;
 }
 
+/**
+ * Common lifecycle interface implemented by visualizer instances.
+ */
 export interface VisualizerInstance {
   updateOutput?(): void;
   redrawConnectors?(): void;
@@ -24,13 +47,16 @@ export interface VisualizerInstance {
   readonly element?: HTMLElement;
 }
 
+/**
+ * Fallback JSON preformatted code visualizer.
+ */
 export class JsonPreVisualizer implements VisualizerInstance {
-  readonly element: HTMLElement;
-  readonly preElement: HTMLPreElement;
-  readonly codeElement: HTMLElement;
-  private traceData: any;
+  public readonly element: HTMLElement;
+  public readonly preElement: HTMLPreElement;
+  public readonly codeElement: HTMLElement;
+  private readonly traceData: unknown;
 
-  constructor(element: HTMLElement, traceData: any) {
+  public constructor(element: HTMLElement, traceData: unknown) {
     this.element = element;
     this.traceData = traceData;
     this.element.innerHTML = "";
@@ -44,71 +70,120 @@ export class JsonPreVisualizer implements VisualizerInstance {
     this.element.appendChild(this.preElement);
   }
 
-  updateOutput(): void {
+  /**
+   * Updates output display.
+   */
+  public updateOutput(): void {
     this.codeElement.textContent = JSON.stringify(this.traceData, null, 2);
   }
 
-  redrawConnectors(): void {
+  /**
+   * Redraws connectors (no-op for JSON pre view).
+   */
+  public redrawConnectors(): void {
     // No connectors for JSON pre view
   }
 
-  destroy(): void {
+  /**
+   * Destroys and cleans up DOM elements.
+   */
+  public destroy(): void {
     this.element.innerHTML = "";
   }
 }
 
+/**
+ * Safely decodes a trace payload which may be:
+ * 1. A pre-parsed JavaScript object
+ * 2. A raw JSON string
+ * 3. A base64 data URI (data:application/json;base64,...)
+ * 4. A raw base64 string
+ *
+ * @param trace The input trace payload.
+ * @return Decoded trace object.
+ */
+function decodeTrace(trace: string | object): unknown {
+  if (typeof trace === "object" && trace !== null) {
+    return trace;
+  }
+
+  if (typeof trace === "string") {
+    const trimmed = trace.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      return JSON.parse(trimmed);
+    }
+
+    const base64Str = trimmed.replace(/^data:application\/json;base64,/, "");
+    try {
+      const binaryString = atob(base64Str);
+      try {
+        // Safe UTF-8 decoding fallback
+        const bytes = Uint8Array.from(binaryString, (c) => c.charCodeAt(0));
+        return JSON.parse(new TextDecoder().decode(bytes));
+      } catch {
+        return JSON.parse(binaryString);
+      }
+    } catch {
+      return JSON.parse(trace);
+    }
+  }
+
+  return trace;
+}
+
+/**
+ * Factory function creating a code visualizer instance.
+ * @param params Initialization options and target DOM element.
+ * @return The instantiated visualizer.
+ */
 export function create({
   lang,
   trace,
   element,
   options,
 }: CreateParams): VisualizerInstance {
-  const visualizerType = options?.visualizer ?? "pytutor";
-
-  // TODO error handling
-  const decodedTrace = JSON.parse(
-    atob(trace.replace(/^data:application\/json;base64,/, "")),
-  );
+  const visualizerType: VisualizerType = options?.visualizer ?? "pytutor";
+  const decodedTrace = decodeTrace(trace);
 
   if (visualizerType === "json-pre") {
     return new JsonPreVisualizer(element, decodedTrace);
   }
 
-  const pyTutorOptions = {
-    lang: lang,
-    includeTypes: options?.includeTypes ?? false,
-    textualMemoryLabels: options?.textualMemoryLabels ?? false,
-    stripTypePrefixes: options?.stripTypePrefixes ?? [],
+  // Ensure element has an ID for PyTutor
+  let elementId = element.id;
+  if (!elementId) {
+    elementId = "codevis-" + Math.random().toString(36).substring(2, 9);
+    element.id = elementId;
+  }
+
+  const frontendOptions = {
     jumpToEnd: true,
     hideCode: true,
     disableHeapNesting: true,
+    lang: lang,
+    includeTypes: options?.includeTypes ?? true,
+    textualMemoryLabels: options?.textualMemoryLabels ?? false,
+    stripTypePrefixes: options?.stripTypePrefixes ?? [],
+    hideFields: options?.hideFields ?? [],
+    hideVars: options?.hideVars ?? [],
   };
 
-  const viz = new ExecutionVisualizer(
-    element.id, // TODO is this safe?
+  const visualizer = new ExecutionVisualizer(
+    elementId,
     decodedTrace,
-    pyTutorOptions,
+    frontendOptions
   );
 
-  const removeIds = [
-    "#vizLayoutTdFirst",
-    "#progOutputs",
-    "#selectiveHideStatus",
-  ];
-
-  removeIds
-    .map((rid) => element.querySelector(rid))
-    .forEach((rel) => rel?.setAttribute("style", "display: none!important;"));
-
-  viz.updateOutput();
-
-  window.addEventListener("resize", () => {
-    viz.redrawConnectors();
-  });
-
-  document.addEventListener("DOMContentLoaded", () => {
-    viz.redrawConnectors();
-  });
-
-  return viz;
+  return {
+    updateOutput: () => {
+      visualizer.updateOutput();
+    },
+    redrawConnectors: () => {
+      visualizer.redrawConnectors();
+    },
+    destroy: () => {
+      element.innerHTML = "";
+    },
+    element: element,
+  };
 }

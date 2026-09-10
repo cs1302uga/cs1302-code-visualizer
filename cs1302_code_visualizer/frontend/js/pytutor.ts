@@ -29,12 +29,13 @@
 */
 
 import * as d3 from "d3";
-require("./lib/jquery-3.0.0.min.js");
-require("./lib/jquery.jsPlumb-1.3.10-all-min.js"); // DO NOT UPGRADE ABOVE 1.3.10 OR ELSE BREAKAGE WILL OCCUR
-require("./lib/jquery-ui-1.11.4/jquery-ui.js");
-require("./lib/jquery-ui-1.11.4/jquery-ui.css");
-require("./lib/jquery.ba-bbq.js"); // contains slight pgbovine modifications
-require("./lib/jquery.ba-dotimeout.min.js"); // for $.doTimeout
+import _jQuery from "jquery";
+const jQuery: any = _jQuery;
+const $: any = _jQuery;
+(window as any).$ = (window as any).jQuery = _jQuery;
+import { SvgConnectorManager as jsPlumb } from "./svgConnectors";
+require("jquery-ui-dist/jquery-ui.js");
+require("jquery-ui-dist/jquery-ui.css");
 
 import "@fontsource/recursive";
 import { isModernTrace, convertModernTraceToOpt } from "./modernTraceAdapter";
@@ -43,13 +44,28 @@ require("../css/pytutor");
 let unsupportedFeaturesStr = `see <a target="_blank" href="https://github.com/pgbovine/OnlinePythonTutor/blob/master/unsupported-features.md">UNSUPPORTED FEATURES</a>`;
 
 // for TypeScript
-declare var jQuery: JQueryStatic;
-declare var jsPlumb: any;
+// for TypeScript
+// jQuery provided by import
 
 export var SVG_ARROW_POLYGON = "0,3 12,3 12,0 18,5 12,10 12,7 0,7";
 var SVG_ARROW_HEIGHT = 10; // must match height of SVG_ARROW_POLYGON
 
 /* colors - see pytutor.css for more colors */
+
+const namedTimeouts = new Map<string, number>();
+function doTimeout(name: string, delay: number, callback: () => void): void {
+  if (namedTimeouts.has(name)) {
+    clearTimeout(namedTimeouts.get(name)!);
+  }
+  namedTimeouts.set(
+    name,
+    window.setTimeout(() => {
+      namedTimeouts.delete(name);
+      callback();
+    }, delay),
+  );
+}
+
 export var brightRed = "#e93f34";
 var connectorBaseColor = "#005583";
 var connectorHighlightColor = brightRed;
@@ -60,6 +76,60 @@ var breakpointColor = brightRed;
 // Unicode arrow types: '\u21d2', '\u21f0', '\u2907'
 export var darkArrowColor = brightRed;
 export var lightArrowColor = "#c9e6ca";
+
+export class D3Map<V = any> {
+  private map = new Map<string, V>();
+
+  has(key: any): boolean {
+    return this.map.has(String(key));
+  }
+
+  get(key: any): V | undefined {
+    return this.map.get(String(key));
+  }
+
+  set(key: any, value: V): this {
+    this.map.set(String(key), value);
+    return this;
+  }
+
+  remove(key: any): boolean {
+    return this.map.delete(String(key));
+  }
+
+  keys(): string[] {
+    return Array.from(this.map.keys());
+  }
+
+  values(): V[] {
+    return Array.from(this.map.values());
+  }
+
+  entries(): { key: string; value: V }[] {
+    return Array.from(this.map.entries()).map(([k, v]) => ({
+      key: k,
+      value: v,
+    }));
+  }
+
+  forEach(callback: (key: string, value: V) => void): void {
+    this.map.forEach((val, key) => callback(key, val));
+  }
+
+  empty(): boolean {
+    return this.map.size === 0;
+  }
+
+  size(): number {
+    return this.map.size;
+  }
+}
+
+export function d3Map<V = any>(): D3Map<V> {
+  return new D3Map<V>();
+}
+
+try { (d3 as any).map = d3Map; } catch { /* Ignore immutable module namespace in ESM */ }
 
 var heapPtrSrcRE = /__heap_pointer_src_/;
 var rightwardNudgeHack = true; // suggested by John DeNero, toggle with global
@@ -212,7 +282,7 @@ export class ExecutionVisualizer {
 
   visualizerID: number;
 
-  breakpoints: any = d3.map(); // set of execution points to set as breakpoints
+  breakpoints: any = d3Map(); // set of execution points to set as breakpoints
   sortedBreakpointsList: any[] = []; // sorted and synced with breakpoints
 
   // Constructor with an ever-growing feature-crepped list of options :)
@@ -561,6 +631,13 @@ export class ExecutionVisualizer {
       this.domRoot.find("#vizLayoutTdSecond"),
       this.domRootD3.select("#vizLayoutTdSecond"),
     );
+
+    if (this.params.hideVars || this.params.hideFields) {
+      this.dataViz.selectivelyHideVarsAndFields(
+        this.params.hideVars || [],
+        this.params.hideFields || [],
+      );
+    }
 
     myViz.navControls.showError(this.instrLimitReachedWarningMsg);
     myViz.navControls.setupSlider(this.curTrace.length - 1);
@@ -1307,7 +1384,7 @@ class DataVisualizer {
     this.hideVarsSet = null;
     this.hideFieldsSet = null;
 
-    this.draggedHeapObjectCSS = d3.map(); // see above for description
+    this.draggedHeapObjectCSS = d3Map(); // see above for description
 
     var codeVizHTML = `
       <div id="selectiveHideStatus"></div>
@@ -1507,12 +1584,12 @@ class DataVisualizer {
 
       // the only elements in these sets are NEW elements to be rendered in this
       // particular call to renderDataStructures.
-      connectionEndpointIDs: d3.map(),
-      heapConnectionEndpointIDs: d3.map(), // subset of connectionEndpointIDs for heap->heap connections
+      connectionEndpointIDs: d3Map(),
+      heapConnectionEndpointIDs: d3Map(), // subset of connectionEndpointIDs for heap->heap connections
       // analogous to connectionEndpointIDs, except for environment parent pointers
-      parentPointerConnectionEndpointIDs: d3.map(),
+      parentPointerConnectionEndpointIDs: d3Map(),
 
-      renderedHeapObjectIDs: d3.map(), // format given by generateHeapObjID()
+      renderedHeapObjectIDs: d3Map(), // format given by generateHeapObjID()
     };
   }
 
@@ -1726,14 +1803,14 @@ class DataVisualizer {
       var curLayout = $.extend(true /* deep copy */, [], prevLayout);
 
       // initialize with all IDs from curLayout
-      var idsToRemove = d3.map();
+      var idsToRemove = d3Map();
       $.each(curLayout, function (i, row) {
         for (var j = 1 /* ignore row ID tag */; j < row.length; j++) {
           idsToRemove.set(row[j], 1);
         }
       });
 
-      var idsAlreadyLaidOut = d3.map(); // to prevent infinite recursion
+      var idsAlreadyLaidOut = d3Map(); // to prevent infinite recursion
 
       function curLayoutIndexOf(id) {
         for (var i = 0; i < curLayout.length; i++) {
@@ -2153,7 +2230,7 @@ class DataVisualizer {
         return false; // punt on all other types
       }
 
-      var obj1fields = d3.map();
+      var obj1fields = d3Map();
 
       // for a dict or object instance, same names of fields (ordering doesn't matter)
       for (var i = startingInd; i < obj1.length; i++) {
@@ -2235,7 +2312,7 @@ class DataVisualizer {
     // jsPlumb connector alignment issues when the visualizer's enclosing
     // div contains, say, a "position: relative;" CSS tag
     // (which happens in the IPython Notebook)
-    var existingConnectionEndpointIDs = d3.map();
+    var existingConnectionEndpointIDs = d3Map();
     myViz.jsPlumbInstance
       .select({ scope: "varValuePointer" })
       .each(function (c) {
@@ -2252,7 +2329,7 @@ class DataVisualizer {
         }
       });
 
-    var existingParentPointerConnectionEndpointIDs = d3.map();
+    var existingParentPointerConnectionEndpointIDs = d3Map();
     myViz.jsPlumbInstance
       .select({ scope: "frameParentPointer" })
       .each(function (c) {
@@ -2306,22 +2383,20 @@ class DataVisualizer {
     var heapRows = myViz.domRootD3
       .select("#heap")
       .selectAll("table.heapRow")
-      .attr("id", function (d, i) {
-        return "heapRow" + i;
-      }) // add unique ID
       .data(curToplevelLayout, function (objLst) {
         return objLst[0]; // return first element, which is the row ID tag
       });
 
     // insert new heap rows
-    heapRows
+    var heapRowsEnter = heapRows
       .enter()
       .append("table")
-      //.each(function(objLst, i) {console.log('NEW ROW:', objLst, i);})
       .attr("id", function (d, i) {
         return "heapRow" + i;
       }) // add unique ID
       .attr("class", "heapRow");
+
+    var heapRowsMerged = heapRowsEnter.merge(heapRows as any);
 
     // delete a heap row
     var hrExit = heapRows.exit();
@@ -2333,8 +2408,7 @@ class DataVisualizer {
       .remove();
 
     // update an existing heap row
-    var toplevelHeapObjects = heapRows
-      //.each(function(objLst, i) { console.log('UPDATE ROW:', objLst, i); })
+    var toplevelHeapObjects = heapRowsMerged
       .selectAll("td.toplevelHeapObject")
       .data(
         function (d, i) {
@@ -2354,11 +2428,10 @@ class DataVisualizer {
         return "toplevel_heap_object_" + d;
       }); // TODO: is this CSS ID unique?
 
-    // remember that the enter selection is added to the update
-    // selection so that we can process it later ...
+    var toplevelHeapObjectsMerged = tlhEnter.merge(toplevelHeapObjects as any);
 
     // update a toplevelHeapObject
-    toplevelHeapObjects
+    toplevelHeapObjectsMerged
       .order() // VERY IMPORTANT to put in the order corresponding to data elements
       .each(function (objID, i) {
         //console.log('NEW/UPDATE ELT', objID);
@@ -2457,7 +2530,7 @@ class DataVisualizer {
         }, // use variable name as key
       );
 
-    globalVarTable
+    var globalVarTableEnter = globalVarTable
       .enter()
       .append("tr")
       .attr("class", function (d, i) {
@@ -2469,7 +2542,9 @@ class DataVisualizer {
         return myViz.owner.generateID(varnameToCssID("global__" + d + "_tr")); // make globally unique (within the page)
       });
 
-    var globalVarTableCells = globalVarTable
+    var globalVarTableMerged = globalVarTableEnter.merge(globalVarTable as any);
+
+    var globalVarTableCells = globalVarTableMerged
       .selectAll("td.stackFrameVar,td.stackFrameValue")
       .data(function (d, i) {
         let type: string | undefined = curEntry.globals_attrs?.[d]?.type;
@@ -2480,18 +2555,19 @@ class DataVisualizer {
         return [typeHtml + d, d];
       });
 
-    globalVarTableCells
+    var globalVarTableCellsEnter = globalVarTableCells
       .enter()
       .append("td")
       .attr("class", function (d, i) {
         return i == 0 ? "stackFrameVar" : "stackFrameValue";
       });
 
-    // remember that the enter selection is added to the update
-    // selection so that we can process it later ...
+    var globalVarTableCellsMerged = globalVarTableCellsEnter.merge(
+      globalVarTableCells as any,
+    );
 
     // UPDATE
-    globalVarTableCells
+    globalVarTableCellsMerged
       .order() // VERY IMPORTANT to put in the order corresponding to data elements
       .each(function (varname, i) {
         if (i == 0) {
@@ -2720,7 +2796,9 @@ class DataVisualizer {
 
     sfdEnter.append("table").attr("class", "stackFrameVarTable");
 
-    var stackVarTable = stackFrameDiv
+    var stackFrameDivMerged = sfdEnter.merge(stackFrameDiv as any);
+
+    var stackVarTable = stackFrameDivMerged
       .order() // VERY IMPORTANT to put in the order corresponding to data elements
       .select("table")
       .selectAll("tr")
@@ -2768,7 +2846,7 @@ class DataVisualizer {
         },
       );
 
-    stackVarTable
+    var stackVarTableEnter = stackVarTable
       .enter()
       .append("tr")
       .attr("class", function (d, i) {
@@ -2780,20 +2858,26 @@ class DataVisualizer {
         ); // make globally unique (within the page)
       });
 
-    var stackVarTableCells = stackVarTable
+    var stackVarTableMerged = stackVarTableEnter.merge(stackVarTable as any);
+
+    var stackVarTableCells = stackVarTableMerged
       .selectAll("td.stackFrameVar,td.stackFrameValue")
       .data(function (d, i) {
         return [d, d] /* map identical data down both columns */;
       });
 
-    stackVarTableCells
+    var stackVarTableCellsEnter = stackVarTableCells
       .enter()
       .append("td")
       .attr("class", function (d, i) {
         return i == 0 ? "stackFrameVar" : "stackFrameValue";
       });
 
-    stackVarTableCells
+    var stackVarTableCellsMerged = stackVarTableCellsEnter.merge(
+      stackVarTableCells as any,
+    );
+
+    stackVarTableCellsMerged
       .order() // VERY IMPORTANT to put in the order corresponding to data elements
       .each(function (d, i) {
         var varname = d.varname;
@@ -2804,7 +2888,7 @@ class DataVisualizer {
             $(this).html('<span class="retval">Return<br/>value</span>');
           else {
             let typeHtml =
-              myViz.params.includeTypes && d.attrs.type
+              myViz.params.includeTypes && d.attrs?.type
                 ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(d.attrs.type))}</div>`
                 : "";
             let varNameHtml =
@@ -3000,7 +3084,7 @@ class DataVisualizer {
 
             var cur_nudgee_set = nudger_to_nudged_rows[srcRowID];
             if (cur_nudgee_set === undefined) {
-              cur_nudgee_set = d3.map();
+              cur_nudgee_set = d3Map();
               nudger_to_nudged_rows[srcRowID] = cur_nudgee_set;
             }
             cur_nudgee_set.set(dstRowID, 1 /* useless value */);
@@ -3266,7 +3350,7 @@ class DataVisualizer {
           .draggable({
             drag: () => {
               // debounce to prevent excessive repaints, which can get super-slow
-              $.doTimeout("heapObjectDrag", 10, () => {
+              doTimeout("heapObjectDrag", 10, () => {
                 // pass in milliseconds
                 console.log("drag"); // to make sure we're not adding too many callbacks
                 myViz.redrawConnectors(); // redraw all arrows whenever you drag!
@@ -3771,7 +3855,7 @@ class DataVisualizer {
         );
       }
 
-      if (obj.length > headerLength) {
+      if (isInstance || obj.length > headerLength) {
         var lab = isInstance ? "inst" : "class";
         d3DomElement.append('<table class="' + lab + 'Tbl"></table>');
 
@@ -3780,6 +3864,7 @@ class DataVisualizer {
         let attrs = myViz.curTrace[stepNum].heap_attrs?.[objID];
         let types = attrs?.type;
 
+        let renderedEntries = 0;
         $.each(obj, function (ind, kvPair) {
           if (ind < headerLength) return; // skip header tags
 
@@ -3790,6 +3875,8 @@ class DataVisualizer {
             );
             return; // get out!
           }
+
+          renderedEntries++;
 
           let isFinal = attrs?.final?.[Number(ind) - 2] === true;
           tbl.append(
@@ -3822,6 +3909,10 @@ class DataVisualizer {
           // values can be arbitrary objects, so recurse:
           myViz.renderNestedObject(kvPair[1], stepNum, valTd);
         });
+
+        if (isInstance && renderedEntries === 0) {
+          tbl.addClass("emptyInst");
+        }
       }
     } else if (obj[0] == "FUNCTION") {
       assert(obj.length == 3 || obj.length == 4);
@@ -4184,14 +4275,14 @@ class DataVisualizer {
   // regardless of what function/object it belongs to
   selectivelyHideVarsAndFields(hideVarsLst, hideFieldsLst) {
     if (hideVarsLst.length > 0) {
-      this.hideVarsSet = d3.map();
+      this.hideVarsSet = d3Map();
       hideVarsLst.forEach((e) => this.hideVarsSet.set(e, true));
     } else {
       this.hideVarsSet = null; // reset
     }
 
     if (hideFieldsLst.length > 0) {
-      this.hideFieldsSet = d3.map();
+      this.hideFieldsSet = d3Map();
       hideFieldsLst.forEach((e) => this.hideFieldsSet.set(e, true));
     } else {
       this.hideFieldsSet = null; // reset
@@ -5077,8 +5168,8 @@ class NavigationController {
       .attr("width", w)
       .attr("height", 12);
 
-    var xrange = d3.scale
-      .linear()
+    var xrange = d3
+      .scaleLinear()
       .domain([0, this.nSteps - 1])
       .range([0, w]);
 

@@ -24,3 +24,5 @@ scripts/installer/shims/bin/
 .java-version
 *.code-workspace
 
+# agents and rules
+.agents/

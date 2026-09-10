@@ -29,8 +29,8 @@ dependencies = [
 ]
 
 [tool.cs1302-code-visualizer]
-tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v2.3.0/code-tracer.jar"
-tracer-sha256 = "852f9b2f21093ec927743656266a66b0da6b9301f0d05fb7f85614a3b0e3e65d"
+tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v2.5.0/code-tracer.jar"
+tracer-sha256 = "e277e292d020db99a342e671e31a87c6054d5fd5731e307bf74792af4fad2f03"
 
 [tool.cs1302book.system-dependencies]
 system-dependencies = [
@@ -105,4 +105,17 @@ dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.9",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["cs1302_code_visualizer"]
+exclude = [
+    "cs1302_code_visualizer/frontend/node_modules",
+    "cs1302_code_visualizer/frontend/tests",
+]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "cs1302_code_visualizer/frontend/node_modules",
+    "cs1302_code_visualizer/frontend/tests",
 ]

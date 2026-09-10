@@ -1,11 +1,12 @@
-// Python Tutor: https://github.com/pgbovine/OnlinePythonTutor/
-// Copyright (C) Philip Guo (philip@pgbovine.net)
-// LICENSE: https://github.com/pgbovine/OnlinePythonTutor/blob/master/LICENSE.txt
+/**
+ * @fileoverview Browser entry point for rendering trace files directly from URL parameters.
+ */
 
+import $ from "jquery";
 import { ExecutionVisualizer } from "./pytutor";
-import { JsonPreVisualizer } from "./CodeVisualizer";
+import { JsonPreVisualizer, VisualizerInstance } from "./CodeVisualizer";
 
-$(document).ready(function () {
+document.addEventListener("DOMContentLoaded", () => {
   const urlParams = new URLSearchParams(window.location.search);
   const tracePath = urlParams.get("tracePath");
   const visualizer = urlParams.get("visualizer") || "pytutor";
@@ -14,29 +15,33 @@ $(document).ready(function () {
     urlParams.get("textMemoryLabels")?.toLowerCase() !== "false";
   let stripTypePrefixes: string[] = [];
   try {
-    let maybePrefixArray = JSON.parse(urlParams.get("stripTypePrefixes") || "[]");
+    const maybePrefixArray = JSON.parse(
+      urlParams.get("stripTypePrefixes") || "[]"
+    );
     if (Array.isArray(maybePrefixArray)) {
       stripTypePrefixes = maybePrefixArray;
     }
-  } catch (e) {}
+  } catch (_unusedError) {
+    // stripTypePrefixes URL parameter is optional or may not be valid JSON
+  }
 
   fetch("file://" + tracePath)
     .then((r) => r.json())
     .then((trace) => {
       const vizTarget = document.getElementById("visualizerDiv")!;
-      let myViz: any;
+      let myViz: VisualizerInstance | ExecutionVisualizer;
 
       if (visualizer === "json-pre") {
         myViz = new JsonPreVisualizer(vizTarget, trace);
         (window as any).optFrontend = myViz;
 
-        let screenshotReadyIndicator = document.createElement("div");
+        const screenshotReadyIndicator = document.createElement("div");
         screenshotReadyIndicator.id = "screenshotReadyIndicator";
         screenshotReadyIndicator.style.position = "absolute";
         screenshotReadyIndicator.style.opacity = "0";
         document.body.appendChild(screenshotReadyIndicator);
       } else {
-        let frontendOptions = {
+        const frontendOptions = {
           jumpToEnd: true,
           hideCode: true,
           disableHeapNesting: true,
@@ -49,28 +54,23 @@ $(document).ready(function () {
         myViz = new ExecutionVisualizer(
           "visualizerDiv",
           trace,
-          frontendOptions,
+          frontendOptions
         );
 
         const notifyReady = () => {
-          if (myViz.redrawConnectors) {
-            myViz.redrawConnectors();
+          if (myViz && typeof (myViz as any).redrawConnectors === "function") {
+            (myViz as any).redrawConnectors();
           }
           (window as any).optFrontend = myViz;
 
-          if (!document.getElementById("screenshotReadyIndicator")) {
-            let screenshotReadyIndicator = document.createElement("div");
-            screenshotReadyIndicator.id = "screenshotReadyIndicator";
-            screenshotReadyIndicator.style.position = "absolute";
-            screenshotReadyIndicator.style.opacity = "0";
-            document.body.appendChild(screenshotReadyIndicator);
-          }
+          const screenshotReadyIndicator = document.createElement("div");
+          screenshotReadyIndicator.id = "screenshotReadyIndicator";
+          screenshotReadyIndicator.style.position = "absolute";
+          screenshotReadyIndicator.style.opacity = "0";
+          document.body.appendChild(screenshotReadyIndicator);
         };
 
-        if (document.fonts) {
-          document.fonts.addEventListener("loadingdone", notifyReady);
-        }
-        setTimeout(notifyReady, 100);
+        setTimeout(notifyReady, 50);
       }
     });
 });

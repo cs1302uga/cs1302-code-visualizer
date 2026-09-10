@@ -271,7 +271,7 @@ def generate_image(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
-    breakpoint: int | None = -1,
+    breakpoint: int | tuple[int, int] | None = -1,
     visualizer: str = "pytutor",
 ) -> bytes:
     """Generate an image of the final state of an execution trace file.

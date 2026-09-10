@@ -86,8 +86,15 @@ div.ExecutionVisualizer .nullObj {
   font-size: x-small !important;
 }
 
-div.ExecutionVisualizer .instTbl:not(:has(.instKey)) {
+div.ExecutionVisualizer .instTbl:not(:has(.instKey)):not(.emptyInst) {
   background-color: var(--value-background-color) !important;
+}
+
+div.ExecutionVisualizer .instTbl.emptyInst {
+  display: inline-block;
+  min-width: 2.5rem;
+  height: 1.5rem;
+  background-color: var(--object-background-color) !important;
 }
 
 div.ExecutionVisualizer td.instKey, div.ExecutionVisualizer td.stackFrameVar {
