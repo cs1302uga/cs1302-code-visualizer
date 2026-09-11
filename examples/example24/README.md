@@ -8,7 +8,7 @@ This example demonstrates standard library generic lists (`List<Integer>` and `A
 - **Autoboxing and Boxed Heap Primitives**: Adding primitive `int` values (`add(2)`, `add(10)`) causing the runtime to allocate boxed `java.lang.Integer` heap instances.
 - **In-Place Element Mutation**: Mutating existing list slots via `set(i, newValue)` in helper method `doubleValues`.
 - **Subtype Polymorphism via Method Parameters**: Passing an `ArrayList<Integer>` object into a helper method expecting interface type `List<Integer>`.
-- **Recovered Generic Type Annotations**: Accurately resolving generic type arguments (`List<Integer>` and `ArrayList<Integer>`) in heap attributes.
+- **Concrete Runtime Reification**: Stack variable `primes` retains declared interface type `java.util.List<java.lang.Integer>`, while the referenced heap instance is accurately reified as concrete implementation `java.util.ArrayList<java.lang.Integer>`.
 
 ## Files
 

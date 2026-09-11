@@ -1,6 +1,6 @@
 # Examples Visualizer Gallery
 
-This gallery showcases memory visualizations generated across all 26 example suites in `examples/`.
+This gallery showcases memory visualizations generated across all 27 example suites in `examples/`.
 
 ---
 
@@ -32,6 +32,7 @@ This gallery showcases memory visualizations generated across all 26 example sui
 - [Example 23: Uncaught Runtime Exceptions & Trace Termination](#example-23-uncaught-runtime-exceptions--trace-termination)
 - [Example 24: Generic Integer Lists & Autoboxing](#example-24-generic-integer-lists--autoboxing)
 - [Example 25: Instance Method Execution & Active Call Stack Frames](#example-25-instance-method-execution--active-call-stack-frames)
+- [Example 26: Polymorphic Generics, Subclass Reification & Wildcards](#example-26-polymorphic-generics-subclass-reification--wildcards)
 
 ---
 
@@ -278,3 +279,13 @@ This gallery showcases memory visualizations generated across all 26 example sui
 - **Concepts**: Instance method dispatch, multi-frame call stacks, implicit `this` reference binding, method parameter passing and local variables.
 
 ![Example 25 Visualization](example25/cs1302/banking/Driver.java.png)
+
+---
+
+## Example 26: Polymorphic Generics, Subclass Reification & Wildcards
+
+- **Source Code**: [Driver.java](example26/cs1302/poly/Driver.java)
+- **Concepts**: Interface pointing to multi-parameter generic subclass (`Container<String>` to `PairContainer<String, Object>`), non-generic subclass implementation (`IntContainer`), wildcard upper bound normalization (`List<? extends Number>`), and nested generic container structures (`List<List<String>>`).
+
+![Example 26 Visualization](example26/cs1302/poly/Driver.java.png)
+
