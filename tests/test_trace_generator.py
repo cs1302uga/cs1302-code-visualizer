@@ -267,6 +267,22 @@ def test_ensure_jdk_installed_download_error(tmp_path, monkeypatch):
         ensure_jdk_installed(install_dir=tmp_path / "nonexistent")
 
 
+def test_ensure_jdk_installed_existing_java21(tmp_path, monkeypatch):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir(parents=True)
+    fake_java = fake_bin / "java"
+    fake_javac = fake_bin / "javac"
+    fake_java.touch()
+    fake_javac.touch()
+
+    monkeypatch.setattr("shutil.which", lambda exe: str(fake_java))
+    fake_props = f"java.home = {tmp_path}\njava.version = 21.0.2\n"
+    monkeypatch.setattr("subprocess.check_output", lambda *args, **kwargs: fake_props)
+
+    res = ensure_jdk_installed(install_dir=tmp_path)
+    assert res == tmp_path
+
+
 def test_ensure_code_tracer_installed():
     ensure_code_tracer_installed(update_existing=False)
 
