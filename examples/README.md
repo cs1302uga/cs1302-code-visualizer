@@ -1,6 +1,6 @@
 # Examples Visualizer Gallery
 
-This gallery showcases memory visualizations generated across all 21 example suites in `examples/`.
+This gallery showcases memory visualizations generated across all 23 example suites in `examples/`.
 
 ---
 
@@ -28,6 +28,7 @@ This gallery showcases memory visualizations generated across all 21 example sui
 - [Example 19: Custom Generic Classes & Type Resolution](#example-19-custom-generic-classes--type-resolution)
 - [Example 20: Varargs & Synthesized Parameter Arrays](#example-20-varargs--synthesized-parameter-arrays)
 - [Example 21: Instance Method Execution & Active Call Stack Frames](#example-21-instance-method-execution--active-call-stack-frames)
+- [Example 22: Generic Integer Lists & Autoboxing](#example-22-generic-integer-lists--autoboxing)
 
 ---
 
@@ -238,3 +239,12 @@ This gallery showcases memory visualizations generated across all 21 example sui
 - **Concepts**: Instance method dispatch, multi-frame call stacks, implicit `this` reference binding, method parameter passing and local variables.
 
 ![Example 21 Visualization](example21/cs1302/banking/Driver.java.png)
+
+---
+
+## Example 22: Generic Integer Lists & Autoboxing
+
+- **Source Code**: [Driver.java](example22/cs1302/list/Driver.java)
+- **Concepts**: Interface vs implementation references (`List<Integer>`, `ArrayList<Integer>`), primitive autoboxing, in-place element mutation in helper methods.
+
+![Example 22 Visualization](example22/cs1302/list/Driver.java.png)
