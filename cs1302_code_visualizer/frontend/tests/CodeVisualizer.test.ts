@@ -291,7 +291,7 @@ describe("CodeVisualizer", () => {
       expect(container.innerHTML).toBe("");
     });
 
-    it("renders empty int[] header with emptyList table, and empty String header without 'instance'", () => {
+    it("renders int[] (length 0) with emptyList table, and String (length 0) header", () => {
       const traceObj = {
         code: 'String emptyStr = ""; int[] emptyArr = new int[0];',
         trace: [
@@ -342,7 +342,7 @@ describe("CodeVisualizer", () => {
       // Verify empty string (heap id 1)
       const emptyStrObj = heapObjects[0];
       const emptyStrTypeLabel = emptyStrObj.querySelector(".typeLabel");
-      expect(emptyStrTypeLabel?.textContent).toBe("empty String");
+      expect(emptyStrTypeLabel?.textContent).toBe("String (length 0)");
       const emptyStringTbl = emptyStrObj.querySelector(".instTbl.emptyStringTbl");
       expect(emptyStringTbl).not.toBeNull();
       const emptyStringVal = emptyStringTbl?.querySelector(".instVal.emptyStringVal");
@@ -352,9 +352,74 @@ describe("CodeVisualizer", () => {
       // Verify empty array (heap id 2)
       const emptyArrObj = heapObjects[1];
       const emptyArrTypeLabel = emptyArrObj.querySelector(".typeLabel");
-      expect(emptyArrTypeLabel?.textContent).toBe("empty int[]");
+      expect(emptyArrTypeLabel?.textContent).toBe("int[] (length 0)");
       const emptyListTable = emptyArrObj.querySelector("table.listTbl.emptyList");
       expect(emptyListTable).not.toBeNull();
+
+      instance.destroy?.();
+      expect(container.innerHTML).toBe("");
+    });
+
+    it("renders populated array with (length N) and collection with (size N)", () => {
+      const traceObj = {
+        code: 'String str = "hello"; int[] arr = {1, 2, 3}; ArrayList<Integer> list = new ArrayList<>();',
+        trace: [
+          {
+            line: 1,
+            event: "step_line",
+            func_name: "main",
+            stack_to_render: [
+              {
+                func_name: "main",
+                frame_id: 1,
+                unique_hash: "main_1",
+                is_parent: false,
+                is_zombie: false,
+                parent_frame_id_list: [],
+                ordered_varnames: ["str", "arr", "list"],
+                encoded_locals: {
+                  str: ["REF", 1],
+                  arr: ["REF", 2],
+                  list: ["REF", 3],
+                },
+              },
+            ],
+            globals: {},
+            ordered_globals: [],
+            heap: {
+              "1": ["INSTANCE", "String", ["___NO_LABEL!___", "hello"]],
+              "2": ["LIST", 1, 2, 3],
+              "3": ["LIST", 10, 20],
+            },
+            heap_attrs: {
+              "2": { type: "int[]" },
+              "3": { type: "ArrayList<Integer>" },
+            },
+            stdout: "",
+            stderr: "",
+          },
+        ],
+      };
+
+      const instance = create({
+        lang: "java",
+        trace: traceObj,
+        element: container,
+      });
+
+      const heapObjects = container.querySelectorAll(".heapObject");
+      expect(heapObjects.length).toBe(3);
+
+      // Populated string: simple String header
+      expect(heapObjects[0].querySelector(".typeLabel")?.textContent).toBe("String");
+
+      // Populated array: int[] (length 3)
+      expect(heapObjects[1].querySelector(".typeLabel")?.textContent).toBe("int[] (length 3)");
+
+      // Populated collection: ArrayList<Integer> (size 2)
+      expect(heapObjects[2].querySelector(".typeLabel")?.textContent).toBe(
+        "ArrayList<Integer> (size 2)",
+      );
 
       instance.destroy?.();
       expect(container.innerHTML).toBe("");

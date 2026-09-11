@@ -1056,12 +1056,29 @@ export class ExecutionVisualizer {
         stack: "stack",
       }[label];
 
+      let listLength = 0;
+      for (let i = 1; i < obj.length; i++) {
+        let val = obj[i];
+        if (val instanceof Array && val[0] == "ELIDE") {
+          listLength += val[1];
+        } else {
+          listLength++;
+        }
+      }
+
+      let isArray =
+        label === "list" &&
+        (!maybeListType ||
+          maybeListType.endsWith("[]") ||
+          visibleLabel === "array");
+      let countWord = isArray ? "length" : "size";
+      let fullLabel = `${htmlsanitize(visibleLabel)} (${countWord} ${listLength})`;
+
       if (obj.length == 1) {
         d3DomElement.append(
           '<div class="typeLabel">' +
             typeLabelPrefix +
-            "empty " +
-            htmlsanitize(visibleLabel) +
+            fullLabel +
             "</div>",
         );
         d3DomElement.append('<table class="' + label + 'Tbl emptyList"></table>');
@@ -1071,7 +1088,7 @@ export class ExecutionVisualizer {
       d3DomElement.append(
         '<div class="typeLabel">' +
           typeLabelPrefix +
-          htmlsanitize(visibleLabel) +
+          fullLabel +
           "</div>",
       );
       d3DomElement.append('<table class="' + label + 'Tbl"></table>');
@@ -1162,7 +1179,7 @@ export class ExecutionVisualizer {
         .find("#dataViz .heapObject")
         .filter(function () {
           let text = $(this).find(".typeLabel").text().trim();
-          return text === "String" || text === "empty String";
+          return text === "String" || text === "String (length 0)" || text === "empty String";
         })
         .each(function () {
           $(this).find(".instKey").remove();
@@ -1170,7 +1187,7 @@ export class ExecutionVisualizer {
           instVal.attr("style", (_, s) => (s || "") + "border: none !important;");
           var stringObj = instVal.find(".stringObj");
           if (stringObj.text().trim() === '""') {
-            $(this).find(".typeLabel").text("empty String");
+            $(this).find(".typeLabel").text("String (length 0)");
             instVal.addClass("emptyStringVal");
             $(this).find(".instTbl").addClass("emptyStringTbl");
             instVal.find(".emptyStringLength").remove();
@@ -3731,12 +3748,25 @@ class DataVisualizer {
       var label = obj[0].toLowerCase();
 
       assert(obj.length >= 1);
+      let listLength = 0;
+      for (let i = 1; i < obj.length; i++) {
+        let val = obj[i];
+        if (val instanceof Array && val[0] == "ELIDE") {
+          listLength += val[1];
+        } else {
+          listLength++;
+        }
+      }
+      let isArray = label === "list";
+      let countWord = isArray ? "length" : "size";
+      let realLabel = myViz.getRealLabel(label);
+      let fullLabel = `${realLabel} (${countWord} ${listLength})`;
+
       if (obj.length == 1) {
         d3DomElement.append(
           '<div class="typeLabel">' +
             typeLabelPrefix +
-            "empty " +
-            myViz.getRealLabel(label) +
+            fullLabel +
             "</div>",
         );
         d3DomElement.append('<table class="' + label + 'Tbl emptyList"></table>');
@@ -3744,7 +3774,7 @@ class DataVisualizer {
         d3DomElement.append(
           '<div class="typeLabel">' +
             typeLabelPrefix +
-            myViz.getRealLabel(label) +
+            fullLabel +
             "</div>",
         );
         d3DomElement.append('<table class="' + label + 'Tbl"></table>');
