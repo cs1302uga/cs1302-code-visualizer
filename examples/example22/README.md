@@ -1,15 +1,13 @@
-# Example 22: Generic Integer Lists & Autoboxing (List<Integer> & ArrayList<Integer>)
+# Example 22: Interleaved Standard Output & Standard Error Logging
 
-This example demonstrates standard library generic lists (`List<Integer>` and `ArrayList<Integer>`), primitive autoboxing, in-place element mutation, and polymorphic method parameter passing.
+This example demonstrates concurrent, isolated capture of standard output (`stdout`) and standard error (`stderr`) streams using the modern trace format (`--format=modern -a`).
 
 ## Concepts Illustrated
 
-- **Interface vs. Implementation References**: Declaring variables with the interface type (`List<Integer> primes = new ArrayList<>();`) versus concrete class type (`ArrayList<Integer> scores = new ArrayList<>();`).
-- **Autoboxing and Boxed Heap Primitives**: Adding primitive `int` values (`add(2)`, `add(10)`) causing the runtime to allocate boxed `java.lang.Integer` heap instances.
-- **In-Place Element Mutation**: Mutating existing list slots via `set(i, newValue)` in helper method `doubleValues`.
-- **Subtype Polymorphism via Method Parameters**: Passing an `ArrayList<Integer>` object into a helper method expecting interface type `List<Integer>`.
-- **Recovered Generic Type Annotations**: Accurately resolving generic type arguments (`List<Integer>` and `ArrayList<Integer>`) in heap attributes.
+- **Stream Separation**: `stdout` and `stderr` are captured into their respective fields in each execution step snapshot without cross-contamination.
+- **Diagnostic Logging**: Emitting status updates to `System.out` and warning messages for invalid inputs to `System.err`.
+- **Modern Trace Format**: Visualizing execution steps containing explicit `stdout` and `stderr` string properties.
 
 ## Files
 
-- `cs1302/list/Driver.java`: Instantiates lists, populates elements, and mutates values via helper method.
+- `cs1302/io/stderr/Driver.java`: Iterates through an array of scores, writing valid entries to `System.out` and validation warnings to `System.err`.

@@ -1,6 +1,6 @@
 # Examples Visualizer Gallery
 
-This gallery showcases memory visualizations generated across all 23 example suites in `examples/`.
+This gallery showcases memory visualizations generated across all 26 example suites in `examples/`.
 
 ---
 
@@ -27,8 +27,11 @@ This gallery showcases memory visualizations generated across all 23 example sui
 - [Example 18: Exception Handling & Stack Frame Unwinding](#example-18-exception-handling--stack-frame-unwinding)
 - [Example 19: Custom Generic Classes & Type Resolution](#example-19-custom-generic-classes--type-resolution)
 - [Example 20: Varargs & Synthesized Parameter Arrays](#example-20-varargs--synthesized-parameter-arrays)
-- [Example 21: Instance Method Execution & Active Call Stack Frames](#example-21-instance-method-execution--active-call-stack-frames)
-- [Example 22: Generic Integer Lists & Autoboxing](#example-22-generic-integer-lists--autoboxing)
+- [Example 21: Unbuffered Standard Output & Progress Prompts](#example-21-unbuffered-standard-output--progress-prompts)
+- [Example 22: Interleaved Standard Output & Standard Error Logging](#example-22-interleaved-standard-output--standard-error-logging)
+- [Example 23: Uncaught Runtime Exceptions & Trace Termination](#example-23-uncaught-runtime-exceptions--trace-termination)
+- [Example 24: Generic Integer Lists & Autoboxing](#example-24-generic-integer-lists--autoboxing)
+- [Example 25: Instance Method Execution & Active Call Stack Frames](#example-25-instance-method-execution--active-call-stack-frames)
 
 ---
 
@@ -233,18 +236,45 @@ This gallery showcases memory visualizations generated across all 23 example sui
 
 ---
 
-## Example 21: Instance Method Execution & Active Call Stack Frames
+## Example 21: Unbuffered Standard Output & Progress Prompts
 
-- **Source Code**: [Driver.java](example21/cs1302/banking/Driver.java)
-- **Concepts**: Instance method dispatch, multi-frame call stacks, implicit `this` reference binding, method parameter passing and local variables.
+- **Source Code**: [Driver.java](example21/cs1302/io/stdout/Driver.java)
+- **Concepts**: Unbuffered console output via `System.out.print`, iterative dot accumulator loops, step-by-step stdout preservation.
 
-![Example 21 Visualization](example21/cs1302/banking/Driver.java.png)
+![Example 21 Visualization](example21/cs1302/io/stdout/Driver.java.png)
 
 ---
 
-## Example 22: Generic Integer Lists & Autoboxing
+## Example 22: Interleaved Standard Output & Standard Error Logging
 
-- **Source Code**: [Driver.java](example22/cs1302/list/Driver.java)
+- **Source Code**: [Driver.java](example22/cs1302/io/stderr/Driver.java)
+- **Concepts**: Dual stream capture (`System.out` vs `System.err`), validation warning logs, modern trace formatting (`--format=modern -a`).
+
+![Example 22 Visualization](example22/cs1302/io/stderr/Driver.java.png)
+
+---
+
+## Example 23: Uncaught Runtime Exceptions & Trace Termination
+
+- **Source Code**: [Driver.java](example23/cs1302/exceptions/uncaught/Driver.java)
+- **Concepts**: Uncaught `ArithmeticException: / by zero`, execution crash snapshot, call stack preservation at exception site, JVM stderr capture.
+
+![Example 23 Visualization](example23/cs1302/exceptions/uncaught/Driver.java.png)
+
+---
+
+## Example 24: Generic Integer Lists & Autoboxing
+
+- **Source Code**: [Driver.java](example24/cs1302/list/Driver.java)
 - **Concepts**: Interface vs implementation references (`List<Integer>`, `ArrayList<Integer>`), primitive autoboxing, in-place element mutation in helper methods.
 
-![Example 22 Visualization](example22/cs1302/list/Driver.java.png)
+![Example 24 Visualization](example24/cs1302/list/Driver.java.png)
+
+---
+
+## Example 25: Instance Method Execution & Active Call Stack Frames
+
+- **Source Code**: [Driver.java](example25/cs1302/banking/Driver.java)
+- **Concepts**: Instance method dispatch, multi-frame call stacks, implicit `this` reference binding, method parameter passing and local variables.
+
+![Example 25 Visualization](example25/cs1302/banking/Driver.java.png)

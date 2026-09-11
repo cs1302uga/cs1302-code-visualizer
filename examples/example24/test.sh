@@ -2,4 +2,4 @@
 
 cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null
 
-../test.sh "$@" cs1302/io/stderr/Driver.java --format=modern -a
+../test.sh "$@" cs1302/list/Driver.java
