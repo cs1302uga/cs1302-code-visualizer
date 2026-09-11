@@ -289,6 +289,70 @@ describe("CodeVisualizer", () => {
       instance.destroy?.();
       expect(container.innerHTML).toBe("");
     });
+
+    it("renders bounded emptyArrayBox for empty arrays and emptyStringLength for empty strings", () => {
+      const traceObj = {
+        code: 'String emptyStr = ""; int[] emptyArr = new int[0];',
+        trace: [
+          {
+            line: 1,
+            event: "step_line",
+            func_name: "main",
+            stack_to_render: [
+              {
+                func_name: "main",
+                frame_id: 1,
+                unique_hash: "main_1",
+                is_parent: false,
+                is_zombie: false,
+                parent_frame_id_list: [],
+                ordered_varnames: ["emptyStr", "emptyArr"],
+                encoded_locals: {
+                  emptyStr: ["REF", 1],
+                  emptyArr: ["REF", 2],
+                },
+              },
+            ],
+            globals: {},
+            ordered_globals: [],
+            heap: {
+              "1": ["INSTANCE", "String", ["___NO_LABEL!___", ""]],
+              "2": ["LIST"],
+            },
+            heap_attrs: {
+              "2": { type: "int[]" },
+            },
+            stdout: "",
+            stderr: "",
+          },
+        ],
+      };
+
+      const instance = create({
+        lang: "java",
+        trace: traceObj,
+        element: container,
+      });
+
+      // Verify empty array container
+      const emptyArrayBox = container.querySelector(".emptyArrayBox");
+      expect(emptyArrayBox).not.toBeNull();
+      const emptyArrayLabel = emptyArrayBox?.querySelector(".emptyArrayLabel");
+      expect(emptyArrayLabel).not.toBeNull();
+      expect(emptyArrayLabel?.textContent).toContain("empty int[] instance");
+
+      // Verify empty string container & indicator
+      const emptyStringTbl = container.querySelector(".instTbl.emptyStringTbl");
+      expect(emptyStringTbl).not.toBeNull();
+      const emptyStringVal = emptyStringTbl?.querySelector(".instVal.emptyStringVal");
+      expect(emptyStringVal).not.toBeNull();
+      const emptyStringLength = emptyStringVal?.querySelector(".emptyStringLength");
+      expect(emptyStringLength).not.toBeNull();
+      expect(emptyStringLength?.textContent).toBe("(length: 0)");
+
+      instance.destroy?.();
+      expect(container.innerHTML).toBe("");
+    });
   });
 });
 

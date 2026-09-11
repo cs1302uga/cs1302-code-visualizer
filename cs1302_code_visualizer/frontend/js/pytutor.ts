@@ -1059,10 +1059,12 @@ export class ExecutionVisualizer {
 
       if (obj.length == 1) {
         d3DomElement.append(
-          '<div class="typeLabel">' +
+          '<div class="emptyArrayBox">' +
+            '<span class="emptyArrayLabel">' +
             typeLabelPrefix +
             "empty " +
             htmlsanitize(visibleLabel) +
+            "</span>" +
             "</div>",
         );
         return [true]; //handled
@@ -1165,9 +1167,18 @@ export class ExecutionVisualizer {
         })
         .each(function () {
           $(this).find(".instKey").remove();
-          $(this)
-            .find(".instVal")
-            .attr("style", (_, s) => (s || "") + "border: none !important;");
+          var instVal = $(this).find(".instVal");
+          instVal.attr("style", (_, s) => (s || "") + "border: none !important;");
+          var stringObj = instVal.find(".stringObj");
+          if (stringObj.text().trim() === '""') {
+            instVal.addClass("emptyStringVal");
+            $(this).find(".instTbl").addClass("emptyStringTbl");
+            if (!instVal.find(".emptyStringLength").length) {
+              instVal.append(
+                '<span class="emptyStringLength">(length: 0)</span>',
+              );
+            }
+          }
         });
     });
 
@@ -3720,10 +3731,12 @@ class DataVisualizer {
       assert(obj.length >= 1);
       if (obj.length == 1) {
         d3DomElement.append(
-          '<div class="typeLabel">' +
+          '<div class="emptyArrayBox">' +
+            '<span class="emptyArrayLabel">' +
             typeLabelPrefix +
             " empty " +
             myViz.getRealLabel(label) +
+            "</span>" +
             "</div>",
         );
       } else {
