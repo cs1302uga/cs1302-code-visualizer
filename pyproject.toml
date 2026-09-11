@@ -55,6 +55,7 @@ render_html = "cs1302_code_visualizer:render_html_cli"
 render_image = "cs1302_code_visualizer:main"
 
 [tool.basedpyright]
+typeCheckingMode = "standard"
 reportAny = false
 reportExplicitAny = false
 reportImportCycles = false
