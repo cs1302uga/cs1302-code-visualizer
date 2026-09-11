@@ -12,7 +12,10 @@ from cs1302_code_visualizer import browser_driver
 from cs1302_code_visualizer.browser_driver import (
     generate_html,
     generate_image,
+    get_default_bundle_url,
     get_webdriver,
+    render_html,
+    render_html_cli,
 )
 from cs1302_code_visualizer.browser_driver import (
     main as driver_main,
@@ -240,5 +243,127 @@ def test_generate_image_breakpoint_resolution_branches(sample_trace_json):
         _ = generate_image(t4, breakpoint=(1, 1))
         _ = generate_image(t4, breakpoint=(1, 99))
         _ = generate_image(t4, breakpoint=None)
+
+
+def test_get_default_bundle_url():
+    url = get_default_bundle_url()
+    assert "https://github.com/cs1302uga/cs1302-code-visualizer/releases/download/v" in url
+    assert url.endswith("/vis-module.bundle.js")
+
+    with patch("importlib.metadata.version", side_effect=browser_driver.metadata.PackageNotFoundError):
+        fallback_url = get_default_bundle_url()
+        assert "v0.7.0" in fallback_url
+
+
+def test_render_html_basic(sample_trace_json):
+    html = render_html(sample_trace_json)
+    assert '<div id="codevis-' in html
+    assert '<script src="https://github.com/cs1302uga/cs1302-code-visualizer/releases/download/' in html
+    assert "CodeVisualizer.create({" in html
+    assert 'lang: "java"' in html
+    assert "options: {" in html
+
+
+def test_render_html_custom(sample_trace_json):
+    html = render_html(
+        sample_trace_json,
+        container_id="custom-container",
+        bundle_url="https://example.com/custom.bundle.js",
+        include_bundle_script=False,
+        include_types=False,
+        text_memory_labels=True,
+        strip_type_prefixes=["java.lang."],
+        hide_fields=["Secret:hidden"],
+        hide_vars=["unused"],
+        visualizer="json-pre",
+        lang="java",
+    )
+    assert '<div id="custom-container"></div>' in html
+    assert '<script src="' not in html
+    assert 'document.getElementById("custom-container")' in html
+    assert '"includeTypes": false' in html
+    assert '"textualMemoryLabels": true' in html
+    assert '"stripTypePrefixes": ["java.lang."]' in html
+    assert '"hideFields": ["Secret:hidden"]' in html
+    assert '"hideVars": ["unused"]' in html
+    assert '"visualizer": "json-pre"' in html
+
+
+def test_render_html_escaping_and_dict():
+    trace_dict = {"code": 'String s = "</script><script>alert(1)</script>";', "trace": []}
+    html = render_html(trace_dict)
+    assert "</script><script>" not in html
+    assert r"<\/script><script>" in html
+
+
+def test_driver_main_cli_html(sample_trace_json, monkeypatch):
+    monkeypatch.setattr(sys, "stdin", io.StringIO(sample_trace_json))
+    output_buffer = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", output_buffer)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "generate_visualization",
+            "--html",
+            "--container-id",
+            "cli-container",
+            "--bundle-url",
+            "https://test.bundle.js",
+            "--no-bundle-script",
+            "-b",
+            "6,1",
+        ],
+    )
+    driver_main()
+    val = output_buffer.getvalue()
+    assert '<div id="cli-container"></div>' in val
+    assert '<script src="' not in val
+
+
+def test_render_html_cli(sample_trace_json, monkeypatch):
+    # Test 1: with comma breakpoint
+    monkeypatch.setattr(sys, "stdin", io.StringIO(sample_trace_json))
+    output_buffer = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", output_buffer)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "render_html",
+            "-b",
+            "6,1",
+            "--container-id",
+            "test-id",
+            "--bundle-url",
+            "https://cdn.example/bundle.js",
+            "--text-memory-labels",
+            "--no-include-types",
+            "--visualizer",
+            "json-pre",
+        ],
+    )
+    render_html_cli()
+    val = output_buffer.getvalue()
+    assert '<div id="test-id"></div>' in val
+    assert '<script src="https://cdn.example/bundle.js"></script>' in val
+    assert '"visualizer": "json-pre"' in val
+
+    # Test 2: with int breakpoint
+    monkeypatch.setattr(sys, "stdin", io.StringIO(sample_trace_json))
+    output_buffer = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", output_buffer)
+    monkeypatch.setattr("sys.argv", ["render_html", "-b", "29", "--no-bundle-script"])
+    render_html_cli()
+    val2 = output_buffer.getvalue()
+    assert "<div id=" in val2
+    assert "<script src=" not in val2
+
+    # Test 3: with trailing comma breakpoint
+    monkeypatch.setattr(sys, "stdin", io.StringIO(sample_trace_json))
+    output_buffer = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", output_buffer)
+    monkeypatch.setattr("sys.argv", ["render_html", "-b", "29,"])
+    render_html_cli()
+    val3 = output_buffer.getvalue()
+    assert "<div id=" in val3
 
 

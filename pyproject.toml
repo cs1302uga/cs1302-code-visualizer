@@ -1,6 +1,6 @@
 [project]
 name = "cs1302-code-visualizer"
-version = "0.6.0"
+version = "0.7.0"
 description = "Visualize Java program memory state and output a screenshot."
 authors = [
     {name = "Gabe Livengood", email = "timothy.livengood@uga.edu"},
@@ -51,6 +51,7 @@ install-jdk = "scripts.installer.jdk:main"
 install-plantuml = "scripts.installer.plantuml:main"
 install-uv = "scripts.installer.uv:main"
 list_breakpoints = "cs1302_code_visualizer.breakpoint_lister:main"
+render_html = "cs1302_code_visualizer:render_html_cli"
 render_image = "cs1302_code_visualizer:main"
 
 [tool.basedpyright]

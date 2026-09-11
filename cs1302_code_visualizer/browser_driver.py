@@ -15,6 +15,7 @@ import logging
 import os
 import shutil
 import sys
+import uuid
 from collections.abc import Sequence
 from contextlib import contextmanager
 from importlib import metadata
@@ -269,36 +270,21 @@ def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> s
             raise CodeVisRenderError("unable to generate an HTML visualization for this trace")
 
 
-def generate_image(
-    trace: str,
-    *,
-    dpi: int = 1,
-    format: str = "PNG",
-    include_types: bool = True,
-    text_memory_labels: bool = False,
-    strip_type_prefixes: Sequence[str] | None = None,
-    breakpoint: int | tuple[int, int] | None = -1,
-    visualizer: str = "pytutor",
-) -> bytes:
-    """Generate an image of the final state of an execution trace file.
+def get_default_bundle_url() -> str:
+    """Return the default GitHub release asset URL for vis-module.bundle.js."""
+    try:
+        ver = metadata.version("cs1302_code_visualizer")
+    except metadata.PackageNotFoundError:
+        ver = "0.7.0"
+    return f"https://github.com/cs1302uga/cs1302-code-visualizer/releases/download/v{ver}/vis-module.bundle.js"
 
-    The trace file is expected to be formatted using JSON as specified by OnlinePythonTutor.
 
-    Args:
-        trace: The execution trace file.
-        dpi: Dots Per Inch (DPI), a positive integer used to scale the driver's display resolution.
-        format: The image output format. This gets passed directly into PIL's ``Image.save()``.
-        include_types: Whether or not type tags should be included in this visualization.
-        text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
-        strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
-        breakpoint: Breakpoint line to visualize.
-        visualizer: The visualizer implementation to use ('pytutor' or 'json-pre').
-
-    Return:
-        The bytes of the generated image in the format specified by the ``format`` argument.
-
-    """
-    trace_json: Any = json.loads(trace)
+def resolve_trace_payload(
+    trace: str | dict[str, Any] | list[Any],
+    breakpoint: int | tuple[int, int] | None = None,
+) -> Any:
+    """Resolve a target execution trace from raw or breakpoint-keyed trace data."""
+    trace_json: Any = json.loads(trace) if isinstance(trace, str) else trace
     if isinstance(trace_json, dict):
         if "breakpoints" in trace_json and isinstance(trace_json["breakpoints"], dict):
             bps = trace_json["breakpoints"]
@@ -308,9 +294,11 @@ def generate_image(
                     if bp_line in bps:
                         val = bps[bp_line]
                         trace_json["breakpoints"] = {
-                            bp_line: val[bp_idx]
-                            if isinstance(val, list) and 0 <= bp_idx < len(val)
-                            else val
+                            bp_line: (
+                                val[bp_idx]
+                                if isinstance(val, list) and 0 <= bp_idx < len(val)
+                                else val
+                            )
                         }
                 elif str(breakpoint) in bps:
                     trace_json["breakpoints"] = {str(breakpoint): bps[str(breakpoint)]}
@@ -353,6 +341,122 @@ def generate_image(
         else:
             trace_json = trace_json[-1]
 
+    return trace_json
+
+
+def render_html(
+    trace: str | dict[str, Any] | list[Any],
+    *,
+    container_id: str | None = None,
+    bundle_url: str | None = None,
+    include_bundle_script: bool = True,
+    include_types: bool = True,
+    text_memory_labels: bool = False,
+    strip_type_prefixes: Sequence[str] | None = None,
+    hide_fields: Sequence[str] | None = None,
+    hide_vars: Sequence[str] | None = None,
+    visualizer: str = "pytutor",
+    lang: str = "java",
+    breakpoint: int | tuple[int, int] | None = None,
+) -> str:
+    """Generate an HTML snippet with a script tag to embed an interactive execution trace visualization.
+
+    Args:
+        trace: The execution trace, either as a JSON string or parsed dictionary/list.
+        container_id: Optional ID for the container element. If None, a unique ID is generated.
+        bundle_url: URL for the CodeVisualizer frontend bundle. If None, defaults to the GitHub release asset URL.
+        include_bundle_script: Whether to include the external <script src="..."> tag for the bundle.
+        include_types: Whether type labels should be included in the visualization.
+        text_memory_labels: Whether memory connections should be rendered as text instead of arrows.
+        strip_type_prefixes: List of package prefixes to strip from displayed types.
+        hide_fields: List of field names (e.g. ClassName:fieldName) to hide.
+        hide_vars: List of variable names to hide.
+        visualizer: Visualizer mode ('pytutor' or 'json-pre').
+        lang: Language mode ('java').
+        breakpoint: Optional breakpoint to resolve from multi-trace payload.
+
+    Returns:
+        HTML snippet containing the container <div>, optional bundle <script> tag, and inline initialization <script>.
+    """
+    trace_data = resolve_trace_payload(trace, breakpoint=breakpoint)
+
+    if container_id is None:
+        container_id = f"codevis-{uuid.uuid4().hex[:8]}"
+
+    if bundle_url is None:
+        bundle_url = get_default_bundle_url()
+
+    # Safely escape '</' in JSON string to prevent premature </script> closing in HTML parsers
+    safe_json_trace = json.dumps(trace_data).replace("</", r"<\/")
+
+    options_dict: dict[str, Any] = {
+        "includeTypes": include_types,
+        "textualMemoryLabels": text_memory_labels,
+        "stripTypePrefixes": list(strip_type_prefixes) if strip_type_prefixes is not None else [],
+        "visualizer": visualizer,
+        "hideFields": list(hide_fields) if hide_fields is not None else [],
+        "hideVars": list(hide_vars) if hide_vars is not None else [],
+    }
+    options_json = json.dumps(options_dict)
+
+    bundle_tag = f'<script src="{bundle_url}"></script>\n' if include_bundle_script else ""
+
+    return (
+        f'<div id="{container_id}"></div>\n'
+        f"{bundle_tag}"
+        f"<script>\n"
+        f"  (function() {{\n"
+        f"    function init() {{\n"
+        f'      var target = document.getElementById("{container_id}");\n'
+        f'      if (typeof CodeVisualizer !== "undefined" && CodeVisualizer.create && target) {{\n'
+        f"        CodeVisualizer.create({{\n"
+        f'          lang: "{lang}",\n'
+        f"          trace: {safe_json_trace},\n"
+        f"          element: target,\n"
+        f"          options: {options_json}\n"
+        f"        }});\n"
+        f"      }}\n"
+        f"    }}\n"
+        f'    if (document.readyState === "loading") {{\n'
+        f'      document.addEventListener("DOMContentLoaded", init);\n'
+        f"    }} else {{\n"
+        f"      init();\n"
+        f"    }}\n"
+        f"  }})();\n"
+        f"</script>"
+    )
+
+
+def generate_image(
+    trace: str,
+    *,
+    dpi: int = 1,
+    format: str = "PNG",
+    include_types: bool = True,
+    text_memory_labels: bool = False,
+    strip_type_prefixes: Sequence[str] | None = None,
+    breakpoint: int | tuple[int, int] | None = -1,
+    visualizer: str = "pytutor",
+) -> bytes:
+    """Generate an image of the final state of an execution trace file.
+
+    The trace file is expected to be formatted using JSON as specified by OnlinePythonTutor.
+
+    Args:
+        trace: The execution trace file.
+        dpi: Dots Per Inch (DPI), a positive integer used to scale the driver's display resolution.
+        format: The image output format. This gets passed directly into PIL's ``Image.save()``.
+        include_types: Whether or not type tags should be included in this visualization.
+        text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
+        strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        breakpoint: Breakpoint line to visualize.
+        visualizer: The visualizer implementation to use ('pytutor' or 'json-pre').
+
+    Return:
+        The bytes of the generated image in the format specified by the ``format`` argument.
+
+    """
+    trace_json = resolve_trace_payload(trace, breakpoint=breakpoint)
     trace = json.dumps(trace_json)
 
     with online_python_tutor_frontend(
@@ -436,6 +540,30 @@ def main() -> None:
         default=None,
     )
 
+    _ = parser.add_argument(
+        "--html",
+        action="store_true",
+        help="Generate an HTML embed snippet instead of rendering a screenshot.",
+    )
+
+    _ = parser.add_argument(
+        "--container-id",
+        help="Optional custom container ID for the HTML element.",
+        default=None,
+    )
+
+    _ = parser.add_argument(
+        "--bundle-url",
+        help="Optional URL for the CodeVisualizer bundle JS.",
+        default=None,
+    )
+
+    _ = parser.add_argument(
+        "--no-bundle-script",
+        action="store_true",
+        help="Omit the external bundle script tag in the HTML snippet.",
+    )
+
     args = parser.parse_args()
 
     bp: int | tuple[int, int] | None = -1
@@ -452,6 +580,18 @@ def main() -> None:
     with fileinput.input("-") as f:
         stdin_data = "".join(f)
 
+    if args.html:
+        html_snippet = render_html(
+            stdin_data,
+            container_id=args.container_id,
+            bundle_url=args.bundle_url,
+            include_bundle_script=not args.no_bundle_script,
+            visualizer=args.visualizer,
+            breakpoint=bp,
+        )
+        sys.stdout.write(html_snippet + "\n")
+        return
+
     image_bytes = generate_image(
         stdin_data,
         dpi=args.dpi,
@@ -461,6 +601,86 @@ def main() -> None:
 
     # dump png to stdout, should be redirected to destination
     _ = sys.stdout.buffer.write(image_bytes)
+
+
+def render_html_cli() -> None:
+    """Command-line entry point for generating an HTML embed snippet from execution trace."""
+    parser = argparse.ArgumentParser(
+        description="Generate an HTML script tag embed from a Java execution trace"
+    )
+
+    _ = parser.add_argument(
+        "--container-id",
+        help="Optional custom container ID for the HTML element.",
+        default=None,
+    )
+
+    _ = parser.add_argument(
+        "--bundle-url",
+        help="Optional URL for the CodeVisualizer bundle JS.",
+        default=None,
+    )
+
+    _ = parser.add_argument(
+        "--no-bundle-script",
+        action="store_true",
+        help="Omit the external bundle script tag in the HTML snippet.",
+    )
+
+    _ = parser.add_argument(
+        "--visualizer",
+        help="Visualizer implementation to use ('pytutor' or 'json-pre').",
+        choices=["pytutor", "json-pre"],
+        default="pytutor",
+    )
+
+    _ = parser.add_argument(
+        "-b",
+        "--breakpoint",
+        dest="breakpoint",
+        help="Breakpoint line to visualize (optional).",
+        default=None,
+    )
+
+    _ = parser.add_argument(
+        "--text-memory-labels",
+        action="store_true",
+        help="Render object connections as text labels instead of arrows.",
+    )
+
+    _ = parser.add_argument(
+        "--no-include-types",
+        action="store_true",
+        help="Omit type tags from the visualization.",
+    )
+
+    args = parser.parse_args()
+
+    bp: int | tuple[int, int] | None = -1
+    if args.breakpoint is not None:
+        if "," in args.breakpoint:
+            parts = [int(p.strip()) for p in args.breakpoint.split(",") if p.strip()]
+            if len(parts) == 2:
+                bp = (parts[0], parts[1])
+            elif len(parts) == 1:
+                bp = parts[0]
+        else:
+            bp = int(args.breakpoint)
+
+    with fileinput.input("-") as f:
+        stdin_data = "".join(f)
+
+    html_snippet = render_html(
+        stdin_data,
+        container_id=args.container_id,
+        bundle_url=args.bundle_url,
+        include_bundle_script=not args.no_bundle_script,
+        include_types=not args.no_include_types,
+        text_memory_labels=args.text_memory_labels,
+        visualizer=args.visualizer,
+        breakpoint=bp,
+    )
+    sys.stdout.write(html_snippet + "\n")
 
 
 if __name__ == "__main__":

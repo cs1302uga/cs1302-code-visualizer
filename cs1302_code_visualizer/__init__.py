@@ -18,7 +18,7 @@ from typing import Any
 
 from . import browser_driver, trace_generator
 from .breakpoint_lister import list_breakpoints, list_breakpoints_json
-from .browser_driver import generate_image
+from .browser_driver import generate_image, render_html, render_html_cli
 from .errors import (
     BreakpointResolutionError,
     CodeVisError,
@@ -49,6 +49,8 @@ __all__ = [
     "list_breakpoints",
     "list_breakpoints_json",
     "main",
+    "render_html",
+    "render_html_cli",
     "render_image",
     "render_images",
 ]
