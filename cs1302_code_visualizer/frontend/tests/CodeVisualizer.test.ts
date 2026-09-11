@@ -180,7 +180,7 @@ describe("CodeVisualizer", () => {
 
       const typeLabel = heapObject?.querySelector(".typeLabel");
       expect(typeLabel).not.toBeNull();
-      expect(typeLabel?.textContent).toContain("Object instance");
+      expect(typeLabel?.textContent).toBe("Object");
 
       const emptyInstTable = heapObject?.querySelector("table.instTbl.emptyInst");
       expect(emptyInstTable).not.toBeNull();
@@ -236,6 +236,7 @@ describe("CodeVisualizer", () => {
       const emptyInstTable = heapObject?.querySelector("table.instTbl.emptyInst");
       expect(emptyInstTable).not.toBeNull();
       expect(emptyInstTable?.classList.contains("emptyInst")).toBe(true);
+      expect(heapObject?.querySelector(".typeLabel")?.textContent).toBe("Secret");
 
       instance.destroy?.();
       expect(container.innerHTML).toBe("");
@@ -290,7 +291,7 @@ describe("CodeVisualizer", () => {
       expect(container.innerHTML).toBe("");
     });
 
-    it("renders bounded emptyArrayBox for empty arrays and emptyStringLength for empty strings", () => {
+    it("renders empty int[] header with emptyList table, and empty String header without 'instance'", () => {
       const traceObj = {
         code: 'String emptyStr = ""; int[] emptyArr = new int[0];',
         trace: [
@@ -334,21 +335,26 @@ describe("CodeVisualizer", () => {
         element: container,
       });
 
-      // Verify empty array container
-      const emptyArrayBox = container.querySelector(".emptyArrayBox");
-      expect(emptyArrayBox).not.toBeNull();
-      const emptyArrayLabel = emptyArrayBox?.querySelector(".emptyArrayLabel");
-      expect(emptyArrayLabel).not.toBeNull();
-      expect(emptyArrayLabel?.textContent).toContain("empty int[] instance");
+      // Verify empty array header and empty body table
+      const heapObjects = container.querySelectorAll(".heapObject");
+      expect(heapObjects.length).toBe(2);
 
-      // Verify empty string container & indicator
-      const emptyStringTbl = container.querySelector(".instTbl.emptyStringTbl");
+      // Verify empty string (heap id 1)
+      const emptyStrObj = heapObjects[0];
+      const emptyStrTypeLabel = emptyStrObj.querySelector(".typeLabel");
+      expect(emptyStrTypeLabel?.textContent).toBe("empty String");
+      const emptyStringTbl = emptyStrObj.querySelector(".instTbl.emptyStringTbl");
       expect(emptyStringTbl).not.toBeNull();
       const emptyStringVal = emptyStringTbl?.querySelector(".instVal.emptyStringVal");
       expect(emptyStringVal).not.toBeNull();
-      const emptyStringLength = emptyStringVal?.querySelector(".emptyStringLength");
-      expect(emptyStringLength).not.toBeNull();
-      expect(emptyStringLength?.textContent).toBe("(length: 0)");
+      expect(emptyStringVal?.textContent?.trim()).toBe('""');
+
+      // Verify empty array (heap id 2)
+      const emptyArrObj = heapObjects[1];
+      const emptyArrTypeLabel = emptyArrObj.querySelector(".typeLabel");
+      expect(emptyArrTypeLabel?.textContent).toBe("empty int[]");
+      const emptyListTable = emptyArrObj.querySelector("table.listTbl.emptyList");
+      expect(emptyListTable).not.toBeNull();
 
       instance.destroy?.();
       expect(container.innerHTML).toBe("");

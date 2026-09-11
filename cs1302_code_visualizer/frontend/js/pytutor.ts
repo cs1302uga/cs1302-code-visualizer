@@ -1049,8 +1049,7 @@ export class ExecutionVisualizer {
 
       var label = obj[0].toLowerCase();
       let maybeListType = myViz
-        .trimTypePrefix(myViz.curTrace[stepNum]?.heap_attrs?.[objID]?.type)
-        .concat(" instance");
+        .trimTypePrefix(myViz.curTrace[stepNum]?.heap_attrs?.[objID]?.type);
       var visibleLabel = {
         list: maybeListType || "array",
         queue: "queue",
@@ -1059,14 +1058,13 @@ export class ExecutionVisualizer {
 
       if (obj.length == 1) {
         d3DomElement.append(
-          '<div class="emptyArrayBox">' +
-            '<span class="emptyArrayLabel">' +
+          '<div class="typeLabel">' +
             typeLabelPrefix +
             "empty " +
             htmlsanitize(visibleLabel) +
-            "</span>" +
             "</div>",
         );
+        d3DomElement.append('<table class="' + label + 'Tbl emptyList"></table>');
         return [true]; //handled
       }
 
@@ -1163,7 +1161,8 @@ export class ExecutionVisualizer {
       myViz.domRoot
         .find("#dataViz .heapObject")
         .filter(function () {
-          return $(this).find(".typeLabel").text().includes("String instance");
+          let text = $(this).find(".typeLabel").text().trim();
+          return text === "String" || text === "empty String";
         })
         .each(function () {
           $(this).find(".instKey").remove();
@@ -1171,13 +1170,10 @@ export class ExecutionVisualizer {
           instVal.attr("style", (_, s) => (s || "") + "border: none !important;");
           var stringObj = instVal.find(".stringObj");
           if (stringObj.text().trim() === '""') {
+            $(this).find(".typeLabel").text("empty String");
             instVal.addClass("emptyStringVal");
             $(this).find(".instTbl").addClass("emptyStringTbl");
-            if (!instVal.find(".emptyStringLength").length) {
-              instVal.append(
-                '<span class="emptyStringLength">(length: 0)</span>',
-              );
-            }
+            instVal.find(".emptyStringLength").remove();
           }
         });
     });
@@ -1514,6 +1510,12 @@ class DataVisualizer {
 
   // customize labels for each language's preferred vocabulary
   getRealLabel(label) {
+    if (this.params.lang === "java") {
+      if (label === "instance") {
+        return "";
+      }
+    }
+
     if (
       this.params.lang === "js" ||
       this.params.lang === "ts" ||
@@ -3731,14 +3733,13 @@ class DataVisualizer {
       assert(obj.length >= 1);
       if (obj.length == 1) {
         d3DomElement.append(
-          '<div class="emptyArrayBox">' +
-            '<span class="emptyArrayLabel">' +
+          '<div class="typeLabel">' +
             typeLabelPrefix +
-            " empty " +
+            "empty " +
             myViz.getRealLabel(label) +
-            "</span>" +
             "</div>",
         );
+        d3DomElement.append('<table class="' + label + 'Tbl emptyList"></table>');
       } else {
         d3DomElement.append(
           '<div class="typeLabel">' +
@@ -3825,13 +3826,15 @@ class DataVisualizer {
 
       let displayClass = htmlsanitize(myViz.trimTypePrefix(obj[1]));
 
+      let realLabel = myViz.getRealLabel("instance");
+      let typeLabelSuffix = realLabel ? " " + realLabel : "";
+
       if (isInstance) {
         d3DomElement.append(
           '<div class="typeLabel">' +
             typeLabelPrefix +
             displayClass +
-            " " +
-            myViz.getRealLabel("instance") +
+            typeLabelSuffix +
             "</div>",
         );
       } else if (isPprintInstance) {
@@ -3839,8 +3842,7 @@ class DataVisualizer {
           '<div class="typeLabel">' +
             typeLabelPrefix +
             displayClass +
-            " " +
-            myViz.getRealLabel("instance") +
+            typeLabelSuffix +
             "</div>",
         );
         d3DomElement.append(

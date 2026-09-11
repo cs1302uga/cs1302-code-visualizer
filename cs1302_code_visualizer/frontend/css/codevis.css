@@ -90,49 +90,23 @@ div.ExecutionVisualizer .instTbl:not(:has(.instKey)):not(.emptyInst) {
   background-color: var(--value-background-color) !important;
 }
 
-div.ExecutionVisualizer .instTbl.emptyInst {
+div.ExecutionVisualizer .instTbl.emptyInst,
+div.ExecutionVisualizer .listTbl.emptyList {
   display: inline-block;
   min-width: 2.5rem;
   height: 1.5rem;
   background-color: var(--object-background-color) !important;
 }
 
-div.ExecutionVisualizer .emptyArrayBox {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: var(--object-border) !important;
-  border-radius: var(--object-border-radius) !important;
-  background-color: var(--object-background-color) !important;
-  padding: 3px 8px !important;
-  box-sizing: border-box;
-}
-
-div.ExecutionVisualizer .emptyArrayLabel {
-  font-size: 8pt !important;
-  color: #444 !important;
-  font-style: italic;
-  white-space: nowrap;
-}
-
 div.ExecutionVisualizer .instTbl.emptyStringTbl {
-  min-width: 5.5rem !important;
+  min-width: 2.5rem !important;
 }
 
 div.ExecutionVisualizer .instVal.emptyStringVal {
   white-space: nowrap !important;
   text-align: center !important;
   padding: 3px 8px !important;
-  min-width: 5rem !important;
   box-sizing: border-box;
-}
-
-div.ExecutionVisualizer .emptyStringLength {
-  font-size: 7.5pt !important;
-  color: #666 !important;
-  font-style: italic;
-  margin-left: 6px;
-  user-select: none;
 }
 
 div.ExecutionVisualizer td.instKey, div.ExecutionVisualizer td.stackFrameVar {
