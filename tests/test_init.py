@@ -1,11 +1,13 @@
-import io
-import sys
-import json
-import pytest
-from unittest.mock import patch, MagicMock
 import importlib
+import io
+import json
+import sys
+from unittest.mock import patch
+
+import pytest
+
 import cs1302_code_visualizer
-from cs1302_code_visualizer import render_image, render_images, main
+from cs1302_code_visualizer import main, render_image, render_images
 
 SAMPLE_JAVA = """
 public class Driver {
@@ -49,26 +51,23 @@ def test_render_image_tracer_installer_error():
     with patch(
         "cs1302_code_visualizer.trace_generator.ensure_code_tracer_installed",
         side_effect=Exception("Failed"),
-    ):
-        with pytest.raises(Exception, match="Unable to ensure code tracer is installed!"):
-            render_image(SAMPLE_JAVA)
+    ), pytest.raises(Exception, match="Unable to ensure code tracer is installed!"):
+        render_image(SAMPLE_JAVA)
 
 
 def test_render_image_trace_generation_error():
     with patch(
         "cs1302_code_visualizer.trace_generator.generate_trace", side_effect=Exception("Trace fail")
-    ):
-        with pytest.raises(Exception, match="Unable to generate execution trace!"):
-            render_image(SAMPLE_JAVA)
+    ), pytest.raises(Exception, match="Unable to generate execution trace!"):
+        render_image(SAMPLE_JAVA)
 
 
 def test_render_image_browser_driver_error():
     with patch(
         "cs1302_code_visualizer.browser_driver.generate_image",
         side_effect=Exception("Render error"),
-    ):
-        with pytest.raises(Exception, match="Unable to generate image from execution trace"):
-            render_image(SAMPLE_JAVA)
+    ), pytest.raises(Exception, match="Unable to generate image from execution trace"):
+        render_image(SAMPLE_JAVA)
 
 
 def test_render_images_single_occurrence():
@@ -115,8 +114,7 @@ def test_render_image_tuple_breakpoint_non_list_trace():
     with patch(
         "cs1302_code_visualizer.trace_generator.generate_trace",
         return_value=json.dumps({"4": {"trace": []}}),
-    ):
-        with patch("cs1302_code_visualizer.browser_driver.generate_image", return_value=b"PNGDATA"):
-            img = render_image(SAMPLE_JAVA, breakpoint_line=(4, 1))
-            assert img == b"PNGDATA"
+    ), patch("cs1302_code_visualizer.browser_driver.generate_image", return_value=b"PNGDATA"):
+        img = render_image(SAMPLE_JAVA, breakpoint_line=(4, 1))
+        assert img == b"PNGDATA"
 

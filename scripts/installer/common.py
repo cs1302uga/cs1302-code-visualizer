@@ -354,7 +354,6 @@ def render_help(
     Raises:
         typer.Exit: Exits after printing help.
     """
-    root_ctx = ctx.find_root() if ctx else None
     cli_obj = typer.main.get_command(app)
 
     if not command_name:

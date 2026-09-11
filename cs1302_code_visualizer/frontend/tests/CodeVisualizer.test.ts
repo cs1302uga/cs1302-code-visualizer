@@ -240,6 +240,55 @@ describe("CodeVisualizer", () => {
       instance.destroy?.();
       expect(container.innerHTML).toBe("");
     });
+
+    it("attaches ARIA attributes and handles keyboard arrow navigation", () => {
+      const traceObj = {
+        code: "int x = 1;",
+        trace: [
+          {
+            line: 1,
+            event: "step_line",
+            func_name: "main",
+            stack_to_render: [],
+            globals: {},
+            ordered_globals: [],
+            heap: {},
+            stdout: "",
+            stderr: "",
+          },
+          {
+            line: 2,
+            event: "step_line",
+            func_name: "main",
+            stack_to_render: [],
+            globals: {},
+            ordered_globals: [],
+            heap: {},
+            stdout: "",
+            stderr: "",
+          },
+        ],
+      };
+
+      const instance = create({
+        lang: "java",
+        trace: traceObj,
+        element: container,
+      });
+
+      expect(container.getAttribute("role")).toBe("region");
+      expect(container.getAttribute("aria-label")).toBe("Code Execution Visualizer");
+      expect(container.getAttribute("tabindex")).toBe("0");
+
+      // Dispatch ArrowLeft and ArrowRight
+      const leftEvent = new KeyboardEvent("keydown", { key: "ArrowLeft" });
+      const rightEvent = new KeyboardEvent("keydown", { key: "ArrowRight" });
+      container.dispatchEvent(leftEvent);
+      container.dispatchEvent(rightEvent);
+
+      instance.destroy?.();
+      expect(container.innerHTML).toBe("");
+    });
   });
 });
 

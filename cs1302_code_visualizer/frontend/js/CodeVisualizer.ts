@@ -1,6 +1,11 @@
 /**
  * @fileoverview Main entry point for the Code Visualizer module.
  * Provides the unified `create()` factory for initializing visualizers.
+ *
+ * Normative References:
+ * - W3C Web Content Accessibility Guidelines (WCAG) 2.1 AA (https://www.w3.org/TR/WCAG21/)
+ * - W3C Scalable Vector Graphics (SVG) 2 Specification (https://www.w3.org/TR/SVG2/)
+ * - W3C WAI-ARIA 1.2 (https://www.w3.org/TR/wai-aria-1.2/)
  */
 
 import { ExecutionVisualizer } from "./pytutor";
@@ -174,6 +179,23 @@ export function create({
     frontendOptions
   );
 
+  // Keyboard navigation for step progression (WCAG 2.1 Success Criterion 2.1.1)
+  const keyHandler = (e: KeyboardEvent) => {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      return;
+    }
+    if (e.key === "ArrowLeft") {
+      visualizer.stepBack();
+    } else if (e.key === "ArrowRight") {
+      visualizer.stepForward();
+    }
+  };
+
+  element.setAttribute("tabindex", "0");
+  element.setAttribute("role", "region");
+  element.setAttribute("aria-label", "Code Execution Visualizer");
+  element.addEventListener("keydown", keyHandler);
+
   return {
     updateOutput: () => {
       visualizer.updateOutput();
@@ -182,6 +204,7 @@ export function create({
       visualizer.redrawConnectors();
     },
     destroy: () => {
+      element.removeEventListener("keydown", keyHandler);
       element.innerHTML = "";
     },
     element: element,

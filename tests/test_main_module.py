@@ -1,7 +1,6 @@
+import importlib
 import io
 import sys
-import importlib
-import pytest
 
 SAMPLE_JAVA = """
 public class Driver {

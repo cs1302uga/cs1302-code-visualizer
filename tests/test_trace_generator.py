@@ -1,31 +1,31 @@
+import hashlib
+import importlib
 import io
-import sys
 import json
 import runpy
-import pytest
-import importlib
-import zipfile
-import tarfile
+import sys
 from pathlib import Path
-import hashlib
-from subprocess import CalledProcessError
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-import cs1302_code_visualizer.trace_generator as trace_generator
+import pytest
+
+from cs1302_code_visualizer import trace_generator
+from cs1302_code_visualizer.errors import CodeVisTraceGeneratorError
 from cs1302_code_visualizer.trace_generator import (
-    generate_trace,
-    ensure_jdk_installed,
-    ensure_code_tracer_installed,
-    download_jdk,
-    jdk_exists,
-    read_tracer_url_and_sum_from_toml,
-    normalize_heap_primitives,
-    get_enum_types,
-    get_enum_globals,
     delete_globals,
+    download_jdk,
+    ensure_code_tracer_installed,
+    ensure_jdk_installed,
+    generate_trace,
+    get_enum_globals,
+    get_enum_types,
+    jdk_exists,
+    normalize_heap_primitives,
+    read_tracer_url_and_sum_from_toml,
+)
+from cs1302_code_visualizer.trace_generator import (
     main as generator_main,
 )
-from cs1302_code_visualizer.errors import CodeVisTraceGeneratorError
 
 SAMPLE_ENUM_JAVA = """
 public class Driver {
@@ -83,7 +83,7 @@ def test_tracer_url_from_toml_none_sha(monkeypatch):
 
 
 def test_tracer_url_from_toml_exception(monkeypatch):
-    with patch("builtins.open", side_effect=Exception("Read error")):
+    with patch("builtins.open", side_effect=OSError("Read error")):
         assert read_tracer_url_and_sum_from_toml() is None
 
 
@@ -164,10 +164,12 @@ def test_download_jdk_linux_x64(tmp_path, monkeypatch):
         (jdk_dir / "bin" / "java").touch()
         (jdk_dir / "bin" / "javac").touch()
 
-    with patch("requests.get", side_effect=mock_get):
-        with patch("tarfile.open", return_value=mock_tar_ctx):
-            with patch("shutil.move", side_effect=mock_move):
-                download_jdk()
+    with (
+        patch("requests.get", side_effect=mock_get),
+        patch("tarfile.open", return_value=mock_tar_ctx),
+        patch("shutil.move", side_effect=mock_move),
+    ):
+        download_jdk()
 
 
 def test_download_jdk_windows_amd64(tmp_path, monkeypatch):
@@ -204,10 +206,12 @@ def test_download_jdk_windows_amd64(tmp_path, monkeypatch):
         (jdk_dir / "bin" / "java").touch()
         (jdk_dir / "bin" / "javac").touch()
 
-    with patch("requests.get", side_effect=mock_get):
-        with patch("zipfile.ZipFile", return_value=mock_zip_ctx):
-            with patch("shutil.move", side_effect=mock_move):
-                download_jdk()
+    with (
+        patch("requests.get", side_effect=mock_get),
+        patch("zipfile.ZipFile", return_value=mock_zip_ctx),
+        patch("shutil.move", side_effect=mock_move),
+    ):
+        download_jdk()
 
 
 def test_download_jdk_extraction_failed(tmp_path, monkeypatch):
@@ -237,13 +241,13 @@ def test_download_jdk_extraction_failed(tmp_path, monkeypatch):
     mock_tar_ctx = MagicMock()
     mock_tar_ctx.__enter__.return_value = mock_tar
 
-    with patch("requests.get", side_effect=mock_get):
-        with patch("tarfile.open", return_value=mock_tar_ctx):
-            with patch(
-                "shutil.move", side_effect=lambda src, dst: None
-            ):  # don't create java binary
-                with pytest.raises(Exception, match="Could not extract the JDK"):
-                    download_jdk()
+    with (
+        patch("requests.get", side_effect=mock_get),
+        patch("tarfile.open", return_value=mock_tar_ctx),
+        patch("shutil.move", side_effect=lambda src, dst: None),
+        pytest.raises(Exception, match="Could not extract the JDK"),
+    ):
+        download_jdk()
 
 
 def test_ensure_jdk_installed_success_download(tmp_path, monkeypatch):
@@ -259,9 +263,8 @@ def test_ensure_jdk_installed_download_error(tmp_path, monkeypatch):
     with patch(
         "cs1302_code_visualizer.trace_generator.download_jdk",
         side_effect=Exception("Download failed"),
-    ):
-        with pytest.raises(Exception, match="Failed to download JDK"):
-            ensure_jdk_installed(install_dir=tmp_path / "nonexistent")
+    ), pytest.raises(Exception, match="Failed to download JDK"):
+        ensure_jdk_installed(install_dir=tmp_path / "nonexistent")
 
 
 def test_ensure_code_tracer_installed():
@@ -287,10 +290,9 @@ def test_ensure_code_tracer_existing_hash_mismatch(tmp_path, monkeypatch):
     with patch(
         "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
         return_value=("http://example.com/code-tracer.jar", new_hash),
-    ):
-        with patch("requests.get", return_value=mock_resp):
-            ensure_code_tracer_installed(update_existing=False)
-            assert old_jar.read_bytes() == new_content
+    ), patch("requests.get", return_value=mock_resp):
+        ensure_code_tracer_installed(update_existing=False)
+        assert old_jar.read_bytes() == new_content
 
 
 def test_ensure_code_tracer_installed_304(tmp_path, monkeypatch):
@@ -325,10 +327,9 @@ def test_ensure_code_tracer_download_full(tmp_path, monkeypatch):
     with patch(
         "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
         return_value=(url, mock_hash),
-    ):
-        with patch("requests.get", return_value=mock_resp):
-            ensure_code_tracer_installed(update_existing=True)
-            assert (tmp_path / "code-tracer.jar").exists()
+    ), patch("requests.get", return_value=mock_resp):
+        ensure_code_tracer_installed(update_existing=True)
+        assert (tmp_path / "code-tracer.jar").exists()
 
 
 def test_ensure_code_tracer_download_sha_mismatch(tmp_path, monkeypatch):
@@ -342,20 +343,17 @@ def test_ensure_code_tracer_download_sha_mismatch(tmp_path, monkeypatch):
     with patch(
         "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
         return_value=("http://example.com", "wrong_hash"),
+    ), patch("requests.get", return_value=mock_resp), pytest.raises(
+        Exception, match="Downloaded tracer JAR doesn't have the correct SHA256 sum"
     ):
-        with patch("requests.get", return_value=mock_resp):
-            with pytest.raises(
-                Exception, match="Downloaded tracer JAR doesn't have the correct SHA256 sum"
-            ):
-                ensure_code_tracer_installed(update_existing=True)
+        ensure_code_tracer_installed(update_existing=True)
 
 
 def test_ensure_code_tracer_update_offline(monkeypatch):
-    import socket
 
     with patch("socket.socket") as mock_sock_class:
         mock_sock_inst = MagicMock()
-        mock_sock_inst.connect.side_effect = socket.error("Offline")
+        mock_sock_inst.connect.side_effect = OSError("Offline")
         mock_sock_class.return_value = mock_sock_inst
         ensure_code_tracer_installed(update_existing=True)
 
@@ -494,7 +492,7 @@ def test_generate_trace_auto_detect_and_extra_args(java_home, monkeypatch):
             extra_tracer_args=["--format=modern", "-s", "src"],
         )
         assert res == '{"trace": []}'
-        args, kwargs = mock_run.call_args
+        args, _ = mock_run.call_args
         cmd = args[0]
         assert "-a" in cmd
         assert "--format=modern" in cmd
@@ -567,24 +565,26 @@ def test_ensure_code_tracer_installed_no_sha_in_toml(tmp_path, monkeypatch):
         ensure_code_tracer_installed(update_existing=False)
 
 
-def test_ensure_code_tracer_installed_if_modified_since(tmp_path, monkeypatch):
+def test_ensure_code_tracer_installed_cached_304(tmp_path, monkeypatch):
     jar_file = tmp_path / "code-tracer.jar"
     jar_file.write_bytes(b"EXISTING")
     dl_info = tmp_path / "code_tracer_dl_headers.json"
     dl_info.write_text(json.dumps({"Last-Modified": "Wed, 21 Oct 2025 07:28:00 GMT"}))
 
     monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
-    with patch(
-        "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
-        return_value=("https://example.com/code-tracer.jar", None),
+    with (
+        patch(
+            "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
+            return_value=("https://example.com/code-tracer.jar", None),
+        ),
+        patch("socket.socket") as mock_sock,
     ):
-        with patch("socket.socket") as mock_sock:
-            mock_sock.return_value.connect.return_value = None
-            mock_resp = MagicMock()
-            mock_resp.status_code = 304
-            with patch("requests.get", return_value=mock_resp) as mock_get:
-                ensure_code_tracer_installed(update_existing=True)
-                assert mock_get.call_args[1]["headers"]["If-Modified-Since"] == "Wed, 21 Oct 2025 07:28:00 GMT"
+        mock_sock.return_value.connect.return_value = None
+        mock_resp = MagicMock()
+        mock_resp.status_code = 304
+        with patch("requests.get", return_value=mock_resp) as mock_get:
+            ensure_code_tracer_installed(update_existing=True)
+            assert mock_get.call_args[1]["headers"]["If-Modified-Since"] == "Wed, 21 Oct 2025 07:28:00 GMT"
 
 
 def test_ensure_code_tracer_installed_malformed_dl_info(tmp_path, monkeypatch):
@@ -597,14 +597,13 @@ def test_ensure_code_tracer_installed_malformed_dl_info(tmp_path, monkeypatch):
     with patch(
         "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
         return_value=("https://example.com/code-tracer.jar", None),
-    ):
-        with patch("socket.socket") as mock_sock:
-            mock_sock.return_value.connect.return_value = None
-            mock_resp = MagicMock()
-            mock_resp.status_code = 304
-            with patch("requests.get", return_value=mock_resp) as mock_get:
-                ensure_code_tracer_installed(update_existing=True)
-                assert "If-Modified-Since" not in mock_get.call_args[1]["headers"]
+    ), patch("socket.socket") as mock_sock:
+        mock_sock.return_value.connect.return_value = None
+        mock_resp = MagicMock()
+        mock_resp.status_code = 304
+        with patch("requests.get", return_value=mock_resp) as mock_get:
+            ensure_code_tracer_installed(update_existing=True)
+            assert "If-Modified-Since" not in mock_get.call_args[1]["headers"]
 
 
 def test_ensure_code_tracer_installed_oserror_reading_jar(tmp_path, monkeypatch):
@@ -612,17 +611,19 @@ def test_ensure_code_tracer_installed_oserror_reading_jar(tmp_path, monkeypatch)
     jar_file.write_bytes(b"EXISTING")
 
     monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
-    with patch(
-        "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
-        return_value=("https://example.com/code-tracer.jar", "somehash"),
+    with (
+        patch(
+            "cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml",
+            return_value=("https://example.com/code-tracer.jar", "somehash"),
+        ),
+        patch("builtins.open", side_effect=OSError("Read error")),
+        patch("socket.socket") as mock_sock,
     ):
-        with patch("builtins.open", side_effect=OSError("Read error")):
-            with patch("socket.socket") as mock_sock:
-                mock_sock.return_value.connect.return_value = None
-                mock_resp = MagicMock()
-                mock_resp.status_code = 304
-                with patch("requests.get", return_value=mock_resp):
-                    ensure_code_tracer_installed(update_existing=False)
+        mock_sock.return_value.connect.return_value = None
+        mock_resp = MagicMock()
+        mock_resp.status_code = 304
+        with patch("requests.get", return_value=mock_resp):
+            ensure_code_tracer_installed(update_existing=False)
 
 
 def test_generate_trace_type_style(java_home):

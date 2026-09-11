@@ -1,9 +1,10 @@
 import json
+
 import pytest
-from pathlib import Path
-from cs1302_code_visualizer.trace_generator import generate_trace, ensure_jdk_installed
+
 from cs1302_code_visualizer.breakpoint_lister import list_breakpoints_json
 from cs1302_code_visualizer.browser_driver import generate_image
+from cs1302_code_visualizer.trace_generator import ensure_jdk_installed, generate_trace
 
 SAMPLE_JAVA = """
 public class Driver {
@@ -42,7 +43,7 @@ def test_generate_trace(java_home):
 def test_generate_image(java_home):
     trace_raw = generate_trace(java_home, SAMPLE_JAVA, breakpoints={-1})
     trace_json = json.loads(trace_raw)
-    inner_trace = trace_json.get("-1", list(trace_json.values())[0])
+    inner_trace = trace_json.get("-1", next(iter(trace_json.values())))
     img_bytes = generate_image(json.dumps(inner_trace))
     assert isinstance(img_bytes, bytes)
     assert len(img_bytes) > 0
@@ -64,6 +65,7 @@ def test_generate_image_modern_format(java_home):
 
 def test_code_visualizer_json_pre(java_home):
     import base64
+
     from cs1302_code_visualizer.browser_driver import get_webdriver, this_files_dir
 
     trace_raw = generate_trace(

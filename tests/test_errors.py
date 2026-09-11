@@ -1,9 +1,9 @@
-import pytest
 from subprocess import CalledProcessError
+
 from cs1302_code_visualizer.errors import (
     CodeVisError,
-    CodeVisTraceGeneratorError,
     CodeVisRenderError,
+    CodeVisTraceGeneratorError,
 )
 
 
@@ -54,3 +54,34 @@ def test_code_vis_trace_generator_error_from_cpe():
     assert err.stdout == "out"
     assert err.stderr == "err"
     assert err.exit_status == 1
+
+
+def test_tracer_download_error():
+    from cs1302_code_visualizer.errors import CodeVisualizerError, TracerDownloadError
+
+    err = TracerDownloadError("Download failure")
+    assert str(err) == "Download failure"
+    assert isinstance(err, CodeVisError)
+    assert issubclass(TracerDownloadError, CodeVisualizerError)
+
+
+def test_breakpoint_resolution_error():
+    from cs1302_code_visualizer.errors import (
+        BreakpointResolutionError,
+        JDKError,
+        JDKInstallationError,
+        RenderError,
+        TraceGeneratorError,
+    )
+
+    err = BreakpointResolutionError("Invalid breakpoint")
+    assert str(err) == "Invalid breakpoint"
+    assert isinstance(err, CodeVisError)
+    assert TraceGeneratorError is CodeVisTraceGeneratorError
+    assert RenderError is CodeVisRenderError
+
+    jdk_err = JDKInstallationError("JDK failure")
+    assert str(jdk_err) == "JDK failure"
+    assert isinstance(jdk_err, CodeVisError)
+    assert JDKError is JDKInstallationError
+

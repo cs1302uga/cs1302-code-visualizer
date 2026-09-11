@@ -5,11 +5,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 import re
 import subprocess
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -114,7 +114,7 @@ def get_binary_version(jar_bytes: bytes) -> str:
         tmp_path.unlink(missing_ok=True)
         if proc.returncode == 0 and proc.stdout.strip():
             return proc.stdout.strip()
-    except Exception:
+    except (subprocess.SubprocessError, OSError):
         pass
     return "(unknown)"
 
@@ -141,7 +141,7 @@ def main() -> int:
 
     try:
         jar_data, sha256_sum = download_and_hash(target_url)
-    except Exception as exc:
+    except (urllib.error.URLError, OSError, ValueError) as exc:
         print(f"Error downloading {target_url}: {exc}", file=sys.stderr)
         return 1
 

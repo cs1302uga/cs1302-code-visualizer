@@ -39,7 +39,6 @@ import click
 import requests
 import typer
 from packaging.requirements import InvalidRequirement, Requirement
-from packaging.version import Version
 from rich.console import Console
 from rich.table import Table
 
@@ -1309,7 +1308,7 @@ def cmd_exec(
     cmd_args = raw_args or ctx.args
     if not cmd_args:
         err_console.print(
-            f"[red]error:[/red] 'exec' requires a command to execute (e.g. 'install-jdk.py exec java -version')"
+            "[red]error:[/red] 'exec' requires a command to execute (e.g. 'install-jdk.py exec java -version')"
         )
         raise typer.Exit(1)
 
@@ -1341,7 +1340,7 @@ def cmd_exec(
     try:
         res = subprocess.run(cmd_args, env=new_env, check=False)
         sys.exit(res.returncode)
-    except Exception as exc:
+    except (subprocess.SubprocessError, OSError) as exc:
         err_console.print(f"[red]error:[/red] Failed to execute command: {exc}")
         sys.exit(1)
 
@@ -1417,7 +1416,7 @@ def main() -> None:
     """Main CLI entry point for the script."""
     try:
         app()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         err_console.print(f"[red]error:[/red] {e}")
         raise typer.Exit(1) from None
 

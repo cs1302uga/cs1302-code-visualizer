@@ -1,4 +1,9 @@
-"""List available breakpoints for a Java source program."""
+"""List available breakpoints for a Java source program.
+
+Normative References:
+    PEP 257 – Docstring Conventions (https://peps.python.org/pep-0257/)
+    PEP 484 – Type Hints (https://peps.python.org/pep-0484/)
+"""
 
 import argparse
 import fileinput
@@ -14,6 +19,7 @@ import platformdirs
 from rich.console import Console
 
 from . import trace_generator
+from .errors import TracerDownloadError
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -39,7 +45,7 @@ def list_breakpoints(
     try:
         trace_generator.ensure_code_tracer_installed()
     except Exception as exc:
-        raise Exception("Unable to ensure code tracer is installed!") from exc
+        raise TracerDownloadError("Unable to ensure code tracer is installed!") from exc
 
     args: list[str] = []
 
@@ -141,7 +147,8 @@ def main() -> None:
         trace_generator.ensure_code_tracer_installed()
 
     # get java file from stdin
-    java_input = "".join(fileinput.input(args.input))
+    with fileinput.input(args.input) as f:
+        java_input = "".join(f)
 
     try:
         with console.status("Generating execution trace..."):

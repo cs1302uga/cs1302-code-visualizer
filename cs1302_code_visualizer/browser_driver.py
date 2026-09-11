@@ -1,4 +1,12 @@
-"""Browser automation and screenshot rendering driver."""
+"""Browser automation and screenshot rendering driver.
+
+Normative References:
+    W3C WebDriver Specification (W3C Recommendation, https://www.w3.org/TR/webdriver2/)
+    Scalable Vector Graphics (SVG) 2 (W3C Recommendation, https://www.w3.org/TR/SVG2/)
+    HTML Living Standard (WHATWG, https://html.spec.whatwg.org/)
+    PEP 257 – Docstring Conventions (https://peps.python.org/pep-0257/)
+    PEP 484 – Type Hints (https://peps.python.org/pep-0484/)
+"""
 
 import argparse
 import fileinput
@@ -20,11 +28,14 @@ from urllib.parse import urlencode
 
 from PIL import Image
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
+
+from .errors import CodeVisRenderError
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -40,9 +51,7 @@ def is_headless_enabled() -> bool:
     """Return True if headless mode is active (the default), False if explicitly disabled."""
     if os.getenv("CS1302_DISABLE_HEADLESS", "").strip().lower() in ["1", "true"]:
         return False
-    if os.getenv("CS1302_HEADLESS", "").strip().lower() in ["0", "false"]:
-        return False
-    return True
+    return os.getenv("CS1302_HEADLESS", "").strip().lower() not in ["0", "false"]
 
 
 DISABLE_HEADLESS_MODE: bool = not is_headless_enabled()
@@ -183,13 +192,12 @@ def online_python_tutor_frontend(
     frontend_path = (this_files_dir / "frontend" / "render-trace.html").as_uri()
     driver = get_webdriver(dpi=dpi)
     try:
-        trace_file = NamedTemporaryFile()
-        try:
+        with NamedTemporaryFile(mode="w", encoding="utf-8") as trace_file:
             wait: WebDriverWait[webdriver.Chrome] = WebDriverWait(driver, 10)
             logger.debug(f"webdriver: {pformat(driver.capabilities)}")
 
-            with open(trace_file.name, "w", encoding="utf-8") as f:
-                print(trace, file=f)
+            trace_file.write(trace)
+            trace_file.flush()
 
             frontend_query: dict[str, str] = {
                 "tracePath": trace_file.name,
@@ -208,7 +216,7 @@ def online_python_tutor_frontend(
             if visualizer == "json-pre":
                 try:
                     dataViz = vizDiv.find_element(By.CSS_SELECTOR, "pre")
-                except Exception:
+                except NoSuchElementException:
                     dataViz = vizDiv
             else:
                 dataViz = driver.find_element(By.ID, "dataViz")
@@ -222,8 +230,6 @@ def online_python_tutor_frontend(
             }
 
             yield frontend
-        finally:
-            trace_file.close()
     finally:
         driver.quit()
 
@@ -260,7 +266,7 @@ def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> s
             """
             )
         else:
-            raise Exception("unable to generate an HTML visualization for this trace")
+            raise CodeVisRenderError("unable to generate an HTML visualization for this trace")
 
 
 def generate_image(
@@ -362,11 +368,13 @@ def generate_image(
 
         tidy_set_window_size_for_element(driver, viz)
 
+        loc = viz.location
+        size = viz.size
         (left, top, right, bottom) = (
-            int(viz.location["x"]),
-            int(viz.location["y"]),
-            int(viz.location["x"] + viz.size["width"]),
-            int(viz.location["y"] + viz.size["height"]),
+            int(loc["x"]),
+            int(loc["y"]),
+            int(loc["x"] + size["width"]),
+            int(loc["y"] + size["height"]),
         )
 
         if visualizer != "json-pre":
@@ -441,7 +449,8 @@ def main() -> None:
         else:
             bp = int(args.breakpoint)
 
-    stdin_data = "".join(fileinput.input("-"))
+    with fileinput.input("-") as f:
+        stdin_data = "".join(f)
 
     image_bytes = generate_image(
         stdin_data,

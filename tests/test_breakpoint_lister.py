@@ -1,13 +1,15 @@
 import io
-import sys
-import json
 import runpy
-import pytest
+import sys
 from unittest.mock import patch
+
+import pytest
 
 from cs1302_code_visualizer.breakpoint_lister import (
     list_breakpoints,
     list_breakpoints_json,
+)
+from cs1302_code_visualizer.breakpoint_lister import (
     main as lister_main,
 )
 from cs1302_code_visualizer.trace_generator import ensure_jdk_installed
@@ -32,9 +34,8 @@ def test_list_breakpoints_tracer_error():
     with patch(
         "cs1302_code_visualizer.trace_generator.ensure_code_tracer_installed",
         side_effect=Exception("Tracer fail"),
-    ):
-        with pytest.raises(Exception, match="Unable to ensure code tracer is installed!"):
-            list_breakpoints(SAMPLE_JAVA, java_home=java_home)
+    ), pytest.raises(Exception, match="Unable to ensure code tracer is installed!"):
+        list_breakpoints(SAMPLE_JAVA, java_home=java_home)
 
 
 def test_list_breakpoints_json_format():

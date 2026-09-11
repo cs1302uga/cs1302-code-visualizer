@@ -35,8 +35,28 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /* reset some styles to nullify effects of existing stylesheets
    e.g., http://meyerweb.com/eric/tools/css/reset/
 */
+:root {
+  --viz-bg: #ffffff;
+  --viz-text: #000000;
+  --viz-stack-bg: #ffffff;
+  --viz-heap-bg: #ffffff;
+  --viz-border: #cccccc;
+}
+
+@media (prefers-color-scheme: dark) {
+  body.theme-dark,
+  .theme-dark div.ExecutionVisualizer {
+    --viz-bg: #1e1e1e;
+    --viz-text: #e0e0e0;
+    --viz-stack-bg: #252526;
+    --viz-heap-bg: #252526;
+    --viz-border: #444444;
+  }
+}
+
 div.ExecutionVisualizer {
-  /* none for now */
+  background-color: var(--viz-bg);
+  color: var(--viz-text);
 }
 
 div.ExecutionVisualizer table.visualizer {

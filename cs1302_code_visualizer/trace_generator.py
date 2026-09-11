@@ -3,6 +3,11 @@
 This module manages downloading the JDK and code-tracer JAR if needed,
 invoking the trace generator on Java source code, and post-processing
 the resulting trace JSON.
+
+Normative References:
+    PEP 257 – Docstring Conventions (https://peps.python.org/pep-0257/)
+    PEP 484 – Type Hints (https://peps.python.org/pep-0484/)
+    Adoptium API v3 Specification (https://api.adoptium.net/v3/)
 """
 
 import argparse
@@ -31,7 +36,11 @@ from typing import Any, Final, cast
 import platformdirs
 import requests
 
-from .errors import CodeVisTraceGeneratorError
+from .errors import (
+    CodeVisTraceGeneratorError,
+    JDKInstallationError,
+    TracerDownloadError,
+)
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stderr))
@@ -83,17 +92,24 @@ JDK_CACHE_DIR: Final[Path] = CACHE_DIR / "jdk"
 
 def normalize_heap_primitives(trace_obj: dict[str, Any]) -> None:
     """Ensure all heap objects in a trace are formatted as lists for OnlinePythonTutor."""
-    for event in trace_obj.get("trace", []):
+    raw_trace = trace_obj.get("trace", [])
+    events: list[Any] = raw_trace if isinstance(raw_trace, list) else []
+    for event in events:
         if not isinstance(event, dict):
             continue
-        heap = event.get("heap", {})
-        heap_attrs = event.get("heap_attrs", {})
+        heap: Any = event.get("heap", {})
+        heap_attrs: Any = event.get("heap_attrs", {})
         if not isinstance(heap, dict):
             continue
         for addr, obj in list(heap.items()):
             if not isinstance(obj, list):
-                type_name = "Object"
-                if isinstance(heap_attrs, dict) and addr in heap_attrs and "type" in heap_attrs[addr]:
+                type_name: str = "Object"
+                if (
+                    isinstance(heap_attrs, dict)
+                    and addr in heap_attrs
+                    and isinstance(heap_attrs[addr], dict)
+                    and "type" in heap_attrs[addr]
+                ):
                     t = heap_attrs[addr]["type"]
                     if isinstance(t, str):
                         type_name = t.split(".")[-1].split("<")[0]
@@ -199,8 +215,8 @@ def generate_trace(
         normalize_heap_primitives(trace_json)
     else:
         for line, trace_value in trace_json.items():
-            items = trace_value if isinstance(trace_value, list) else [trace_value]
-            for item in items:
+            items_list: list[Any] = trace_value if isinstance(trace_value, list) else [trace_value]
+            for item in items_list:
                 if isinstance(item, dict):
                     normalize_heap_primitives(item)
 
@@ -213,12 +229,14 @@ def generate_trace(
         else:
             for line, trace_value in trace_json.items():
                 logger.debug(f"removing enum constants and $VALUES for line {line}")
-                items = trace_value if isinstance(trace_value, list) else [trace_value]
-                for item in items:
+                line_items: list[Any] = (
+                    trace_value if isinstance(trace_value, list) else [trace_value]
+                )
+                for item in line_items:
                     if isinstance(item, dict):
-                        enum_types: list[str] = get_enum_types(item)
-                        enum_globals: list[str] = get_enum_globals(item, enum_types)
-                        delete_globals(item, enum_globals)
+                        line_enum_types: list[str] = get_enum_types(item)
+                        line_enum_globals: list[str] = get_enum_globals(item, line_enum_types)
+                        delete_globals(item, line_enum_globals)
 
     return json.dumps(trace_json)
 
@@ -249,7 +267,7 @@ def download_jdk() -> None:
                 message: str = (
                     f"Cannot automatically download a JDK for your computer's platform ({s})."
                 )
-                raise Exception(message)
+                raise JDKInstallationError(message)
 
         match platform.machine().lower():
             case "amd64" | "x86_64":
@@ -257,7 +275,7 @@ def download_jdk() -> None:
             case "aarch64" | "arm64":
                 arch = "aarch64"
             case str(m):
-                raise Exception(
+                raise JDKInstallationError(
                     f"Cannot automatically download a JDK for your computer's architecture ({m} {os}). Please download and provide one yourself."
                 )
 
@@ -306,7 +324,9 @@ def download_jdk() -> None:
         _ = shutil.move(CACHE_DIR / toplevel_dir, CACHE_DIR / "jdk")
 
         if not jdk_exists(str(CACHE_DIR / "jdk")):
-            raise Exception("Could not extract the JDK. Please download and provide one yourself.")
+            raise JDKInstallationError(
+                "Could not extract the JDK. Please download and provide one yourself."
+            )
 
 
 def ensure_jdk_installed(install_dir: str | PathLike[str] = JDK_CACHE_DIR) -> Path:
@@ -345,7 +365,7 @@ def ensure_jdk_installed(install_dir: str | PathLike[str] = JDK_CACHE_DIR) -> Pa
         try:
             download_jdk()
         except Exception as e:
-            raise Exception("Failed to download JDK") from e
+            raise JDKInstallationError("Failed to download JDK") from e
         return CACHE_DIR / "jdk"
 
 
@@ -365,7 +385,7 @@ def read_tracer_url_and_sum_from_toml() -> tuple[str, str] | None:
                 package_constants.get("tracer-url"),
                 package_constants.get("tracer-sha256"),
             )
-    except Exception:
+    except (OSError, tomllib.TOMLDecodeError):
         return None
 
 
@@ -436,7 +456,7 @@ def ensure_code_tracer_installed(update_existing: bool = False) -> None:
         if tracer_url_and_sum and tracer_url_and_sum[1] != sha256_hash.hexdigest():
             if tmp_jar_path.exists():
                 tmp_jar_path.unlink()
-            raise Exception(
+            raise TracerDownloadError(
                 f"Downloaded tracer JAR doesn't have the correct SHA256 sum. Expected: {tracer_url_and_sum[1]}, got {sha256_hash.hexdigest()}."
             )
 
@@ -574,7 +594,8 @@ def main() -> None:
     ensure_code_tracer_installed()
 
     # get java file from stdin
-    java_input = "".join(fileinput.input(args.input)).rstrip()
+    with fileinput.input(args.input) as f:
+        java_input = "".join(f).rstrip()
 
     parsed_breakpoints: set[int] = set()
     if args.breakpoints:

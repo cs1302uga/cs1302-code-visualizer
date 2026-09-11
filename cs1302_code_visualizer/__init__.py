@@ -1,4 +1,10 @@
-"""CS1302 Java Code Visualizer package."""
+"""CS1302 Java Code Visualizer package.
+
+Normative References:
+    PEP 257 – Docstring Conventions (https://peps.python.org/pep-0257/)
+    PEP 484 – Type Hints (https://peps.python.org/pep-0484/)
+    PEP 695 – Type Parameter Syntax (https://peps.python.org/pep-0695/)
+"""
 
 import fileinput
 import json
@@ -13,13 +19,31 @@ from typing import Any
 from . import browser_driver, trace_generator
 from .breakpoint_lister import list_breakpoints, list_breakpoints_json
 from .browser_driver import generate_image
-from .errors import CodeVisError, CodeVisRenderError, CodeVisTraceGeneratorError
+from .errors import (
+    BreakpointResolutionError,
+    CodeVisError,
+    CodeVisRenderError,
+    CodeVisTraceGeneratorError,
+    CodeVisualizerError,
+    JDKError,
+    JDKInstallationError,
+    RenderError,
+    TraceGeneratorError,
+    TracerDownloadError,
+)
 from .trace_generator import generate_trace
 
 __all__ = [
+    "BreakpointResolutionError",
     "CodeVisError",
     "CodeVisRenderError",
     "CodeVisTraceGeneratorError",
+    "CodeVisualizerError",
+    "JDKError",
+    "JDKInstallationError",
+    "RenderError",
+    "TraceGeneratorError",
+    "TracerDownloadError",
     "generate_image",
     "generate_trace",
     "list_breakpoints",
@@ -68,34 +92,37 @@ def render_images(
     type_style: str = "simple",
 ) -> dict[int, bytes] | dict[int, list[bytes]]:
     """Visualize the state of a Java program at given breakpoints.
-    java_source:         The Java source code to visualize.
-    breakpoints:         The source lines at which an execution snapshot should be taken. If a line is
-                         executed multiple times, the last execution is the one visualized. If a breakpoint
-                         cannot be created on a line, it will not be included in this function's output.
-    java_home:           A path to a JDK 21+ installation home. If not provided, a JDK will be fetched
-                         automatically.
-    timeout_secs:        Maximum execution time for the Java source's trace generation, or no limit if
-                         None.
-    dpi:                 A positive, integer multiplicative factor for the output image's resolution.
-    format:              The image output format. This gets passed directly into PIL's Image.save() method,
-                         refer to that method's documentation for acceptable values.
-    inline_strings:      True if strings should be inlined in the visualization, false if they should be
-                         rendered separately on the heap.
-    remove_main_args:    False if the visualization should include the main method's `args` parameter,
-                         True otherwise
-    include_types:       True if type tags should be included in this visualization, False otherwise.
-    text_memory_labels:  True if object connections should be rendered as text labels, False otherwise.
-    strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
-    render_all_breakpoint_occurrences: If true, render each occurrence of a breakpoint as a separate image.
-                         This changes the return type of the function.
-    type_style:          Type qualification style ('fqn' or 'simple').
 
-    out:                 Mapping from a breakpoint line to a visualization image. If
-                         render_all_breakpoint_occurrences is true, then this instead returns a mapping from
-                         a breakpoint line to a list of visualization images (first occurrence first,
-                         last occurrence last).
-    include_enum_static_fields: True if enum constants and $VALUES should be included in the
-                         global static fields list, False otherwise.
+    Args:
+        java_source: The Java source code to visualize.
+        breakpoints: The source lines at which an execution snapshot should be taken. If a line is
+            executed multiple times, the last execution is the one visualized. If a breakpoint
+            cannot be created on a line, it will not be included in this function's output.
+        java_home: A path to a JDK 21+ installation home. If not provided, a JDK will be fetched
+            automatically.
+        timeout_secs: Maximum execution time for the Java source's trace generation, or no limit if
+            None.
+        dpi: A positive, integer multiplicative factor for the output image's resolution.
+        format: The image output format. This gets passed directly into PIL's Image.save() method,
+            refer to that method's documentation for acceptable values.
+        inline_strings: True if strings should be inlined in the visualization, false if they should be
+            rendered separately on the heap.
+        remove_main_args: False if the visualization should include the main method's `args` parameter,
+            True otherwise.
+        include_types: True if type tags should be included in this visualization, False otherwise.
+        text_memory_labels: True if object connections should be rendered as text labels, False otherwise.
+        strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        render_all_breakpoint_occurrences: If true, render each occurrence of a breakpoint as a separate image.
+            This changes the return type of the function.
+        type_style: Type qualification style ('fqn' or 'simple').
+        include_enum_static_fields: True if enum constants and $VALUES should be included in the
+            global static fields list, False otherwise.
+
+    Returns:
+        Mapping from a breakpoint line to a visualization image. If
+        render_all_breakpoint_occurrences is true, then this instead returns a mapping from
+        a breakpoint line to a list of visualization images (first occurrence first,
+        last occurrence last).
 
     Note that exceptions may be raised if image generation fails.
     """
@@ -120,8 +147,8 @@ def render_images(
     if render_all_breakpoint_occurrences:
         traces_accumulated: dict[str, list[dict[str, Any]]] = json.loads(trace)
         out_accumulated: dict[int, list[bytes]] = defaultdict(list)
-        for line in traces_accumulated:
-            for occurrence in traces_accumulated[line]:
+        for line, occurrences in traces_accumulated.items():
+            for occurrence in occurrences:
                 out_accumulated[int(line)].append(
                     browser_driver.generate_image(
                         json.dumps(occurrence),
@@ -135,10 +162,10 @@ def render_images(
         return out_accumulated
     else:
         traces: dict[str, dict[str, Any]] = json.loads(trace)
-        out_single: dict[int, bytes] = dict()
-        for line in traces:
+        out_single: dict[int, bytes] = {}
+        for line, trace_dict in traces.items():
             out_single[int(line)] = browser_driver.generate_image(
-                json.dumps(traces[line]),
+                json.dumps(trace_dict),
                 dpi=dpi,
                 format=format,
                 include_types=include_types,
@@ -197,6 +224,8 @@ def render_image(
             If a tuple (a,b) is passed, an image is generated at the b-th occurrence of the breakpoint at
             line a. If there is no b-th occurrence, the last occurrence is used.
 
+        verbose: True to enable debug logging, False otherwise.
+
         include_types: True if type tags should be included in this visualization, False otherwise.
 
         text_memory_labels: True if object connections should be rendered as text labels, False otherwise.
@@ -206,7 +235,9 @@ def render_image(
         include_enum_static_fields: True if enum constants and $VALUES should be included in the
             global static fields list, False otherwise.
 
-    Return:
+        type_style: Type qualification style ('fqn' or 'simple').
+
+    Returns:
         Raw bytes of the visualization image.
 
     Note that exceptions may be raised if image generation fails.
@@ -221,7 +252,7 @@ def render_image(
     try:
         trace_generator.ensure_code_tracer_installed()
     except Exception as exc:
-        raise Exception("Unable to ensure code tracer is installed!") from exc
+        raise TracerDownloadError("Unable to ensure code tracer is installed!") from exc
 
     trace: str = "{}"
 
@@ -254,11 +285,10 @@ def render_image(
 
         traces: dict[str, Any] = json.loads(execution_trace)
 
-        logging.debug(f"TRACES: {traces=}")
+        logger.debug(f"TRACES: {traces=}")
 
         if breakpoint_index is not None:
-            for line in traces:
-                line_traces = traces[line]
+            for line_traces in traces.values():
                 if isinstance(line_traces, list) and breakpoint_index in range(len(line_traces)):
                     trace = json.dumps(line_traces[breakpoint_index])
                 elif isinstance(line_traces, list) and line_traces:
@@ -267,12 +297,12 @@ def render_image(
                     trace = json.dumps(line_traces)
                 break
         else:
-            for line in traces:
-                trace = json.dumps(traces[line])
+            for trace_val in traces.values():
+                trace = json.dumps(trace_val)
                 break
 
     except Exception as exc:
-        raise Exception("Unable to generate execution trace!") from exc
+        raise CodeVisError("Unable to generate execution trace!") from exc
 
     try:
         output: bytes = browser_driver.generate_image(
@@ -286,14 +316,15 @@ def render_image(
         )
         return output
     except Exception as exc:
-        raise Exception(
+        raise CodeVisRenderError(
             f"Unable to generate image from execution trace:\n\n{trace}\n",
         ) from exc
 
 
 def main() -> None:
     """Read Java source from standard input and write rendered image to standard output."""
-    java_source: str = "".join(fileinput.input("-"))
+    with fileinput.input("-") as f:
+        java_source: str = "".join(f)
     rendered_image: bytes = render_image(
         java_source,
         dpi=2,

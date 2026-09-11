@@ -1,4 +1,10 @@
-"""Errors related to code visualization."""
+"""Errors related to code visualization.
+
+Normative References:
+    PEP 257 – Docstring Conventions (https://peps.python.org/pep-0257/)
+    PEP 484 – Type Hints (https://peps.python.org/pep-0484/)
+    PEP 678 – Enriching Exceptions with Notes (https://peps.python.org/pep-0678/)
+"""
 
 from __future__ import annotations
 
@@ -21,16 +27,16 @@ class CodeVisTraceGeneratorError(CodeVisError):
 
     def __init__(
         self,
-        source_code: str,
-        cli_args: list[str],
-        stdout: str | None,
-        stderr: str | None,
-        exit_status: int,
+        source_code: str = "",
+        cli_args: list[str] | None = None,
+        stdout: str | None = None,
+        stderr: str | None = None,
+        exit_status: int = 1,
     ) -> None:
         """Initialize a CodeVisTraceGeneratorError."""
         super().__init__("Unable to generate code execution trace.")
         self._source_code: str = source_code
-        self._cli_args: list[str] = cli_args
+        self._cli_args: list[str] = cli_args if cli_args is not None else []
         self._stdout: str = stdout if stdout is not None else ""
         self._stderr: str = stderr if stderr is not None else ""
         self._exit_status: int = exit_status
@@ -106,3 +112,35 @@ class CodeVisRenderError(CodeVisError):
     def __init__(self, message: str) -> None:
         """Initialize a CodeVisRenderError with a message."""
         super().__init__(message)
+
+
+class TracerDownloadError(CodeVisError):
+    """An error occurring while downloading, verifying, or caching the tracer JAR."""
+
+    def __init__(self, message: str) -> None:
+        """Initialize a TracerDownloadError with a message."""
+        super().__init__(message)
+
+
+class BreakpointResolutionError(CodeVisError):
+    """An error occurring while discovering or resolving breakpoints."""
+
+    def __init__(self, message: str) -> None:
+        """Initialize a BreakpointResolutionError with a message."""
+        super().__init__(message)
+
+
+class JDKInstallationError(CodeVisError):
+    """An error occurring while downloading, extracting, or verifying the JDK."""
+
+    def __init__(self, message: str) -> None:
+        """Initialize a JDKInstallationError with a message."""
+        super().__init__(message)
+
+
+# Domain-level aliases
+CodeVisualizerError = CodeVisError
+TraceGeneratorError = CodeVisTraceGeneratorError
+RenderError = CodeVisRenderError
+JDKError = JDKInstallationError
+

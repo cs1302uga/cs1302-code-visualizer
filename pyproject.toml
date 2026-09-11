@@ -29,8 +29,8 @@ dependencies = [
 ]
 
 [tool.cs1302-code-visualizer]
-tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v2.6.3/code-tracer.jar"
-tracer-sha256 = "a9718d15e2916f02a7b1cde31ed039af70f22b759619824a340243c3df0c2665"
+tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v2.7.0/code-tracer.jar"
+tracer-sha256 = "eacfc013e1728ed7d4e8a9f1b9b43d910c645704d81756334df60642a27874d3"
 
 [tool.cs1302book.system-dependencies]
 system-dependencies = [
@@ -77,6 +77,11 @@ skip-magic-trailing-comma = false
 extend-select = ["D", "F401", "I", "TID", "Q"]
 future-annotations = true
 preview = true
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+"scripts/*" = ["D"]
+
 
 [tool.ruff.lint.pycodestyle]
 max-line-length = 100
