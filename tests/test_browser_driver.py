@@ -252,7 +252,7 @@ def test_get_default_bundle_url():
 
     with patch("importlib.metadata.version", side_effect=browser_driver.metadata.PackageNotFoundError):
         fallback_url = get_default_bundle_url()
-        assert "v0.7.0" in fallback_url
+        assert "v0.7.1" in fallback_url
 
 
 def test_render_html_basic(sample_trace_json):

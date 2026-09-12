@@ -3940,9 +3940,12 @@ class DataVisualizer {
           if (typeof kvPair[0] == "string") {
             // common case ...
             var attrnameStr = htmlspecialchars(kvPair[0]);
+            let fieldType = Array.isArray(types)
+              ? types[Number(ind) - 2]
+              : undefined;
             let typeHtml =
-              myViz.params.includeTypes && types
-                ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(types[Number(ind) - 2]))}</div>`
+              myViz.params.includeTypes && fieldType
+                ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(fieldType))}</div>`
                 : "";
             keyTd.append(typeHtml);
             keyTd.append('<span class="keyObj">' + attrnameStr + "</span>");

@@ -424,6 +424,72 @@ describe("CodeVisualizer", () => {
       instance.destroy?.();
       expect(container.innerHTML).toBe("");
     });
+
+    it("renders primitive field type for boxed primitives on heap and handles non-array type attributes defensively", () => {
+      const traceObj = {
+        code: "Integer a = 42;\nInteger b = 99;\n",
+        trace: [
+          {
+            event: "step_line",
+            line: 2,
+            func_name: "main:2",
+            stack_to_render: [
+              {
+                func_name: "main:2",
+                frame_id: 0,
+                is_parent: false,
+                is_zombie: false,
+                is_highlighted: true,
+                parent_frame_id_list: [],
+                unique_hash: "main_0",
+                ordered_varnames: ["a", "b"],
+                locals_attrs: {
+                  a: { type: "Integer" },
+                  b: { type: "Integer" },
+                },
+                encoded_locals: {
+                  a: ["REF", 1],
+                  b: ["REF", 2],
+                },
+              },
+            ],
+            globals: {},
+            ordered_globals: [],
+            heap: {
+              "1": ["INSTANCE", "Integer", ["value", 42]],
+              "2": ["INSTANCE", "Integer", ["value", 99]],
+            },
+            heap_attrs: {
+              "1": { type: ["int"] },
+              "2": { type: "Integer" }, // non-array scalar string safeguard
+            },
+            stdout: "",
+            stderr: "",
+          },
+        ],
+      };
+
+      const instance = create({
+        lang: "java",
+        trace: traceObj,
+        element: container,
+      });
+
+      const heapObjects = container.querySelectorAll(".heapObject");
+      expect(heapObjects.length).toBe(2);
+
+      // Object 1: has field type label "int"
+      const obj1FieldLabel = heapObjects[0].querySelector(".fieldTypeLabel");
+      expect(obj1FieldLabel).not.toBeNull();
+      expect(obj1FieldLabel?.textContent).toBe("int");
+
+      // Object 2: scalar string "Integer" must NOT evaluate to "I" via string indexing
+      const obj2FieldLabel = heapObjects[1].querySelector(".fieldTypeLabel");
+      expect(obj2FieldLabel).toBeNull();
+
+      instance.destroy?.();
+      expect(container.innerHTML).toBe("");
+    });
   });
 });
 

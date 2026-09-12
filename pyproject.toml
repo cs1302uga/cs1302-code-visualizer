@@ -1,6 +1,6 @@
 [project]
 name = "cs1302-code-visualizer"
-version = "0.7.0"
+version = "0.7.1"
 description = "Visualize Java program memory state and output a screenshot."
 authors = [
     {name = "Gabe Livengood", email = "timothy.livengood@uga.edu"},
@@ -29,8 +29,8 @@ dependencies = [
 ]
 
 [tool.cs1302-code-visualizer]
-tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v2.7.0/code-tracer.jar"
-tracer-sha256 = "eacfc013e1728ed7d4e8a9f1b9b43d910c645704d81756334df60642a27874d3"
+tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v2.8.1/code-tracer.jar"
+tracer-sha256 = "11fb2ae5ea4198cd665c17d1d714c06e4653fb7b8e9cabfef93fa0765300b5ef"
 
 [tool.cs1302book.system-dependencies]
 system-dependencies = [

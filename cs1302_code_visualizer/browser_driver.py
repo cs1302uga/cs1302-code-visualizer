@@ -275,7 +275,7 @@ def get_default_bundle_url() -> str:
     try:
         ver = metadata.version("cs1302_code_visualizer")
     except metadata.PackageNotFoundError:
-        ver = "0.7.0"
+        ver = "0.7.1"
     return f"https://github.com/cs1302uga/cs1302-code-visualizer/releases/download/v{ver}/vis-module.bundle.js"
 
 

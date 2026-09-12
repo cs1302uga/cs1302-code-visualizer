@@ -90,6 +90,18 @@ CACHE_DIR: Final[Path] = Path(
 JDK_CACHE_DIR: Final[Path] = CACHE_DIR / "jdk"
 
 
+BOXED_PRIMITIVE_TYPES: Final[dict[str, str]] = {
+    "Integer": "int",
+    "Double": "double",
+    "Boolean": "boolean",
+    "Character": "char",
+    "Byte": "byte",
+    "Short": "short",
+    "Long": "long",
+    "Float": "float",
+}
+
+
 def normalize_heap_primitives(trace_obj: dict[str, Any]) -> None:
     """Ensure all heap objects in a trace are formatted as lists for OnlinePythonTutor."""
     raw_trace = trace_obj.get("trace", [])
@@ -122,6 +134,22 @@ def normalize_heap_primitives(trace_obj: dict[str, Any]) -> None:
                 elif isinstance(obj, str):
                     type_name = "String"
                 heap[addr] = ["INSTANCE", type_name, ["value", obj]]
+                if type_name in BOXED_PRIMITIVE_TYPES and isinstance(heap_attrs, dict):
+                    if addr not in heap_attrs or not isinstance(heap_attrs[addr], dict):
+                        heap_attrs[addr] = {}
+                    heap_attrs[addr]["type"] = [BOXED_PRIMITIVE_TYPES[type_name]]
+            elif (
+                isinstance(obj, list)
+                and len(obj) >= 2
+                and obj[0] == "INSTANCE"
+                and isinstance(obj[1], str)
+                and obj[1] in BOXED_PRIMITIVE_TYPES
+                and isinstance(heap_attrs, dict)
+                and addr in heap_attrs
+                and isinstance(heap_attrs[addr], dict)
+                and isinstance(heap_attrs[addr].get("type"), str)
+            ):
+                heap_attrs[addr]["type"] = [BOXED_PRIMITIVE_TYPES[obj[1]]]
 
 
 def generate_trace(

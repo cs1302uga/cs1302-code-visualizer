@@ -536,21 +536,50 @@ def test_normalize_heap_primitives():
                     "104": "text",
                     "105": object(),
                     "106": 99,
+                    "107": ["INSTANCE", "Integer", ["value", 5]],
+                    "108": ["INSTANCE", "Double", ["value", 2.718]],
+                    "109": ["INSTANCE", "Character", ["value", "c"]],
+                    "110": ["INSTANCE", "Byte", ["value", 1]],
+                    "111": ["INSTANCE", "Short", ["value", 2]],
+                    "112": ["INSTANCE", "Long", ["value", 100]],
+                    "113": ["INSTANCE", "Float", ["value", 1.0]],
+                    "114": ["INSTANCE", "CustomClass", ["value", 10]],
                 },
                 "heap_attrs": {
                     "106": {"type": "java.lang.Integer"},
+                    "107": {"type": "Integer"},
+                    "108": {"type": "Double"},
+                    "109": {"type": "Character"},
+                    "110": {"type": "Byte"},
+                    "111": {"type": "Short"},
+                    "112": {"type": "Long"},
+                    "113": {"type": "Float"},
+                    "114": {"type": "CustomClass"},
                 },
             }
         ]
     }
     normalize_heap_primitives(t3)
     heap = t3["trace"][0]["heap"]
+    attrs = t3["trace"][0]["heap_attrs"]
     assert heap["101"] == ["INSTANCE", "Integer", ["value", 42]]
+    assert attrs["101"]["type"] == ["int"]
     assert heap["102"] == ["INSTANCE", "Double", ["value", 3.14]]
+    assert attrs["102"]["type"] == ["double"]
     assert heap["103"] == ["INSTANCE", "Boolean", ["value", True]]
+    assert attrs["103"]["type"] == ["boolean"]
     assert heap["104"] == ["INSTANCE", "String", ["value", "text"]]
     assert heap["105"] == ["INSTANCE", "Object", ["value", heap["105"][2][1]]]
     assert heap["106"] == ["INSTANCE", "Integer", ["value", 99]]
+    assert attrs["106"]["type"] == ["int"]
+    assert attrs["107"]["type"] == ["int"]
+    assert attrs["108"]["type"] == ["double"]
+    assert attrs["109"]["type"] == ["char"]
+    assert attrs["110"]["type"] == ["byte"]
+    assert attrs["111"]["type"] == ["short"]
+    assert attrs["112"]["type"] == ["long"]
+    assert attrs["113"]["type"] == ["float"]
+    assert attrs["114"]["type"] == "CustomClass"
 
 
 def test_ensure_code_tracer_installed_matching_hash(tmp_path, monkeypatch):
