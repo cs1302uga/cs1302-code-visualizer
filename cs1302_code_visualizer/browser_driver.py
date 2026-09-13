@@ -490,18 +490,8 @@ def generate_image(
         driver: webdriver.Chrome = frontend["driver"]
         viz: WebElement = frontend["dataViz"]
 
-        fast_capture = session is not None
-        if fast_capture:
-            viewport = driver.execute_script("return [window.innerWidth, window.innerHeight]")
-            rect = viz.rect
-            # Overflow can change wrapping and connector placement when the viewport
-            # is resized. Preserve the established layout for those diagrams.
-            fast_capture = (
-                rect["x"] + rect["width"] <= viewport[0]
-                and rect["y"] + rect["height"] <= viewport[1]
-            )
-        if not fast_capture:
-            tidy_set_window_size_for_element(driver, viz)
+        # Preserve wrapping and connector rasterization, even for small diagrams.
+        tidy_set_window_size_for_element(driver, viz)
 
         loc = viz.location
         size = viz.size
@@ -515,8 +505,8 @@ def generate_image(
         if visualizer != "json-pre":
             _ = driver.execute_script("window.optFrontend.redrawConnectors()")
 
-        if fast_capture:
-            # Capture the diagram without expensive window resizing.
+        if session is not None:
+            # Capture only the diagram rather than the entire browser surface.
             result = driver.execute_cdp_cmd("Page.captureScreenshot", {
                 "format": "png",
                 "captureBeyondViewport": True,

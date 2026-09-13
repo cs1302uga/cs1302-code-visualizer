@@ -113,8 +113,8 @@ requests are not cached, and damaged cache entries are regenerated.
 The session leases browsers exclusively, keeps at most `max_browsers` alive across
 all DPI settings, and discards a browser after a failed request. Each request loads
 a fresh frontend document. Exiting the context closes browsers, including after an
-exception. Diagrams fitting the viewport use direct capture; larger diagrams retain
-the established resize-and-crop layout. Existing calls without a session continue
+exception. The renderer preserves viewport resizing for consistent wrapping and
+connector pixels, then captures the diagram directly instead of the full browser surface. Existing calls without a session continue
 to own and close a browser per image.
 
 Persistent traces are not removed automatically. Use

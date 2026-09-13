@@ -261,3 +261,30 @@ def test_failed_trace_is_not_cached(tmp_path, tracing):
         assert not list(tmp_path.iterdir())
         session.generate_trace(Path("/jdk"), "source")
     assert tracing.call_count == 2
+
+
+def test_lambda_wrapping_matches_legacy_capture():
+    from io import BytesIO
+
+    from PIL import Image
+
+    from cs1302_code_visualizer import browser_driver
+
+    code = """public class Main {
+ public static void main(String[] args) {
+  int x = 42;
+  String s = "hello";
+  final java.util.function.Function<Integer, Integer> f = (Integer num) -> num + 1;
+ }
+}"""
+    java_home = trace_generator.ensure_jdk_installed()
+    trace_generator.ensure_code_tracer_installed()
+    traces = json.loads(trace_generator.generate_trace(java_home, code, breakpoints={-1}, type_style="simple"))
+    frame = json.dumps(traces["-1"])
+    expected = browser_driver.generate_image(frame)
+    with RenderingSession() as session:
+        actual = browser_driver.generate_image(frame, session=session)
+    a = Image.open(BytesIO(actual)).convert("RGBA")
+    b = Image.open(BytesIO(expected)).convert("RGBA")
+    assert a.size == b.size
+    assert a.tobytes() == b.tobytes()
