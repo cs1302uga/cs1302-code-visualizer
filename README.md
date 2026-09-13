@@ -115,8 +115,9 @@ all DPI settings, and discards a browser after a failed request. Each request lo
 a fresh frontend document. Exiting the context closes browsers, including after an
 exception. A virtual viewport reproduces the existing two-pass window fitting,
 including the browser's measured minimum dimensions and chrome offsets. This
-preserves wrapping and connector pixels while avoiding native resize stalls during
-direct diagram capture. Existing calls without a session continue
+preserves wrapping and connector placement while avoiding native resize stalls
+during direct diagram capture. Chrome can produce tiny antialiasing differences
+along rounded borders compared with native window capture. Existing calls without a session continue
 to own and close a browser per image.
 
 Persistent traces are not removed automatically. Use
