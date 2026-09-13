@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 if TYPE_CHECKING:
     from .session import RenderingSession
 from urllib.parse import urlencode
+from weakref import WeakKeyDictionary
 
 from PIL import Image
 from selenium import webdriver
@@ -184,6 +185,50 @@ class OnlinePythonTutor(TypedDict):
     wait: WebDriverWait[webdriver.Chrome]
 
 
+_minimum_window_sizes: WeakKeyDictionary[webdriver.Chrome, dict[str, int]] = WeakKeyDictionary()
+
+
+def _prepare_session_viewport(driver: webdriver.Chrome) -> None:
+    """Reset emulation and measure this browser's minimum window size once."""
+    driver.execute_cdp_cmd("Emulation.clearDeviceMetricsOverride", {})
+    if driver not in _minimum_window_sizes:
+        initial = driver.get_window_size()
+        driver.set_window_size(1, 1)
+        _minimum_window_sizes[driver] = driver.get_window_size()
+        driver.set_window_size(initial["width"], initial["height"])
+
+
+def _fit_session_viewport(driver: webdriver.Chrome, element: WebElement, dpi: int) -> None:
+    """Reproduce native window fitting using a virtual viewport for fast capture.
+
+    Native resizing can stall Chrome's direct screenshot path. Emulation applies
+    the same two layout passes, browser chrome offsets, and minimum dimensions
+    without changing the native capture surface.
+    """
+    window = driver.get_window_size()
+    client = driver.execute_script(
+        "return [document.documentElement.clientWidth, document.documentElement.clientHeight]"
+    )
+    offset = {"width": window["width"] - client[0], "height": window["height"] - client[1]}
+    minimum = _minimum_window_sizes[driver]
+
+    def resize(width: int, height: int) -> None:
+        driver.execute_cdp_cmd("Emulation.setDeviceMetricsOverride", {
+            "width": max(1, max(minimum["width"], width) - offset["width"]),
+            "height": max(1, max(minimum["height"], height) - offset["height"]),
+            "deviceScaleFactor": dpi,
+            "mobile": False,
+        })
+
+    rect = element.rect
+    resize(int(rect["x"] + rect["width"]), int(rect["y"] + rect["height"]))
+    rect = element.rect
+    resize(
+        int(rect["x"] + rect["width"] + offset["width"]),
+        int(rect["y"] + rect["height"] + offset["height"]),
+    )
+
+
 @contextmanager
 def _browser_scope(dpi: int, session: RenderingSession | None):
     """Lease a session browser or own a standalone browser for this request."""
@@ -213,6 +258,8 @@ def online_python_tutor_frontend(
     prefixes = list(strip_type_prefixes) if strip_type_prefixes is not None else []
     frontend_path = (this_files_dir / "frontend" / "render-trace.html").as_uri()
     with _browser_scope(dpi, session) as driver, NamedTemporaryFile(mode="w", encoding="utf-8") as trace_file:
+        if session is not None:
+            _prepare_session_viewport(driver)
         wait: WebDriverWait[webdriver.Chrome] = WebDriverWait(driver, 10)
         logger.debug(f"webdriver: {pformat(driver.capabilities)}")
 
@@ -490,8 +537,10 @@ def generate_image(
         driver: webdriver.Chrome = frontend["driver"]
         viz: WebElement = frontend["dataViz"]
 
-        # Preserve wrapping and connector rasterization, even for small diagrams.
-        tidy_set_window_size_for_element(driver, viz)
+        if session is None:
+            tidy_set_window_size_for_element(driver, viz)
+        else:
+            _fit_session_viewport(driver, viz, dpi)
 
         loc = viz.location
         size = viz.size
