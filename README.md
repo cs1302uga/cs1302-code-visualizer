@@ -90,3 +90,34 @@ visualization created by the frontend.
 When making a new release, make sure that the version of the tracer program that
 you want to use is specified in the `tool.cs1302-code-visualizer` object of
 `pyproject.toml`.
+
+## Reusing browsers and execution traces
+
+For repeated image requests, own a `RenderingSession` for the duration of a build:
+
+```python
+from pathlib import Path
+from cs1302_code_visualizer import RenderingSession, render_images
+
+with RenderingSession(max_browsers=2, cache_dir=Path(".cache/traces")) as session:
+    images = render_images(java_source, {3, 4, 5}, session=session)
+    larger_images = render_images(java_source, {3, 4, 5}, dpi=2, session=session)
+```
+
+The second request reuses the execution trace. Trace keys include all execution
+arguments, the JDK release identity, and the tracer URL and checksum. Different
+breakpoint selections, accumulated occurrences, and full traces remain distinct.
+Without `cache_dir`, trace reuse lasts only for that session. Failed execution
+requests are not cached, and damaged cache entries are regenerated.
+
+The session leases browsers exclusively, keeps at most `max_browsers` alive across
+all DPI settings, and discards a browser after a failed request. Each request loads
+a fresh frontend document. Exiting the context closes browsers, including after an
+exception. Diagrams fitting the viewport use direct capture; larger diagrams retain
+the established resize-and-crop layout. Existing calls without a session continue
+to own and close a browser per image.
+
+Persistent traces are not removed automatically. Use
+`cs1302_code_visualizer.session.prune_trace_cache(cache_dir)` to remove entries
+unused for 30 days, or delete the cache directory to force retracing. The pruning
+function accepts `max_age_days` and `dry_run` and returns file and byte counts.

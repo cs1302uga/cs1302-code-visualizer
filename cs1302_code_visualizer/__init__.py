@@ -31,6 +31,7 @@ from .errors import (
     TraceGeneratorError,
     TracerDownloadError,
 )
+from .session import RenderingSession
 from .trace_generator import generate_trace
 
 __all__ = [
@@ -42,6 +43,7 @@ __all__ = [
     "JDKError",
     "JDKInstallationError",
     "RenderError",
+    "RenderingSession",
     "TraceGeneratorError",
     "TracerDownloadError",
     "generate_image",
@@ -92,6 +94,7 @@ def render_images(
     render_all_breakpoint_occurrences: bool = False,
     include_enum_static_fields: bool = False,
     type_style: str = "simple",
+    session: RenderingSession | None = None,
 ) -> dict[int, bytes] | dict[int, list[bytes]]:
     """Visualize the state of a Java program at given breakpoints.
 
@@ -116,6 +119,7 @@ def render_images(
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
         render_all_breakpoint_occurrences: If true, render each occurrence of a breakpoint as a separate image.
             This changes the return type of the function.
+        session: Optional build-scoped browser and trace-cache owner.
         type_style: Type qualification style ('fqn' or 'simple').
         include_enum_static_fields: True if enum constants and $VALUES should be included in the
             global static fields list, False otherwise.
@@ -131,9 +135,11 @@ def render_images(
     if not (java_home and trace_generator.jdk_exists(java_home)):
         java_home = trace_generator.ensure_jdk_installed()
 
-    trace_generator.ensure_code_tracer_installed()
+    if session is None:
+        trace_generator.ensure_code_tracer_installed()
 
-    trace = trace_generator.generate_trace(
+    generate = session.generate_trace if session is not None else trace_generator.generate_trace
+    trace = generate(
         java_home,
         java_source,
         timeout_secs,
@@ -159,6 +165,7 @@ def render_images(
                         include_types=include_types,
                         text_memory_labels=text_memory_labels,
                         strip_type_prefixes=strip_type_prefixes,
+                        session=session,
                     )
                 )
         return out_accumulated
@@ -173,6 +180,7 @@ def render_images(
                 include_types=include_types,
                 text_memory_labels=text_memory_labels,
                 strip_type_prefixes=strip_type_prefixes,
+                session=session,
             )
         return out_single
 
