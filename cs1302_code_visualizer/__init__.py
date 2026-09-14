@@ -6,6 +6,7 @@ Normative References:
     PEP 695 – Type Parameter Syntax (https://peps.python.org/pep-0695/)
 """
 
+import argparse
 import fileinput
 import json
 import logging
@@ -95,6 +96,8 @@ def render_images(
     render_all_breakpoint_occurrences: bool = False,
     include_enum_static_fields: bool = False,
     type_style: str = "simple",
+    stdin: str | None = None,
+    stdin_file: Path | str | None = None,
     session: RenderingSession | None = None,
 ) -> dict[int, bytes] | dict[int, list[bytes]]:
     """Visualize the state of a Java program at given breakpoints.
@@ -122,6 +125,8 @@ def render_images(
             This changes the return type of the function.
         session: Optional build-scoped browser and trace-cache owner.
         type_style: Type qualification style ('fqn' or 'simple').
+        stdin: Standard input string provided to the traced Java program.
+        stdin_file: Path to file whose content is provided via standard input.
         include_enum_static_fields: True if enum constants and $VALUES should be included in the
             global static fields list, False otherwise.
 
@@ -150,6 +155,8 @@ def render_images(
         accumulate_breakpoints=render_all_breakpoint_occurrences,
         include_enum_static_fields=include_enum_static_fields,
         type_style=type_style,
+        stdin=stdin,
+        stdin_file=stdin_file,
     )
 
     logger.debug(f"{render_all_breakpoint_occurrences=}")
@@ -202,6 +209,8 @@ def render_image(
     strip_type_prefixes: Sequence[str] | None = None,
     include_enum_static_fields: bool = False,
     type_style: str = "simple",
+    stdin: str | None = None,
+    stdin_file: Path | str | None = None,
 ) -> bytes:
     """Visualize the state of a Java program just before exiting as an image.
 
@@ -248,6 +257,10 @@ def render_image(
 
         type_style: Type qualification style ('fqn' or 'simple').
 
+        stdin: Standard input string provided to the traced Java program.
+
+        stdin_file: Path to file whose content is provided via standard input.
+
     Returns:
         Raw bytes of the visualization image.
 
@@ -292,6 +305,8 @@ def render_image(
             accumulate_breakpoints=breakpoint_index is not None,
             include_enum_static_fields=include_enum_static_fields,
             type_style=type_style,
+            stdin=stdin,
+            stdin_file=stdin_file,
         )
 
         traces: dict[str, Any] = json.loads(execution_trace)
@@ -334,7 +349,27 @@ def render_image(
 
 def main() -> None:
     """Read Java source from standard input and write rendered image to standard output."""
-    with fileinput.input("-") as f:
+    parser = argparse.ArgumentParser(description="Render Java execution state to an image.")
+    _ = parser.add_argument(
+        "--input",
+        "-i",
+        help="Path to Java source file, or `-` for stdin.",
+        default="-",
+    )
+    stdin_group = parser.add_mutually_exclusive_group()
+    _ = stdin_group.add_argument(
+        "--stdin",
+        help="Input string provided to the traced program via standard input.",
+        default=None,
+    )
+    _ = stdin_group.add_argument(
+        "--stdin-file",
+        help="Path to file whose content is provided to the traced program via standard input.",
+        default=None,
+    )
+    args = parser.parse_args()
+
+    with fileinput.input(args.input) as f:
         java_source: str = "".join(f)
     rendered_image: bytes = render_image(
         java_source,
@@ -343,5 +378,7 @@ def main() -> None:
         inline_strings=False,
         include_types=True,
         include_enum_static_fields=False,
+        stdin=args.stdin,
+        stdin_file=args.stdin_file,
     )
     _ = sys.stdout.buffer.write(rendered_image)

@@ -559,6 +559,40 @@ describe("CodeVisualizer", () => {
       instance.destroy?.();
       expect(container.innerHTML).toBe("");
     });
+
+    it("does not render stdin block even when stdin is present in trace", () => {
+      const traceObj = {
+        code: "Scanner s = new Scanner(System.in);",
+        stdin: "Hello World\n",
+        trace: [
+          {
+            event: "step_line",
+            line: 1,
+            func_name: "main:1",
+            stack_to_render: [],
+            globals: {},
+            ordered_globals: [],
+            heap: {},
+            stdout: "",
+            stderr: "",
+          },
+        ],
+      };
+
+      const instance = create({
+        lang: "java",
+        trace: traceObj,
+        element: container,
+      });
+
+      const stdinWrap = container.querySelector("#stdinWrap");
+      const stdinShow = container.querySelector("#stdinShow");
+      expect(stdinWrap).toBeNull();
+      expect(stdinShow).toBeNull();
+
+      instance.destroy?.();
+      expect(container.innerHTML).toBe("");
+    });
   });
 });
 

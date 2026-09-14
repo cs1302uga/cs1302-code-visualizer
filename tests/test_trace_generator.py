@@ -750,3 +750,79 @@ def test_generate_trace_suppresses_java_tool_options_banner(java_home, monkeypat
     assert "Picked up JAVA_TOOL_OPTIONS" not in captured.err
 
 
+SAMPLE_SCANNER_JAVA = """
+public class Driver {
+    public static void main(String[] args) {
+        java.util.Scanner input = new java.util.Scanner(System.in);
+        String greeting = input.next();
+        int num = input.nextInt();
+    }
+}
+"""
+
+
+def test_generate_trace_stdin(java_home):
+    trace_raw = generate_trace(
+        java_home=java_home,
+        java_program=SAMPLE_SCANNER_JAVA,
+        stdin="Hello 1302",
+    )
+    assert isinstance(trace_raw, str)
+    data = json.loads(trace_raw)
+    assert "-1" in data
+    assert data["-1"].get("stdin") == "Hello 1302"
+
+
+def test_generate_trace_stdin_file(java_home, tmp_path):
+    stdin_file = tmp_path / "input.txt"
+    stdin_file.write_text("Hello 1302", encoding="utf-8")
+    trace_raw = generate_trace(
+        java_home=java_home,
+        java_program=SAMPLE_SCANNER_JAVA,
+        stdin_file=stdin_file,
+    )
+    assert isinstance(trace_raw, str)
+    data = json.loads(trace_raw)
+    assert "-1" in data
+    assert data["-1"].get("stdin") == "Hello 1302"
+
+
+def test_generate_trace_stdin_mutual_exclusion(java_home):
+    with pytest.raises(ValueError, match="Cannot specify both stdin and stdin_file"):
+        generate_trace(
+            java_home=java_home,
+            java_program=SAMPLE_SCANNER_JAVA,
+            stdin="inline",
+            stdin_file="file.txt",
+        )
+
+
+def test_trace_generator_main_stdin(monkeypatch):
+    monkeypatch.setattr(sys, "stdin", io.StringIO(SAMPLE_SCANNER_JAVA))
+    captured = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", captured)
+    monkeypatch.setattr("sys.argv", ["generate_trace", "--stdin", "Hello 1302"])
+    generator_main()
+    out = captured.getvalue()
+    assert len(out) > 0
+    data = json.loads(out)
+    assert "-1" in data
+    assert data["-1"].get("stdin") == "Hello 1302"
+
+
+def test_trace_generator_main_stdin_file(tmp_path, monkeypatch):
+    stdin_file = tmp_path / "input.txt"
+    stdin_file.write_text("Hello 1302", encoding="utf-8")
+    monkeypatch.setattr(sys, "stdin", io.StringIO(SAMPLE_SCANNER_JAVA))
+    captured = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", captured)
+    monkeypatch.setattr("sys.argv", ["generate_trace", "--stdin-file", str(stdin_file)])
+    generator_main()
+    out = captured.getvalue()
+    assert len(out) > 0
+    data = json.loads(out)
+    assert "-1" in data
+    assert data["-1"].get("stdin") == "Hello 1302"
+
+
+

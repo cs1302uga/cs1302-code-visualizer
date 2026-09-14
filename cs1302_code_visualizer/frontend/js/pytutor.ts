@@ -1000,29 +1000,8 @@ export class ExecutionVisualizer {
       return [false]; // didn't handle it
     });
 
-    this.add_pytutor_hook("end_updateOutput", function (args) {
-      var myViz = args.myViz;
-      var curEntry = myViz.curTrace[myViz.curInstr];
-      if (myViz.params.stdin && myViz.params.stdin != "") {
-        var stdinPosition = curEntry.stdinPosition || 0;
-        var stdinContent =
-          '<span style="color:lightgray;text-decoration: line-through">' +
-          escapeHtml(myViz.params.stdin.substr(0, stdinPosition)) +
-          "</span>" +
-          escapeHtml(myViz.params.stdin.substr(stdinPosition));
-        myViz.domRoot.find("#stdinShow").html(stdinContent);
-      }
-      return [false];
-    });
-
     this.add_pytutor_hook("end_render", function (args) {
       var myViz = args.myViz;
-
-      if (myViz.params.stdin && myViz.params.stdin != "") {
-        var stdinHTML =
-          '<div id="stdinWrap">stdin:<pre id="stdinShow" style="border:1px solid gray"></pre></div>';
-        myViz.domRoot.find("#dataViz").append(stdinHTML); // TODO: leaky abstraction with #dataViz
-      }
 
       myViz.domRoot
         .find("#" + myViz.generateID("globals_header"))

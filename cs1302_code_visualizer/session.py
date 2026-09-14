@@ -112,6 +112,12 @@ class RenderingSession:
         values["breakpoints"] = sorted(values["breakpoints"])
         values["tracer"] = trace_generator.read_tracer_url_and_sum_from_toml()
         values["schema"] = 1
+        if values.get("stdin_file") is not None:
+            file_path = Path(values["stdin_file"])
+            values["stdin_file_content"] = (
+                file_path.read_text(encoding="utf-8") if file_path.is_file() else None
+            )
+            values["stdin_file"] = str(file_path)
         key = hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
         with self._condition:
             if self._closed:

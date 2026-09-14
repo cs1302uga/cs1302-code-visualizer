@@ -193,6 +193,8 @@ def generate_trace(
     include_enum_static_fields: bool = False,
     auto_detect: bool = False,
     type_style: str | None = "simple",
+    stdin: str | None = None,
+    stdin_file: Path | str | None = None,
     extra_tracer_args: Sequence[str] | None = None,
 ) -> str:
     """Generate an execution trace for a Java source program.
@@ -208,11 +210,16 @@ def generate_trace(
         include_enum_static_fields: Whether to keep enum constants in global static fields.
         auto_detect: Whether to automatically detect and compile dependent source files.
         type_style: Type qualification style ('fqn' or 'simple').
+        stdin: Standard input string provided to the traced Java program.
+        stdin_file: Path to file whose content is provided via standard input.
         extra_tracer_args: Additional CLI arguments to pass to code-tracer.
 
     Returns:
         JSON string representing the execution trace.
     """
+    if stdin is not None and stdin_file is not None:
+        raise ValueError("Cannot specify both stdin and stdin_file")
+
     cli_args: list[str] = ["-v"]
 
     for breakpoint in sorted(breakpoints):
@@ -232,6 +239,12 @@ def generate_trace(
 
     if type_style:
         cli_args.append(f"--type-style={type_style}")
+
+    if stdin is not None:
+        cli_args.extend(["--stdin", stdin])
+
+    if stdin_file is not None:
+        cli_args.extend(["--stdin-file", str(stdin_file)])
 
     if extra_tracer_args:
         cli_args.extend(extra_tracer_args)
@@ -643,6 +656,19 @@ def main() -> None:
         help="Type qualification style: fqn (fully-qualified) or simple (default: simple).",
     )
 
+    stdin_group = parser.add_mutually_exclusive_group()
+    _ = stdin_group.add_argument(
+        "--stdin",
+        help="Input string provided to the traced program via standard input.",
+        default=None,
+    )
+
+    _ = stdin_group.add_argument(
+        "--stdin-file",
+        help="Path to file whose content is provided to the traced program via standard input.",
+        default=None,
+    )
+
     args, extra_tracer_args = parser.parse_known_args()
 
     if args.verbose:
@@ -676,6 +702,8 @@ def main() -> None:
         breakpoints=breakpoints,
         auto_detect=args.auto_detect,
         type_style=args.type_style,
+        stdin=args.stdin,
+        stdin_file=args.stdin_file,
         extra_tracer_args=extra_tracer_args if extra_tracer_args else None,
     )
 

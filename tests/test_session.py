@@ -223,6 +223,7 @@ def test_close_during_active_request_discards_browser_and_wakes_waiter():
     ("timeout_secs", 2), ("remove_main_args_parameter", False),
     ("accumulate_breakpoints", True), ("include_enum_static_fields", True),
     ("auto_detect", True), ("type_style", "fqn"),
+    ("stdin", "hello"), ("stdin_file", "input.txt"),
     ("extra_tracer_args", ["--debug"]),
 ])
 def test_trace_execution_options_invalidate(tmp_path, tracing, option, value):
@@ -230,6 +231,20 @@ def test_trace_execution_options_invalidate(tmp_path, tracing, option, value):
         session.generate_trace(Path("/jdk"), "source")
         session.generate_trace(Path("/jdk"), "source", **{option: value})
     assert tracing.call_count == 2
+
+
+def test_trace_stdin_file_content_change_invalidates(tmp_path, tracing):
+    stdin_file = tmp_path / "guest_input.txt"
+    stdin_file.write_text("initial input", encoding="utf-8")
+    with RenderingSession(cache_dir=tmp_path) as session:
+        session.generate_trace(Path("/jdk"), "source", stdin_file=stdin_file)
+        session.generate_trace(Path("/jdk"), "source", stdin_file=stdin_file)
+        assert tracing.call_count == 1
+
+        # Modify file content
+        stdin_file.write_text("changed input", encoding="utf-8")
+        session.generate_trace(Path("/jdk"), "source", stdin_file=stdin_file)
+        assert tracing.call_count == 2
 
 
 def test_trace_jdk_identity_and_payload_corruption(tmp_path, tracing):

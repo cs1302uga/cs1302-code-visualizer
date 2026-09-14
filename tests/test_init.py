@@ -118,3 +118,85 @@ def test_render_image_tuple_breakpoint_non_list_trace():
         img = render_image(SAMPLE_JAVA, breakpoint_line=(4, 1))
         assert img == b"PNGDATA"
 
+
+def test_render_image_stdin():
+    with patch(
+        "cs1302_code_visualizer.trace_generator.generate_trace",
+        return_value=json.dumps({"4": {"trace": []}}),
+    ) as mock_gen, patch(
+        "cs1302_code_visualizer.browser_driver.generate_image", return_value=b"PNGDATA"
+    ):
+        res = render_image(SAMPLE_JAVA, stdin="Hello stdin")
+        assert res == b"PNGDATA"
+        assert mock_gen.call_args.kwargs["stdin"] == "Hello stdin"
+
+
+def test_render_image_stdin_file(tmp_path):
+    f = tmp_path / "in.txt"
+    f.write_text("Hello file", encoding="utf-8")
+    with patch(
+        "cs1302_code_visualizer.trace_generator.generate_trace",
+        return_value=json.dumps({"4": {"trace": []}}),
+    ) as mock_gen, patch(
+        "cs1302_code_visualizer.browser_driver.generate_image", return_value=b"PNGDATA"
+    ):
+        res = render_image(SAMPLE_JAVA, stdin_file=f)
+        assert res == b"PNGDATA"
+        assert mock_gen.call_args.kwargs["stdin_file"] == f
+
+
+def test_render_images_stdin():
+    with patch(
+        "cs1302_code_visualizer.trace_generator.generate_trace",
+        return_value=json.dumps({"4": {"trace": []}}),
+    ) as mock_gen, patch(
+        "cs1302_code_visualizer.browser_driver.generate_image", return_value=b"PNGDATA"
+    ):
+        res = render_images(SAMPLE_JAVA, breakpoints={4}, stdin="Hello stdin")
+        assert 4 in res
+        assert mock_gen.call_args.kwargs["stdin"] == "Hello stdin"
+
+
+def test_render_images_stdin_file(tmp_path):
+    f = tmp_path / "in.txt"
+    f.write_text("Hello file", encoding="utf-8")
+    with patch(
+        "cs1302_code_visualizer.trace_generator.generate_trace",
+        return_value=json.dumps({"4": {"trace": []}}),
+    ) as mock_gen, patch(
+        "cs1302_code_visualizer.browser_driver.generate_image", return_value=b"PNGDATA"
+    ):
+        res = render_images(SAMPLE_JAVA, breakpoints={4}, stdin_file=f)
+        assert 4 in res
+        assert mock_gen.call_args.kwargs["stdin_file"] == f
+
+
+def test_init_main_with_stdin(monkeypatch):
+    monkeypatch.setattr(sys, "stdin", io.StringIO(SAMPLE_JAVA))
+    monkeypatch.setattr("sys.argv", ["main", "--stdin", "Hello stdin"])
+    with patch(
+        "cs1302_code_visualizer.render_image", return_value=b"\x89PNG\r\n\x1a\n"
+    ) as mock_render:
+        output_buffer = io.BytesIO()
+        monkeypatch.setattr(sys, "stdout", MockStdout(output_buffer))
+        main()
+        assert mock_render.call_args.kwargs["stdin"] == "Hello stdin"
+        assert output_buffer.getvalue() == b"\x89PNG\r\n\x1a\n"
+
+
+def test_init_main_with_stdin_file(tmp_path, monkeypatch):
+    f = tmp_path / "input.java"
+    f.write_text(SAMPLE_JAVA, encoding="utf-8")
+    in_file = tmp_path / "stdin.txt"
+    in_file.write_text("Hello file", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["main", "-i", str(f), "--stdin-file", str(in_file)])
+    with patch(
+        "cs1302_code_visualizer.render_image", return_value=b"\x89PNG\r\n\x1a\n"
+    ) as mock_render:
+        output_buffer = io.BytesIO()
+        monkeypatch.setattr(sys, "stdout", MockStdout(output_buffer))
+        main()
+        assert mock_render.call_args.kwargs["stdin_file"] == str(in_file)
+        assert output_buffer.getvalue() == b"\x89PNG\r\n\x1a\n"
+
+
