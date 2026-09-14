@@ -29,7 +29,7 @@ if [ "$#" -eq 0 ]; then
     ARGS=("--open" "--rm-json" "--rm-image")
 fi
 
-for i in {0..30}; do
+for i in {0..31}; do
     dir="example${i}"
     if [ -d "${dir}" ] && [ -f "${dir}/test.sh" ]; then
         echo "========================================"

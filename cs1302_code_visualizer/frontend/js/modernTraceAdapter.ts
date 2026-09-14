@@ -39,7 +39,7 @@ export interface ModernField {
 export interface ModernHeapObject {
   id: number | string;
   type?: string;
-  kind?: "object" | "array" | "string" | "primitive" | string;
+  kind?: "object" | "array" | "string" | "primitive" | "color" | string;
   fields?: ModernField[];
   elements?: unknown[];
   value?: unknown;
@@ -254,6 +254,13 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): Record<string
             "INSTANCE",
             objType,
             ["value", encodeValue(heapObj.value)],
+          ];
+          optStep["heap_attrs"][idStr] = { type: objType };
+        } else if (kind === "color") {
+          optStep["heap"][idStr] = [
+            "COLOR",
+            objType,
+            typeof heapObj.value === "string" ? heapObj.value : "",
           ];
           optStep["heap_attrs"][idStr] = { type: objType };
         } else if (Array.isArray(heapObj as unknown)) {
