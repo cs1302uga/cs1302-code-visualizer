@@ -242,6 +242,75 @@ describe("CodeVisualizer", () => {
       expect(container.innerHTML).toBe("");
     });
 
+    it("renders a color swatch preview and hex label for COLOR heap objects", () => {
+      const traceObj = {
+        code: "Color c = Color.RED;",
+        trace: [
+          {
+            line: 1,
+            event: "step_line",
+            func_name: "main",
+            stack_to_render: [
+              {
+                func_name: "main",
+                frame_id: 1,
+                unique_hash: "main_1",
+                is_parent: false,
+                is_zombie: false,
+                parent_frame_id_list: [],
+                ordered_varnames: ["c1", "c2"],
+                encoded_locals: { c1: ["REF", 1], c2: ["REF", 2] },
+              },
+            ],
+            globals: {},
+            ordered_globals: [],
+            heap: {
+              "1": ["COLOR", "java.awt.Color", "#FF0000"],
+              "2": ["COLOR", "Color", "#00FF0080"],
+            },
+            stdout: "",
+            stderr: "",
+          },
+        ],
+      };
+
+      const instance = create({
+        lang: "java",
+        trace: traceObj,
+        element: container,
+        options: {
+          stripTypePrefixes: ["java.awt."],
+        },
+      });
+
+      const heapObjects = container.querySelectorAll(".heapObject");
+      expect(heapObjects.length).toBe(2);
+
+      // Object 1: java.awt.Color (#FF0000)
+      const obj1 = heapObjects[0];
+      expect(obj1.querySelector(".typeLabel")?.textContent).toBe("Color");
+      const colorTbl1 = obj1.querySelector("table.colorObjTbl");
+      expect(colorTbl1).not.toBeNull();
+      const swatch1 = obj1.querySelector(".colorSwatch") as HTMLElement;
+      expect(swatch1).not.toBeNull();
+      expect(swatch1.style.backgroundColor).toBe("rgb(255, 0, 0)");
+      const hexLabel1 = obj1.querySelector(".colorHexLabel");
+      expect(hexLabel1?.textContent).toBe("#FF0000");
+
+      // Object 2: Color with alpha (#00FF0080)
+      const obj2 = heapObjects[1];
+      expect(obj2.querySelector(".typeLabel")?.textContent).toBe("Color");
+      const colorTbl2 = obj2.querySelector("table.colorObjTbl");
+      expect(colorTbl2).not.toBeNull();
+      const swatch2 = obj2.querySelector(".colorSwatch") as HTMLElement;
+      expect(swatch2).not.toBeNull();
+      const hexLabel2 = obj2.querySelector(".colorHexLabel");
+      expect(hexLabel2?.textContent).toBe("#00FF0080");
+
+      instance.destroy?.();
+      expect(container.innerHTML).toBe("");
+    });
+
     it("attaches ARIA attributes and handles keyboard arrow navigation", () => {
       const traceObj = {
         code: "int x = 1;",

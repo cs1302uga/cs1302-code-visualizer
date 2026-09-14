@@ -213,7 +213,7 @@ export class ExecutionVisualizer {
       return true;
     } else if (
       obj.length >= 2 &&
-      (obj[0] == "INSTANCE" || obj[0] == "INSTANCE_PPRINT") &&
+      (obj[0] == "INSTANCE" || obj[0] == "INSTANCE_PPRINT" || obj[0] == "COLOR") &&
       this.params.alwaysNestTypes.indexOf(obj[1]) >= 0
     ) {
       // otherwise is this an INSTANCE with the type name (obj[1]) in alwaysNestTypes?
@@ -2245,7 +2245,7 @@ class DataVisualizer {
     }
 
     // for a list or tuple, same size (e.g., a cons cell is a list/tuple of size 2)
-    if (obj1[0] == "LIST" || obj1[0] == "TUPLE") {
+    if (obj1[0] == "LIST" || obj1[0] == "TUPLE" || obj1[0] == "COLOR") {
       return true;
     } else {
       var startingInd = -1;
@@ -4127,6 +4127,35 @@ class DataVisualizer {
         primitiveVal,
         stepNum,
         d3DomElement.find("div.heapPrimitive"),
+      );
+    } else if (obj[0] == "COLOR") {
+      assert(obj.length >= 2);
+      let className = obj.length >= 3 ? obj[1] : "Color";
+      let hexColor = obj.length >= 3 ? obj[2] : obj[1];
+      let displayClass = htmlsanitize(myViz.trimTypePrefix(className));
+      let realLabel = myViz.getRealLabel("instance");
+      let typeLabelSuffix = realLabel ? " " + realLabel : "";
+
+      d3DomElement.append(
+        '<div class="typeLabel">' +
+          typeLabelPrefix +
+          displayClass +
+          typeLabelSuffix +
+          "</div>",
+      );
+
+      let sanitizedHex = htmlspecialchars(hexColor);
+      d3DomElement.append(
+        '<table class="colorObjTbl"><tr><td class="colorObjElt">' +
+          '<span class="colorSwatchContainer">' +
+          '<span class="colorSwatch" style="background-color: ' +
+          sanitizedHex +
+          ';"></span>' +
+          "</span>" +
+          '<span class="colorHexLabel">' +
+          sanitizedHex +
+          "</span>" +
+          "</td></tr></table>",
       );
     } else if (
       obj[0] == "C_STRUCT" ||

@@ -8,7 +8,10 @@ Normative References:
     PEP 484 – Type Hints (https://peps.python.org/pep-0484/)
 """
 
+from __future__ import annotations
+
 import argparse
+import base64
 import fileinput
 import json
 import logging
@@ -24,8 +27,12 @@ from pathlib import Path
 from pprint import pformat
 from tempfile import NamedTemporaryFile
 from textwrap import dedent, indent
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
+
+if TYPE_CHECKING:
+    from .session import RenderingSession
 from urllib.parse import urlencode
+from weakref import WeakKeyDictionary
 
 from PIL import Image
 from selenium import webdriver
@@ -178,6 +185,64 @@ class OnlinePythonTutor(TypedDict):
     wait: WebDriverWait[webdriver.Chrome]
 
 
+_minimum_window_sizes: WeakKeyDictionary[webdriver.Chrome, dict[str, int]] = WeakKeyDictionary()
+
+
+def _prepare_session_viewport(driver: webdriver.Chrome) -> None:
+    """Reset emulation and measure this browser's minimum window size once."""
+    driver.execute_cdp_cmd("Emulation.clearDeviceMetricsOverride", {})
+    if driver not in _minimum_window_sizes:
+        initial = driver.get_window_size()
+        driver.set_window_size(1, 1)
+        _minimum_window_sizes[driver] = driver.get_window_size()
+        driver.set_window_size(initial["width"], initial["height"])
+
+
+def _fit_session_viewport(driver: webdriver.Chrome, element: WebElement, dpi: int) -> None:
+    """Reproduce native window fitting using a virtual viewport for fast capture.
+
+    Native resizing can stall Chrome's direct screenshot path. Emulation applies
+    the same two layout passes, browser chrome offsets, and minimum dimensions
+    without changing the native capture surface.
+    """
+    window = driver.get_window_size()
+    client = driver.execute_script(
+        "return [document.documentElement.clientWidth, document.documentElement.clientHeight]"
+    )
+    offset = {"width": window["width"] - client[0], "height": window["height"] - client[1]}
+    minimum = _minimum_window_sizes[driver]
+
+    def resize(width: int, height: int) -> None:
+        driver.execute_cdp_cmd("Emulation.setDeviceMetricsOverride", {
+            "width": max(1, max(minimum["width"], width) - offset["width"]),
+            "height": max(1, max(minimum["height"], height) - offset["height"]),
+            "deviceScaleFactor": dpi,
+            "mobile": False,
+        })
+
+    rect = element.rect
+    resize(int(rect["x"] + rect["width"]), int(rect["y"] + rect["height"]))
+    rect = element.rect
+    resize(
+        int(rect["x"] + rect["width"] + offset["width"]),
+        int(rect["y"] + rect["height"] + offset["height"]),
+    )
+
+
+@contextmanager
+def _browser_scope(dpi: int, session: RenderingSession | None):
+    """Lease a session browser or own a standalone browser for this request."""
+    if session is not None:
+        with session.browser(dpi, get_webdriver) as driver:
+            yield driver
+    else:
+        driver = get_webdriver(dpi=dpi)
+        try:
+            yield driver
+        finally:
+            driver.quit()
+
+
 @contextmanager
 def online_python_tutor_frontend(
     trace: str,
@@ -187,52 +252,51 @@ def online_python_tutor_frontend(
     text_memory_labels: bool = True,
     strip_type_prefixes: Sequence[str] | None = None,
     visualizer: str = "pytutor",
+    session: RenderingSession | None = None,
 ):
     """Context manager for interacting with the OnlinePythonTutor frontend in Chrome."""
     prefixes = list(strip_type_prefixes) if strip_type_prefixes is not None else []
     frontend_path = (this_files_dir / "frontend" / "render-trace.html").as_uri()
-    driver = get_webdriver(dpi=dpi)
-    try:
-        with NamedTemporaryFile(mode="w", encoding="utf-8") as trace_file:
-            wait: WebDriverWait[webdriver.Chrome] = WebDriverWait(driver, 10)
-            logger.debug(f"webdriver: {pformat(driver.capabilities)}")
+    with _browser_scope(dpi, session) as driver, NamedTemporaryFile(mode="w", encoding="utf-8") as trace_file:
+        if session is not None:
+            _prepare_session_viewport(driver)
+        wait: WebDriverWait[webdriver.Chrome] = WebDriverWait(driver, 10)
+        logger.debug(f"webdriver: {pformat(driver.capabilities)}")
 
-            trace_file.write(trace)
-            trace_file.flush()
+        trace_file.write(trace)
+        trace_file.flush()
 
-            frontend_query: dict[str, str] = {
-                "tracePath": trace_file.name,
-                "includeTypes": str(include_types).lower(),
-                "textMemoryLabels": str(text_memory_labels).lower(),
-                "stripTypePrefixes": json.dumps(prefixes),
-                "visualizer": visualizer,
-            }
+        frontend_query: dict[str, str] = {
+            "tracePath": trace_file.name,
+            "includeTypes": str(include_types).lower(),
+            "textMemoryLabels": str(text_memory_labels).lower(),
+            "stripTypePrefixes": json.dumps(prefixes),
+            "visualizer": visualizer,
+        }
 
-            frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
+        frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
 
-            driver.get(frontend_uri)
+        driver.get(frontend_uri)
 
-            _ = driver.find_element(By.ID, "screenshotReadyIndicator")
-            vizDiv = driver.find_element(By.ID, "visualizerDiv")
-            if visualizer == "json-pre":
-                try:
-                    dataViz = vizDiv.find_element(By.CSS_SELECTOR, "pre")
-                except NoSuchElementException:
-                    dataViz = vizDiv
-            else:
-                dataViz = driver.find_element(By.ID, "dataViz")
+        _ = driver.find_element(By.ID, "screenshotReadyIndicator")
+        vizDiv = driver.find_element(By.ID, "visualizerDiv")
+        if visualizer == "json-pre":
+            try:
+                dataViz = vizDiv.find_element(By.CSS_SELECTOR, "pre")
+            except NoSuchElementException:
+                dataViz = vizDiv
+        else:
+            dataViz = driver.find_element(By.ID, "dataViz")
 
-            frontend: OnlinePythonTutor = {
-                "driver": driver,
-                "vizDiv": vizDiv,
-                "dataViz": dataViz,
-                "traceFile": trace_file,
-                "wait": wait,
-            }
+        frontend: OnlinePythonTutor = {
+            "driver": driver,
+            "vizDiv": vizDiv,
+            "dataViz": dataViz,
+            "traceFile": trace_file,
+            "wait": wait,
+        }
 
-            yield frontend
-    finally:
-        driver.quit()
+        yield frontend
 
 
 def generate_html(trace: str, *, dpi: int = 1, include_style: bool = False) -> str:
@@ -437,6 +501,7 @@ def generate_image(
     strip_type_prefixes: Sequence[str] | None = None,
     breakpoint: int | tuple[int, int] | None = -1,
     visualizer: str = "pytutor",
+    session: RenderingSession | None = None,
 ) -> bytes:
     """Generate an image of the final state of an execution trace file.
 
@@ -450,6 +515,7 @@ def generate_image(
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
         breakpoint: Breakpoint line to visualize.
+        session: Optional build-scoped browser owner.
         visualizer: The visualizer implementation to use ('pytutor' or 'json-pre').
 
     Return:
@@ -466,11 +532,15 @@ def generate_image(
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
         visualizer=visualizer,
+        **({"session": session} if session is not None else {}),
     ) as frontend:
         driver: webdriver.Chrome = frontend["driver"]
         viz: WebElement = frontend["dataViz"]
 
-        tidy_set_window_size_for_element(driver, viz)
+        if session is None:
+            tidy_set_window_size_for_element(driver, viz)
+        else:
+            _fit_session_viewport(driver, viz, dpi)
 
         loc = viz.location
         size = viz.size
@@ -483,6 +553,21 @@ def generate_image(
 
         if visualizer != "json-pre":
             _ = driver.execute_script("window.optFrontend.redrawConnectors()")
+
+        if session is not None:
+            # Capture only the diagram rather than the entire browser surface.
+            result = driver.execute_cdp_cmd("Page.captureScreenshot", {
+                "format": "png",
+                "captureBeyondViewport": True,
+                "clip": {
+                    "x": left, "y": top,
+                    "width": right - left, "height": bottom - top, "scale": 1,
+                },
+            })
+            captured = Image.open(BytesIO(base64.b64decode(result["data"])))
+            output = BytesIO()
+            captured.save(output, format=format)
+            return output.getvalue()
 
         screenshot = driver.get_screenshot_as_png()
 
