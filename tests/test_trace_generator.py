@@ -19,6 +19,7 @@ from cs1302_code_visualizer.trace_generator import (
     generate_trace,
     get_enum_globals,
     get_enum_types,
+    get_sanitized_java_env,
     jdk_exists,
     normalize_heap_primitives,
     read_tracer_url_and_sum_from_toml,
@@ -700,5 +701,52 @@ def test_trace_generator_main_breakpoints(java_home, monkeypatch):
     with patch("cs1302_code_visualizer.trace_generator.generate_trace", return_value='{"trace": []}') as mock_gt:
         generator_main()
         assert mock_gt.call_args[1]["breakpoints"] == {29, 30, 35}
+
+
+def test_get_sanitized_java_env(monkeypatch):
+    custom_env = {
+        "PATH": "/usr/bin",
+        "JAVA_TOOL_OPTIONS": "-Djava.awt.headless=true",
+        "_JAVA_OPTIONS": '-Djava.awt.headless="true" -Xmx512m',
+    }
+    sanitized = get_sanitized_java_env(custom_env)
+    assert "JAVA_TOOL_OPTIONS" not in sanitized
+    assert sanitized["_JAVA_OPTIONS"] == "-Xmx512m"
+    assert sanitized["PATH"] == "/usr/bin"
+
+    custom_env2 = {
+        "JAVA_TOOL_OPTIONS": "-Xms128m -Djava.awt.headless='false'",
+    }
+    sanitized2 = get_sanitized_java_env(custom_env2)
+    assert sanitized2["JAVA_TOOL_OPTIONS"] == "-Xms128m"
+
+    monkeypatch.setenv("JAVA_TOOL_OPTIONS", "-Djava.awt.headless=true")
+    sanitized_os = get_sanitized_java_env()
+    assert "JAVA_TOOL_OPTIONS" not in sanitized_os
+
+
+def test_generate_trace_passes_headless_and_sanitized_env(java_home):
+    mock_run = MagicMock()
+    mock_run.return_value.stdout = '{"trace": []}'
+    with patch("subprocess.run", mock_run):
+        _ = generate_trace(java_home, SAMPLE_ENUM_JAVA)
+        cmd = mock_run.call_args[0][0]
+        assert "-Djava.awt.headless=true" in cmd
+        assert "env" in mock_run.call_args[1]
+        assert "JAVA_TOOL_OPTIONS" not in mock_run.call_args[1]["env"]
+
+
+def test_generate_trace_suppresses_java_tool_options_banner(java_home, monkeypatch, capsys):
+    monkeypatch.setenv("JAVA_TOOL_OPTIONS", "-Djava.awt.headless=true")
+    trace_str = generate_trace(java_home, SAMPLE_ENUM_JAVA)
+    trace_data = json.loads(trace_str)
+    assert "-1" in trace_data
+    steps = trace_data["-1"]["trace"]
+    assert len(steps) > 0
+    for step in steps:
+        assert "Picked up JAVA_TOOL_OPTIONS" not in step.get("stderr", "")
+    captured = capsys.readouterr()
+    assert "Picked up JAVA_TOOL_OPTIONS" not in captured.out
+    assert "Picked up JAVA_TOOL_OPTIONS" not in captured.err
 
 

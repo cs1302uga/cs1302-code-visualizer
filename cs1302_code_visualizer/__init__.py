@@ -32,7 +32,7 @@ from .errors import (
     TracerDownloadError,
 )
 from .session import RenderingSession
-from .trace_generator import generate_trace
+from .trace_generator import generate_trace, get_sanitized_java_env
 
 __all__ = [
     "BreakpointResolutionError",
@@ -48,6 +48,7 @@ __all__ = [
     "TracerDownloadError",
     "generate_image",
     "generate_trace",
+    "get_sanitized_java_env",
     "list_breakpoints",
     "list_breakpoints_json",
     "main",

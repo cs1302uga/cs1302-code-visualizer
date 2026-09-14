@@ -73,11 +73,11 @@ IMAGE_FILE="${INPUT_FILE}.png"
 
 TRACER_INFO=$(uv run python -c "
 import subprocess, re
-from cs1302_code_visualizer.trace_generator import ensure_jdk_installed, ensure_code_tracer_installed, CACHE_DIR, read_tracer_url_and_sum_from_toml
+from cs1302_code_visualizer.trace_generator import ensure_jdk_installed, ensure_code_tracer_installed, CACHE_DIR, read_tracer_url_and_sum_from_toml, get_sanitized_java_env
 ensure_code_tracer_installed()
 java_home = ensure_jdk_installed()
 jar = CACHE_DIR / 'code-tracer.jar'
-bin_ver = subprocess.check_output([str(java_home / 'bin' / 'java'), '-jar', str(jar), '--version'], text=True).strip()
+bin_ver = subprocess.check_output([str(java_home / 'bin' / 'java'), '-Djava.awt.headless=true', '-jar', str(jar), '--version'], text=True, stderr=subprocess.DEVNULL, env=get_sanitized_java_env()).strip()
 toml_info = read_tracer_url_and_sum_from_toml()
 conf_ver = 'unknown'
 if toml_info:

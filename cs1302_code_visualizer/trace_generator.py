@@ -27,7 +27,7 @@ import tempfile
 import threading
 import tomllib
 import zipfile
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from os import PathLike
 from pathlib import Path
 from subprocess import CalledProcessError
@@ -100,6 +100,36 @@ BOXED_PRIMITIVE_TYPES: Final[dict[str, str]] = {
     "Long": "long",
     "Float": "float",
 }
+
+
+def get_sanitized_java_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Return an environment dictionary sanitized of JVM options that emit startup banners.
+
+    If ``JAVA_TOOL_OPTIONS`` or ``_JAVA_OPTIONS`` contains ``-Djava.awt.headless=true``,
+    that property is stripped since it is supplied explicitly on the JVM command line.
+    If the variable becomes empty, it is removed entirely to prevent the JVM from emitting
+    ``Picked up JAVA_TOOL_OPTIONS`` to standard error.
+
+    Args:
+        env: Base environment mapping to sanitize, or None to use ``os.environ``.
+
+    Returns:
+        A sanitized dictionary copy of the environment.
+    """
+    clean_env: dict[str, str] = dict(os.environ if env is None else env)
+    for var in ("JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS"):
+        if var in clean_env:
+            val = clean_env[var]
+            cleaned_val = re.sub(
+                r'(?:^|\s+)-Djava\.awt\.headless=["\']?(?:true|false)["\']?(?:\s+|$)',
+                " ",
+                val,
+            ).strip()
+            if cleaned_val:
+                clean_env[var] = cleaned_val
+            else:
+                del clean_env[var]
+    return clean_env
 
 
 def normalize_heap_primitives(trace_obj: dict[str, Any]) -> None:
@@ -211,6 +241,7 @@ def generate_trace(
     try:
         trace_command: list[str] = [
             str(java_home / "bin" / "java"),
+            "-Djava.awt.headless=true",
             "--enable-native-access=ALL-UNNAMED",
             "-jar",
             str(CACHE_DIR / "code-tracer.jar"),
@@ -224,6 +255,7 @@ def generate_trace(
             text=True,
             capture_output=True,
             check=True,
+            env=get_sanitized_java_env(),
         )
 
         trace = process.stdout
@@ -366,11 +398,13 @@ def ensure_jdk_installed(install_dir: str | PathLike[str] = JDK_CACHE_DIR) -> Pa
         java_props: str = subprocess.check_output(
             [
                 java_exe,
+                "-Djava.awt.headless=true",
                 "-XshowSettings:properties",
                 "-version",
             ],
             text=True,
             stderr=subprocess.STDOUT,
+            env=get_sanitized_java_env(),
         )
 
         for line in java_props.splitlines():

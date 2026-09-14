@@ -13,7 +13,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from cs1302_code_visualizer.trace_generator import CACHE_DIR, ensure_jdk_installed
+from cs1302_code_visualizer.trace_generator import (
+    CACHE_DIR,
+    ensure_jdk_installed,
+    get_sanitized_java_env,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -106,10 +110,17 @@ def get_binary_version(jar_bytes: bytes) -> str:
             tmp_path = Path(tmp.name)
 
         proc = subprocess.run(
-            [str(java_home / "bin" / "java"), "-jar", str(tmp_path), "--version"],
+            [
+                str(java_home / "bin" / "java"),
+                "-Djava.awt.headless=true",
+                "-jar",
+                str(tmp_path),
+                "--version",
+            ],
             capture_output=True,
             text=True,
             check=False,
+            env=get_sanitized_java_env(),
         )
         tmp_path.unlink(missing_ok=True)
         if proc.returncode == 0 and proc.stdout.strip():

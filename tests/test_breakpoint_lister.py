@@ -1,5 +1,6 @@
 import io
 import runpy
+import subprocess
 import sys
 from unittest.mock import patch
 
@@ -47,11 +48,27 @@ def test_list_breakpoints_json_format():
 
 def test_list_breakpoints_command_arguments():
     java_home = ensure_jdk_installed()
-    with patch("subprocess.check_output", return_value="breakpoints output") as mock_check_output:
+    mock_res = subprocess.CompletedProcess(
+        args=["java"], returncode=0, stdout="breakpoints output", stderr=""
+    )
+    with patch("subprocess.run", return_value=mock_res) as mock_run:
         res = list_breakpoints(SAMPLE_JAVA, java_home=java_home)
         assert res == "breakpoints output"
-        cmd = mock_check_output.call_args[0][0]
+        cmd = mock_run.call_args[0][0]
+        assert "-Djava.awt.headless=true" in cmd
         assert "--enable-native-access=ALL-UNNAMED" in cmd
+        assert mock_run.call_args[1]["capture_output"] is True
+        assert "JAVA_TOOL_OPTIONS" not in mock_run.call_args[1]["env"]
+
+
+def test_list_breakpoints_suppresses_java_tool_options_banner(monkeypatch, capsys):
+    monkeypatch.setenv("JAVA_TOOL_OPTIONS", "-Djava.awt.headless=true")
+    java_home = ensure_jdk_installed()
+    res = list_breakpoints_json(SAMPLE_JAVA, java_home=java_home)
+    assert isinstance(res, list)
+    captured = capsys.readouterr()
+    assert "Picked up JAVA_TOOL_OPTIONS" not in captured.out
+    assert "Picked up JAVA_TOOL_OPTIONS" not in captured.err
 
 
 def test_lister_main_stdout(monkeypatch):
