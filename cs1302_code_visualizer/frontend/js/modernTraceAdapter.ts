@@ -66,6 +66,8 @@ export interface ModernStep {
   heap?: Record<string, ModernHeapObject>;
   stdout?: string;
   stderr?: string;
+  stdinConsumed?: string;
+  stdinOffset?: number;
 }
 
 /**
@@ -157,6 +159,8 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): Record<string
       func_name: step.method || "main",
       stdout: step.stdout ?? "",
       stderr: step.stderr ?? "",
+      stdinConsumed: step.stdinConsumed ?? "",
+      stdinOffset: step.stdinOffset ?? 0,
       file: null,
       stack_to_render: [],
       globals: {},

@@ -826,6 +826,33 @@ export class ExecutionVisualizer {
     return false;
   }
 
+  // Computes chronologically interleaved terminal output (stdin echo + stdout) up to curInstr
+  computeInterleavedTerminal(curInstr: number): string {
+    if (!this.curTrace || this.curTrace.length === 0) {
+      return "";
+    }
+    let terminalText = "";
+    let prevStdout = "";
+    let prevStdin = "";
+    for (let i = 0; i <= curInstr && i < this.curTrace.length; i++) {
+      const step = this.curTrace[i];
+      const curStdin = typeof step.stdinConsumed === "string" ? step.stdinConsumed : "";
+      const curStdout = typeof step.stdout === "string" ? step.stdout : "";
+
+      const deltaStdin = curStdin.startsWith(prevStdin)
+        ? curStdin.substring(prevStdin.length)
+        : curStdin;
+      const deltaStdout = curStdout.startsWith(prevStdout)
+        ? curStdout.substring(prevStdout.length)
+        : curStdout;
+
+      terminalText += deltaStdin + deltaStdout;
+      prevStdin = curStdin;
+      prevStdout = curStdout;
+    }
+    return terminalText;
+  }
+
   // This function is called every time the display needs to be updated
   updateOutput(smoothTransition = false) {
     if (this.params.hideCode) {
@@ -833,7 +860,8 @@ export class ExecutionVisualizer {
     } else {
       this.updateOutputFull(smoothTransition);
     }
-    this.outputBox.renderOutput(this.curTrace[this.curInstr].stdout);
+    const terminalOutput = this.computeInterleavedTerminal(this.curInstr);
+    this.outputBox.renderOutput(terminalOutput);
     this.try_hook("end_updateOutput", { myViz: this });
   }
 
@@ -4406,18 +4434,22 @@ class ProgramOutputBox {
 
     this.domRoot.append(outputsHTML);
 
-    // go backwards from the end ... sometimes the final entry doesn't
-    // have an stdout
-    var lastStdout;
-    for (var i = this.owner.curTrace.length - 1; i >= 0; i--) {
-      lastStdout = this.owner.curTrace[i].stdout;
-      if (lastStdout) {
-        break;
+    // Compute the max terminal lines based on the final step's interleaved output
+    var lastTerminal = "";
+    if (this.owner && typeof (this.owner as any).computeInterleavedTerminal === "function") {
+      lastTerminal = (this.owner as any).computeInterleavedTerminal(this.owner.curTrace.length - 1);
+    }
+    if (!lastTerminal) {
+      for (var i = this.owner.curTrace.length - 1; i >= 0; i--) {
+        lastTerminal = this.owner.curTrace[i].stdout;
+        if (lastTerminal) {
+          break;
+        }
       }
     }
 
-    if (lastStdout) {
-      this.numStdoutLines = lastStdout.rtrim().split("\n").length;
+    if (lastTerminal) {
+      this.numStdoutLines = (lastTerminal as any).rtrim().split("\n").length;
     }
 
     var stdoutHeight = "75px";
@@ -4443,7 +4475,7 @@ class ProgramOutputBox {
 
     // if there isn't anything to display, don't even bother
     // displaying the pane (but this may cause jumpiness later)
-    if (this.numStdoutLines > 0) {
+    if (this.numStdoutLines > 0 || stdoutStr.length > 0) {
       this.domRoot.find("#progOutputs").show();
 
       var pyStdout = this.domRoot.find("#pyStdout");

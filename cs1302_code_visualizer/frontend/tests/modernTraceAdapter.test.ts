@@ -196,5 +196,24 @@ describe("modernTraceAdapter", () => {
       expect(traceArray[0].line).toBe(1);
       expect(traceArray[1].line).toBe(2);
     });
+
+    it("preserves stdinConsumed and stdinOffset across steps", () => {
+      const modernTrace: ModernTrace = {
+        code: "Scanner s = new Scanner(System.in); int x = s.nextInt();",
+        stdin: "42\n",
+        steps: [
+          { line: 1, method: "main", stdinConsumed: "", stdinOffset: 0 },
+          { line: 2, method: "main", stdinConsumed: "42", stdinOffset: 2 },
+        ],
+      };
+
+      const result = convertModernTraceToOpt(modernTrace);
+      const traceArray = result["trace"] as any[];
+      expect(traceArray).toHaveLength(2);
+      expect(traceArray[0].stdinConsumed).toBe("");
+      expect(traceArray[0].stdinOffset).toBe(0);
+      expect(traceArray[1].stdinConsumed).toBe("42");
+      expect(traceArray[1].stdinOffset).toBe(2);
+    });
   });
 });

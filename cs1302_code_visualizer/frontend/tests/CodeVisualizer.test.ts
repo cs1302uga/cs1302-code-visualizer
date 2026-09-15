@@ -593,6 +593,81 @@ describe("CodeVisualizer", () => {
       instance.destroy?.();
       expect(container.innerHTML).toBe("");
     });
+
+    it("interleaves stdout and consumed stdin into terminal output textarea", () => {
+      const traceObj = {
+        code: "System.out.print(\"Enter number: \");\nint x = s.nextInt();\nSystem.out.println(\"Got: \" + x);",
+        stdin: "42\n",
+        trace: [
+          {
+            event: "step_line",
+            line: 1,
+            func_name: "main:1",
+            stack_to_render: [],
+            globals: {},
+            ordered_globals: [],
+            heap: {},
+            stdout: "Enter number: ",
+            stdinConsumed: "",
+            stdinOffset: 0,
+          },
+          {
+            event: "step_line",
+            line: 2,
+            func_name: "main:2",
+            stack_to_render: [],
+            globals: {},
+            ordered_globals: [],
+            heap: {},
+            stdout: "Enter number: ",
+            stdinConsumed: "42\n",
+            stdinOffset: 3,
+          },
+          {
+            event: "step_line",
+            line: 3,
+            func_name: "main:3",
+            stack_to_render: [],
+            globals: {},
+            ordered_globals: [],
+            heap: {},
+            stdout: "Enter number: \nGot: 42\n",
+            stdinConsumed: "42\n",
+            stdinOffset: 3,
+          },
+        ],
+      };
+
+      const instance = create({
+        lang: "java",
+        trace: traceObj,
+        element: container,
+      }) as any;
+
+      const pyStdout = container.querySelector<HTMLTextAreaElement>("#pyStdout");
+      expect(pyStdout).not.toBeNull();
+
+      // Step 0: Only prompt displayed
+      instance.visualizer.curInstr = 0;
+      instance.updateOutput();
+      expect(instance.visualizer.computeInterleavedTerminal(0)).toBe("Enter number: ");
+      expect(pyStdout?.value).toBe("Enter number:");
+
+      // Step 1: Echoed input follows prompt
+      instance.visualizer.curInstr = 1;
+      instance.updateOutput();
+      expect(instance.visualizer.computeInterleavedTerminal(1)).toBe("Enter number: 42\n");
+      expect(pyStdout?.value).toBe("Enter number: 42");
+
+      // Step 2: Full execution output interleaved
+      instance.visualizer.curInstr = 2;
+      instance.updateOutput();
+      expect(instance.visualizer.computeInterleavedTerminal(2)).toBe("Enter number: 42\n\nGot: 42\n");
+      expect(pyStdout?.value).toBe("Enter number: 42\n\nGot: 42");
+
+      instance.destroy?.();
+      expect(container.innerHTML).toBe("");
+    });
   });
 });
 

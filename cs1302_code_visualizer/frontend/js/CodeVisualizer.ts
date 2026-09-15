@@ -50,6 +50,7 @@ export interface VisualizerInstance {
   redrawConnectors?(): void;
   destroy?(): void;
   readonly element?: HTMLElement;
+  readonly visualizer?: any;
 }
 
 /**
@@ -197,6 +198,7 @@ export function create({
   element.addEventListener("keydown", keyHandler);
 
   return {
+    visualizer: visualizer,
     updateOutput: () => {
       visualizer.updateOutput();
     },
