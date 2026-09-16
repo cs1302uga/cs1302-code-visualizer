@@ -7,6 +7,7 @@ import argparse
 import base64
 import json
 import re
+import tomllib
 from pathlib import Path
 
 from pygments import highlight
@@ -25,6 +26,15 @@ GALLERY_IMAGES_DIR = Path(
 ARTIFACT_DIR = Path(
     "/Users/mepcott/.gemini/antigravity-ide/brain/23001bca-d34b-4919-879c-5a79a1815fae"
 )
+
+
+def get_visualizer_version() -> str:
+    pyproject_path = REPO_ROOT / "pyproject.toml"
+    if pyproject_path.exists():
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+            return str(data.get("project", {}).get("version", "unknown"))
+    return "unknown"
 
 
 def load_metadata() -> list[dict]:
@@ -47,6 +57,7 @@ def build_html(examples: list[dict]) -> str:
     pygments_css = formatter.get_style_defs(".highlight")
 
     total_steps = sum(ex.get("step_count", 1) for ex in examples)
+    version = get_visualizer_version()
 
     # Build TOC rows
     toc_items_html = []
@@ -577,7 +588,7 @@ body {{
             <div class="stat-label">LTS Runtime</div>
         </div>
         <div class="stat-item">
-            <div class="stat-value">v0.11.0</div>
+            <div class="stat-value">v{version}</div>
             <div class="stat-label">Visualizer</div>
         </div>
     </div>
