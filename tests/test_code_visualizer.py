@@ -40,24 +40,24 @@ def test_generate_trace(java_home):
     assert "-1" in trace_json or len(trace_json) > 0
 
 
-def test_generate_image(java_home):
+def test_generate_image(java_home, rendering_session):
     trace_raw = generate_trace(java_home, SAMPLE_JAVA, breakpoints={-1})
     trace_json = json.loads(trace_raw)
     inner_trace = trace_json.get("-1", next(iter(trace_json.values())))
-    img_bytes = generate_image(json.dumps(inner_trace))
+    img_bytes = generate_image(json.dumps(inner_trace), session=rendering_session)
     assert isinstance(img_bytes, bytes)
     assert len(img_bytes) > 0
     assert img_bytes[:8] == b"\x89PNG\r\n\x1a\n"  # PNG magic header
 
 
-def test_generate_image_modern_format(java_home):
+def test_generate_image_modern_format(java_home, rendering_session):
     trace_raw = generate_trace(
         java_home,
         SAMPLE_JAVA,
         breakpoints={-1},
         extra_tracer_args=["--format=modern"],
     )
-    img_bytes = generate_image(trace_raw)
+    img_bytes = generate_image(trace_raw, session=rendering_session)
     assert isinstance(img_bytes, bytes)
     assert len(img_bytes) > 0
     assert img_bytes[:8] == b"\x89PNG\r\n\x1a\n"

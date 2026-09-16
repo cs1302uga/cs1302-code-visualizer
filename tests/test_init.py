@@ -75,15 +75,21 @@ def test_render_image_browser_driver_error():
         render_image(SAMPLE_JAVA)
 
 
-def test_render_images_single_occurrence():
-    res = render_images(SAMPLE_JAVA, breakpoints={4}, render_all_breakpoint_occurrences=False)
+def test_render_images_single_occurrence(rendering_session):
+    res = render_images(
+        SAMPLE_JAVA, breakpoints={4},
+        render_all_breakpoint_occurrences=False, session=rendering_session,
+    )
     assert isinstance(res, dict)
     assert 4 in res
     assert isinstance(res[4], bytes)
 
 
-def test_render_images_all_occurrences():
-    res = render_images(SAMPLE_JAVA, breakpoints={4}, render_all_breakpoint_occurrences=True)
+def test_render_images_all_occurrences(rendering_session):
+    res = render_images(
+        SAMPLE_JAVA, breakpoints={4},
+        render_all_breakpoint_occurrences=True, session=rendering_session,
+    )
     assert isinstance(res, dict)
     assert 4 in res
     assert isinstance(res[4], list)
@@ -113,8 +119,8 @@ def test_render_image_type_style():
     assert isinstance(img_fqn, bytes)
 
 
-def test_render_images_type_style():
-    res = render_images(SAMPLE_JAVA, breakpoints={4}, type_style="simple")
+def test_render_images_type_style(rendering_session):
+    res = render_images(SAMPLE_JAVA, breakpoints={4}, type_style="simple", session=rendering_session)
     assert isinstance(res, dict)
     assert 4 in res
 

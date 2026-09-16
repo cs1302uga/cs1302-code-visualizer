@@ -96,29 +96,51 @@ you want to use is specified in the `tool.cs1302-code-visualizer` object of
 For repeated image requests, own a `RenderingSession` for the duration of a build:
 
 ```python
-from pathlib import Path
 from cs1302_code_visualizer import RenderingSession, render_images
 
-with RenderingSession(max_browsers=2, cache_dir=Path(".cache/traces")) as session:
+with RenderingSession(max_browsers=2) as session:
     images = render_images(java_source, {3, 4, 5}, session=session)
     larger_images = render_images(java_source, {3, 4, 5}, dpi=2, session=session)
 ```
 
-The second request reuses the execution trace. Trace keys include all execution
-arguments, the JDK release identity, and the tracer URL and checksum. Different
+By default, sessions reuse only Chrome: each request still executes Java. To opt
+into trace caching separately, set `cache_traces=True` for memory-only caching or
+provide `cache_dir=Path(".cache/traces")` for persistent caching (import `Path`
+from `pathlib`). Trace keys include all execution arguments, the JDK release identity, and the tracer URL and checksum. Different
 breakpoint selections, accumulated occurrences, and full traces remain distinct.
-Without `cache_dir`, trace reuse lasts only for that session. Failed execution
-requests are not cached, and damaged cache entries are regenerated.
+With `cache_traces=True` and no `cache_dir`, trace reuse lasts only for that
+session. Failed execution requests are not cached, and damaged cache entries are regenerated.
 
 The session leases browsers exclusively, keeps at most `max_browsers` alive across
-all DPI settings, and discards a browser after a failed request. Each request loads
+all DPI settings, and discards a browser after a failed render or viewport reset,
+without retrying the request. Reuse requires matching DPI, headless, and debug
+settings. The next request replaces a discarded browser. Each request loads
 a fresh frontend document. Exiting the context closes browsers, including after an
 exception. A virtual viewport reproduces the existing two-pass window fitting,
 including the browser's measured minimum dimensions and chrome offsets. This
 preserves wrapping and connector placement while avoiding native resize stalls
-during direct diagram capture. Chrome can produce tiny antialiasing differences
-along rounded borders compared with native window capture. Existing calls without a session continue
+during direct diagram capture. Tests require identical image dimensions and
+decoded pixels against fresh-browser capture in the same Chrome environment. Existing calls without a session continue
 to own and close a browser per image.
+
+Rendering tests opt in by requesting the `rendering_session` fixture and passing
+it as `session=rendering_session` to `generate_image` or `generate_step_images`.
+The fixture owns one browser per pytest worker and closes it at worker teardown;
+it does not cache traces. Use only rendering APIs with this fixture. Tests that
+access raw WebDriver, change browser configuration, or verify lifecycle behavior
+must own fresh browsers. Each render reloads the frontend and resets viewport
+emulation; this contract covers the local renderer, not arbitrary browser state
+from applications or raw WebDriver operations. Sessions do not span processes or
+separate runs.
+
+To measure browser reuse independently of Java execution and trace caching:
+
+```sh
+python -m scripts.benchmark_rendering small-trace-examples/example0/Driver.java.json --requests 6
+```
+
+The benchmark reports elapsed time and Chrome launches, and fails if image
+sizes or decoded pixels differ between fresh and reused browsers.
 
 Persistent traces are not removed automatically. Use
 `cs1302_code_visualizer.session.prune_trace_cache(cache_dir)` to remove entries

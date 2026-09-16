@@ -23,17 +23,21 @@ class RenderingSession:
 
     Requests lease browsers exclusively. A failed request discards its browser;
     different DPI settings never share the same instance. ``cache_dir`` enables
-    persistent traces; without it, traces are reused only within this session.
+    persistent traces; ``cache_traces=True`` enables memory-only trace caching.
+    By default only browsers are reused, and every trace request executes Java.
     """
 
-    def __init__(self, max_browsers: int = 2, cache_dir: Path | None = None):
+    def __init__(
+        self, max_browsers: int = 2, cache_dir: Path | None = None, *, cache_traces: bool = False
+    ):
         """Create a lazy session; no browser or Java process starts here."""
         if max_browsers < 1:
             raise ValueError("max_browsers must be positive")
         self.max_browsers = max_browsers
         self.cache_dir = cache_dir
+        self.cache_traces = cache_traces or cache_dir is not None
         self._condition = threading.Condition()
-        self._idle: list[tuple[int, Any]] = []
+        self._idle: list[tuple[tuple[int, Any], Any]] = []
         self._active = 0
         self._closed = False
         self._trace_locks: dict[str, threading.Lock] = {}
@@ -65,16 +69,17 @@ class RenderingSession:
             self._quit(driver)
 
     @contextmanager
-    def browser(self, dpi: int, factory):
+    def browser(self, dpi: int, factory, *, configuration=None):
         """Lease an exclusive browser, replacing incompatible or failed instances."""
+        key = (dpi, configuration)
         driver = None
         with self._condition:
             while not self._closed and self._active >= self.max_browsers:
                 self._condition.wait()
             if self._closed:
                 raise RuntimeError("Rendering session is closed")
-            for index, (scale, candidate) in enumerate(self._idle):
-                if scale == dpi:
+            for index, (settings, candidate) in enumerate(self._idle):
+                if settings == key:
                     driver = candidate
                     self._idle.pop(index)
                     break
@@ -96,13 +101,19 @@ class RenderingSession:
                 self._active -= 1
                 if driver is not None:
                     if healthy and not self._closed:
-                        self._idle.append((dpi, driver))
+                        self._idle.append((key, driver))
                     else:
                         self._quit(driver)
                 self._condition.notify_all()
 
     def generate_trace(self, *args, **kwargs) -> str:
-        """Cache normalized traces by all execution arguments and tracer identity."""
+        """Execute Java each time unless trace caching was explicitly enabled."""
+        with self._condition:
+            if self._closed:
+                raise RuntimeError("Rendering session is closed")
+        if not self.cache_traces:
+            trace_generator.ensure_code_tracer_installed()
+            return trace_generator.generate_trace(*args, **kwargs)
         bound = _TRACE_SIGNATURE.bind(*args, **kwargs)
         bound.apply_defaults()
         values = dict(bound.arguments)

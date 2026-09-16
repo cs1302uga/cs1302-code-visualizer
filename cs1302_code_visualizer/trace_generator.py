@@ -141,45 +141,62 @@ def normalize_heap_primitives(trace_obj: dict[str, Any]) -> None:
             continue
         heap: Any = event.get("heap", {})
         heap_attrs: Any = event.get("heap_attrs", {})
-        if not isinstance(heap, dict):
-            continue
-        for addr, obj in list(heap.items()):
-            if not isinstance(obj, list):
-                type_name: str = "Object"
-                if (
-                    isinstance(heap_attrs, dict)
-                    and addr in heap_attrs
-                    and isinstance(heap_attrs[addr], dict)
-                    and "type" in heap_attrs[addr]
+        if isinstance(heap, dict):
+            for addr, obj in list(heap.items()):
+                if not isinstance(obj, list):
+                    type_name: str = "Object"
+                    if (
+                        isinstance(heap_attrs, dict)
+                        and addr in heap_attrs
+                        and isinstance(heap_attrs[addr], dict)
+                        and "type" in heap_attrs[addr]
+                    ):
+                        t = heap_attrs[addr]["type"]
+                        if isinstance(t, str):
+                            type_name = t.split(".")[-1].split("<")[0]
+                    elif isinstance(obj, int) and not isinstance(obj, bool):
+                        type_name = "Integer"
+                    elif isinstance(obj, float):
+                        type_name = "Double"
+                    elif isinstance(obj, bool):
+                        type_name = "Boolean"
+                    elif isinstance(obj, str):
+                        type_name = "String"
+                    heap[addr] = ["INSTANCE", type_name, ["value", obj]]
+                    if type_name in BOXED_PRIMITIVE_TYPES and isinstance(heap_attrs, dict):
+                        if addr not in heap_attrs or not isinstance(heap_attrs[addr], dict):
+                            heap_attrs[addr] = {}
+                        heap_attrs[addr]["type"] = [BOXED_PRIMITIVE_TYPES[type_name]]
+                elif (
+                    isinstance(obj, list)
+                    and len(obj) >= 2
+                    and obj[0] == "INSTANCE"
+                    and isinstance(obj[1], str)
                 ):
-                    t = heap_attrs[addr]["type"]
-                    if isinstance(t, str):
-                        type_name = t.split(".")[-1].split("<")[0]
-                elif isinstance(obj, int) and not isinstance(obj, bool):
-                    type_name = "Integer"
-                elif isinstance(obj, float):
-                    type_name = "Double"
-                elif isinstance(obj, bool):
-                    type_name = "Boolean"
-                elif isinstance(obj, str):
-                    type_name = "String"
-                heap[addr] = ["INSTANCE", type_name, ["value", obj]]
-                if type_name in BOXED_PRIMITIVE_TYPES and isinstance(heap_attrs, dict):
-                    if addr not in heap_attrs or not isinstance(heap_attrs[addr], dict):
-                        heap_attrs[addr] = {}
-                    heap_attrs[addr]["type"] = [BOXED_PRIMITIVE_TYPES[type_name]]
-            elif (
-                isinstance(obj, list)
-                and len(obj) >= 2
-                and obj[0] == "INSTANCE"
-                and isinstance(obj[1], str)
-                and obj[1] in BOXED_PRIMITIVE_TYPES
-                and isinstance(heap_attrs, dict)
-                and addr in heap_attrs
-                and isinstance(heap_attrs[addr], dict)
-                and isinstance(heap_attrs[addr].get("type"), str)
-            ):
-                heap_attrs[addr]["type"] = [BOXED_PRIMITIVE_TYPES[obj[1]]]
+                    if obj[1].endswith("[]"):
+                        obj[1] = obj[1].removesuffix("[]")
+                    if (
+                        obj[1] in BOXED_PRIMITIVE_TYPES
+                        and isinstance(heap_attrs, dict)
+                        and addr in heap_attrs
+                        and isinstance(heap_attrs[addr], dict)
+                        and isinstance(heap_attrs[addr].get("type"), str)
+                    ):
+                        heap_attrs[addr]["type"] = [BOXED_PRIMITIVE_TYPES[obj[1]]]
+
+        stack_to_render = event.get("stack_to_render")
+        if isinstance(stack_to_render, list):
+            for frame in stack_to_render:
+                if isinstance(frame, dict):
+                    locals_attrs = frame.get("locals_attrs")
+                    if isinstance(locals_attrs, dict):
+                        this_attr = locals_attrs.get("this")
+                        if (
+                            isinstance(this_attr, dict)
+                            and isinstance(this_attr.get("type"), str)
+                            and this_attr["type"].endswith("[]")
+                        ):
+                            this_attr["type"] = this_attr["type"].removesuffix("[]")
 
 
 def generate_trace(
@@ -228,14 +245,12 @@ def generate_trace(
 
     has_explicit_breakpoints = breakpoints != DEFAULT_BREAKPOINTS_SET
     effective_all_breakpoints = all_breakpoints or auto_detect
-    if extra_tracer_args:
-        if "-a" in extra_tracer_args or "--all-breakpoints" in extra_tracer_args:
-            effective_all_breakpoints = True
+    if extra_tracer_args and (
+        "-a" in extra_tracer_args or "--all-breakpoints" in extra_tracer_args
+    ):
+        effective_all_breakpoints = True
 
-    if has_explicit_breakpoints:
-        for breakpoint in sorted(breakpoints):
-            cli_args.extend(["-b", str(breakpoint)])
-    elif not effective_all_breakpoints:
+    if has_explicit_breakpoints or not effective_all_breakpoints:
         for breakpoint in sorted(breakpoints):
             cli_args.extend(["-b", str(breakpoint)])
 
@@ -251,12 +266,11 @@ def generate_trace(
     if not eval_enum_hash:
         cli_args.append("--no-eval-enum-hash")
 
-    if effective_all_breakpoints:
-        if not (
-            extra_tracer_args
-            and ("-a" in extra_tracer_args or "--all-breakpoints" in extra_tracer_args)
-        ):
-            cli_args.append("-a")
+    if effective_all_breakpoints and not (
+        extra_tracer_args
+        and ("-a" in extra_tracer_args or "--all-breakpoints" in extra_tracer_args)
+    ):
+        cli_args.append("-a")
 
     if type_style:
         cli_args.append(f"--type-style={type_style}")

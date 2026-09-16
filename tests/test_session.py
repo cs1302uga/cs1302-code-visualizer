@@ -114,7 +114,7 @@ def test_closed_session_invalid_limits_and_trace_shapes(tracing):
     with pytest.raises(RuntimeError, match="closed"):
         session.generate_trace(Path("/jdk"), "source")
     tracing.return_value = "[]"
-    with RenderingSession() as session, pytest.raises(TypeError):
+    with RenderingSession(cache_traces=True) as session, pytest.raises(TypeError):
         session.generate_trace(Path("/jdk"), "source")
     with RenderingSession() as session, session.browser(
         1, Mock(return_value=Mock(quit=Mock(side_effect=OSError("gone"))))
@@ -303,3 +303,86 @@ def test_lambda_wrapping_matches_legacy_capture():
     b = Image.open(BytesIO(expected)).convert("RGBA")
     assert a.size == b.size
     assert a.tobytes() == b.tobytes()
+
+
+def test_browser_only_session_executes_each_trace_request(tracing):
+    with RenderingSession() as session:
+        for _ in range(2):
+            assert session.generate_trace(Path("/jdk"), "source") == '{"-1": {"trace": []}}'
+    assert tracing.call_count == 2
+    assert trace_generator.ensure_code_tracer_installed.call_count == 2
+
+
+def test_memory_trace_cache_requires_explicit_opt_in(tracing):
+    with RenderingSession(cache_traces=True) as session:
+        for _ in range(2):
+            session.generate_trace(Path("/jdk"), "source")
+    assert tracing.call_count == 1
+
+
+def test_browser_configuration_change_replaces_idle_browser():
+    factory = Mock(side_effect=lambda **kwargs: Mock())
+    with RenderingSession(max_browsers=1) as session:
+        with session.browser(1, factory, configuration=(True, False)) as first:
+            pass
+        with session.browser(1, factory, configuration=(False, False)) as second:
+            assert second is not first
+        first.quit.assert_called_once()
+    assert factory.call_count == 2
+    second.quit.assert_called_once()
+
+
+def test_reset_failure_discards_browser_without_retry():
+    first = Mock()
+    second = Mock()
+    factory = Mock(side_effect=[first, second])
+    with RenderingSession(max_browsers=1) as session:
+        with session.browser(1, factory):
+            pass
+        first.set_window_size.side_effect = RuntimeError("reset failed")
+        with pytest.raises(RuntimeError, match="reset failed"), session.browser(1, factory):
+            pytest.fail("failed reset must not lend browser")
+        first.quit.assert_called_once()
+        assert factory.call_count == 1
+        with session.browser(1, factory) as replacement:
+            assert replacement is second
+    second.quit.assert_called_once()
+
+
+def test_render_sequence_is_order_independent():
+    from io import BytesIO
+
+    from PIL import Image
+
+    from cs1302_code_visualizer import browser_driver
+
+    root = Path(__file__).resolve().parents[1] / "small-trace-examples"
+    traces = [(root / f"example{i}/Driver.java.json").read_text() for i in (0, 4)]
+    cases = [
+        (traces[0], {"dpi": 1, "include_types": False}),
+        (traces[1], {"dpi": 1, "text_memory_labels": True}),
+        (traces[0], {"dpi": 2, "strip_type_prefixes": ["java.lang."]}),
+        (traces[1], {"dpi": 1, "visualizer": "json-pre"}),
+    ]
+
+    def pixels(data):
+        with Image.open(BytesIO(data)) as image:
+            return image.size, image.convert("RGBA").tobytes()
+
+    expected = [pixels(browser_driver.generate_image(trace, **options)) for trace, options in cases]
+    with RenderingSession(max_browsers=1) as session:
+        for index in [0, 1, 2, 3, 3, 2, 1, 0]:
+            trace, options = cases[index]
+            assert pixels(browser_driver.generate_image(trace, session=session, **options)) == expected[index]
+
+
+def test_close_while_preparing_cache_key_prevents_trace_execution(tracing, monkeypatch):
+    with RenderingSession(cache_traces=True) as session:
+        def tracer_identity():
+            session.close()
+            return "url", "version-a"
+
+        monkeypatch.setattr(trace_generator, "read_tracer_url_and_sum_from_toml", tracer_identity)
+        with pytest.raises(RuntimeError, match="closed"):
+            session.generate_trace(Path("/jdk"), "source")
+    tracing.assert_not_called()

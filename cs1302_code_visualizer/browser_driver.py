@@ -233,7 +233,9 @@ def _fit_session_viewport(driver: webdriver.Chrome, element: WebElement, dpi: in
 def _browser_scope(dpi: int, session: RenderingSession | None):
     """Lease a session browser or own a standalone browser for this request."""
     if session is not None:
-        with session.browser(dpi, get_webdriver) as driver:
+        with session.browser(
+            dpi, get_webdriver, configuration=(is_headless_enabled(), DEBUG_MODE)
+        ) as driver:
             yield driver
     else:
         driver = get_webdriver(dpi=dpi)

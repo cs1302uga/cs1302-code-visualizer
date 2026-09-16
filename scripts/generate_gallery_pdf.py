@@ -6,10 +6,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
-import os
 import re
-import shutil
-import sys
 from pathlib import Path
 
 from pygments import highlight
@@ -115,7 +112,6 @@ def build_html(examples: list[dict]) -> str:
             for s in steps_data:
                 s_idx = s["step"]
                 s_line = s.get("line", "?")
-                s_func = s.get("func", "")
                 s_path = GALLERY_IMAGES_DIR / s["filename"]
                 s_data = encode_image(s_path)
                 if s_data:

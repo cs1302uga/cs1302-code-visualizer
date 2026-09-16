@@ -650,6 +650,36 @@ def test_normalize_heap_primitives():
     assert attrs["113"]["type"] == ["float"]
     assert attrs["114"]["type"] == "CustomClass"
 
+    # Test defensive sanitization of array types in INSTANCE headers and stack 'this'
+    t4 = {
+        "trace": [
+            {
+                "heap": {
+                    "201": ["INSTANCE", "Person[]", ["name", "Alice"]],
+                    "202": ["LIST", ["REF", 201]],
+                },
+                "stack_to_render": [
+                    {
+                        "locals_attrs": {
+                            "this": {"type": "Person[]"},
+                            "other": {"type": "int"},
+                        }
+                    },
+                    "not_a_frame",
+                    {"locals_attrs": "not_a_dict"},
+                    {"locals_attrs": {}},
+                    {"locals_attrs": {"this": "not_a_dict"}},
+                    {"locals_attrs": {"this": {"type": 123}}},
+                    {"locals_attrs": {"this": {"type": "Person"}}},
+                ],
+            }
+        ]
+    }
+    normalize_heap_primitives(t4)
+    assert t4["trace"][0]["heap"]["201"][1] == "Person"
+    assert t4["trace"][0]["stack_to_render"][0]["locals_attrs"]["this"]["type"] == "Person"
+    assert t4["trace"][0]["stack_to_render"][6]["locals_attrs"]["this"]["type"] == "Person"
+
 
 def test_ensure_code_tracer_installed_matching_hash(tmp_path, monkeypatch):
     jar_file = tmp_path / "code-tracer.jar"

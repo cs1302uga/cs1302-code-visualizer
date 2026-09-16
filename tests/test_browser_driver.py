@@ -85,7 +85,7 @@ def test_generate_html_failure(monkeypatch):
         generate_html("{}", dpi=1)
 
 
-def test_generate_image_with_options(sample_trace_json):
+def test_generate_image_with_options(sample_trace_json, rendering_session):
     img = generate_image(
         sample_trace_json,
         dpi=1,
@@ -93,15 +93,16 @@ def test_generate_image_with_options(sample_trace_json):
         include_types=True,
         text_memory_labels=False,
         strip_type_prefixes=["java.lang."],
+        session=rendering_session,
     )
     assert isinstance(img, bytes)
     assert img[:8] == b"\x89PNG\r\n\x1a\n"
 
 
-def test_generate_image_with_line_keyed_trace(sample_trace_json):
+def test_generate_image_with_line_keyed_trace(sample_trace_json, rendering_session):
     data = json.loads(sample_trace_json)
     wrapper = json.dumps({"5": data})
-    img = generate_image(wrapper, breakpoint=5)
+    img = generate_image(wrapper, breakpoint=5, session=rendering_session)
     assert isinstance(img, bytes)
     assert img[:8] == b"\x89PNG\r\n\x1a\n"
 
@@ -368,12 +369,12 @@ def test_render_html_cli(sample_trace_json, monkeypatch):
     assert "<div id=" in val3
 
 
-def test_generate_step_images_single_and_json_pre(sample_trace_json):
-    imgs1 = generate_step_images(sample_trace_json)
+def test_generate_step_images_single_and_json_pre(sample_trace_json, rendering_session):
+    imgs1 = generate_step_images(sample_trace_json, session=rendering_session)
     assert len(imgs1) == 1
     assert isinstance(imgs1[0], bytes)
 
-    imgs2 = generate_step_images(sample_trace_json, visualizer="json-pre")
+    imgs2 = generate_step_images(sample_trace_json, visualizer="json-pre", session=rendering_session)
     assert len(imgs2) == 1
     assert isinstance(imgs2[0], bytes)
 
