@@ -255,8 +255,10 @@ def test_ensure_jdk_installed_success_download(tmp_path, monkeypatch):
     monkeypatch.setattr("shutil.which", lambda exe: None)
     fake_jdk = tmp_path / "jdk"
     monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
-    res = ensure_jdk_installed(install_dir=tmp_path / "nonexistent")
-    assert res == fake_jdk
+    with patch("cs1302_code_visualizer.trace_generator.download_jdk") as mock_download:
+        res = ensure_jdk_installed(install_dir=tmp_path / "nonexistent")
+        assert res == fake_jdk
+        mock_download.assert_called_once()
 
 
 def test_ensure_jdk_installed_download_error(tmp_path, monkeypatch):
@@ -515,6 +517,45 @@ def test_generate_trace_auto_detect_and_extra_args(java_home, monkeypatch):
         assert "--format=modern" in cmd
         assert "-s" in cmd
         assert "src" in cmd
+
+
+def test_generate_trace_eval_enum_hash(java_home):
+    mock_run = MagicMock()
+    mock_run.return_value.stdout = '{"trace": []}'
+
+    with patch("subprocess.run", mock_run):
+        _ = generate_trace(
+            java_home,
+            SAMPLE_ENUM_JAVA,
+            eval_enum_hash=False,
+        )
+        args, _ = mock_run.call_args
+        cmd = args[0]
+        assert "--no-eval-enum-hash" in cmd
+
+    mock_run.reset_mock()
+    with patch("subprocess.run", mock_run):
+        _ = generate_trace(
+            java_home,
+            SAMPLE_ENUM_JAVA,
+            eval_enum_hash=True,
+        )
+        args, _ = mock_run.call_args
+        cmd = args[0]
+        assert "--no-eval-enum-hash" not in cmd
+
+
+def test_trace_generator_main_no_eval_enum_hash(monkeypatch):
+    monkeypatch.setattr(sys, "stdin", io.StringIO(SAMPLE_ENUM_JAVA))
+    captured = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", captured)
+    monkeypatch.setattr("sys.argv", ["generate_trace", "--no-eval-enum-hash"])
+    with patch(
+        "cs1302_code_visualizer.trace_generator.generate_trace",
+        return_value='{"trace": []}',
+    ) as mock_gen:
+        generator_main()
+        assert mock_gen.call_args.kwargs["eval_enum_hash"] is False
 
 
 def test_normalize_heap_primitives():

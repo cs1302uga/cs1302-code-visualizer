@@ -200,3 +200,57 @@ def test_init_main_with_stdin_file(tmp_path, monkeypatch):
         assert output_buffer.getvalue() == b"\x89PNG\r\n\x1a\n"
 
 
+def test_render_image_eval_enum_hash():
+    with (
+        patch(
+            "cs1302_code_visualizer.trace_generator.generate_trace",
+            return_value='{"4": {"trace": []}}',
+        ) as mock_gen,
+        patch(
+            "cs1302_code_visualizer.browser_driver.generate_image",
+            return_value=b"\x89PNG\r\n\x1a\n",
+        ),
+    ):
+        res = render_image(SAMPLE_JAVA, eval_enum_hash=False)
+        assert res == b"\x89PNG\r\n\x1a\n"
+        assert mock_gen.call_args.kwargs["eval_enum_hash"] is False
+
+        res2 = render_image(SAMPLE_JAVA, eval_enum_hash=True)
+        assert res2 == b"\x89PNG\r\n\x1a\n"
+        assert mock_gen.call_args.kwargs["eval_enum_hash"] is True
+
+
+def test_render_images_eval_enum_hash():
+    with (
+        patch(
+            "cs1302_code_visualizer.trace_generator.generate_trace",
+            return_value='{"4": {"trace": []}}',
+        ) as mock_gen,
+        patch(
+            "cs1302_code_visualizer.browser_driver.generate_image",
+            return_value=b"\x89PNG\r\n\x1a\n",
+        ),
+    ):
+        res = render_images(SAMPLE_JAVA, breakpoints={4}, eval_enum_hash=False)
+        assert 4 in res
+        assert mock_gen.call_args.kwargs["eval_enum_hash"] is False
+
+        res2 = render_images(SAMPLE_JAVA, breakpoints={4}, eval_enum_hash=True)
+        assert 4 in res2
+        assert mock_gen.call_args.kwargs["eval_enum_hash"] is True
+
+
+def test_init_main_with_no_eval_enum_hash(monkeypatch):
+    monkeypatch.setattr(sys, "stdin", io.StringIO(SAMPLE_JAVA))
+    monkeypatch.setattr("sys.argv", ["main", "--no-eval-enum-hash"])
+    with patch(
+        "cs1302_code_visualizer.render_image", return_value=b"\x89PNG\r\n\x1a\n"
+    ) as mock_render:
+        output_buffer = io.BytesIO()
+        monkeypatch.setattr(sys, "stdout", MockStdout(output_buffer))
+        main()
+        assert mock_render.call_args.kwargs["eval_enum_hash"] is False
+        assert output_buffer.getvalue() == b"\x89PNG\r\n\x1a\n"
+
+
+

@@ -99,6 +99,7 @@ def render_images(
     stdin: str | None = None,
     stdin_file: Path | str | None = None,
     session: RenderingSession | None = None,
+    eval_enum_hash: bool = True,
 ) -> dict[int, bytes] | dict[int, list[bytes]]:
     """Visualize the state of a Java program at given breakpoints.
 
@@ -129,6 +130,8 @@ def render_images(
         stdin_file: Path to file whose content is provided via standard input.
         include_enum_static_fields: True if enum constants and $VALUES should be included in the
             global static fields list, False otherwise.
+        eval_enum_hash: True if lazy enum hash codes should be eagerly evaluated,
+            False to leave uninitialized hash codes as 0.
 
     Returns:
         Mapping from a breakpoint line to a visualization image. If
@@ -157,6 +160,7 @@ def render_images(
         type_style=type_style,
         stdin=stdin,
         stdin_file=stdin_file,
+        eval_enum_hash=eval_enum_hash,
     )
 
     logger.debug(f"{render_all_breakpoint_occurrences=}")
@@ -211,6 +215,7 @@ def render_image(
     type_style: str = "simple",
     stdin: str | None = None,
     stdin_file: Path | str | None = None,
+    eval_enum_hash: bool = True,
 ) -> bytes:
     """Visualize the state of a Java program just before exiting as an image.
 
@@ -261,6 +266,9 @@ def render_image(
 
         stdin_file: Path to file whose content is provided via standard input.
 
+        eval_enum_hash: True if lazy enum hash codes should be eagerly evaluated,
+            False to leave uninitialized hash codes as 0.
+
     Returns:
         Raw bytes of the visualization image.
 
@@ -307,6 +315,7 @@ def render_image(
             type_style=type_style,
             stdin=stdin,
             stdin_file=stdin_file,
+            eval_enum_hash=eval_enum_hash,
         )
 
         traces: dict[str, Any] = json.loads(execution_trace)
@@ -356,6 +365,17 @@ def main() -> None:
         help="Path to Java source file, or `-` for stdin.",
         default="-",
     )
+    _ = parser.add_argument(
+        "--no-eval-enum-hash",
+        dest="eval_enum_hash",
+        action="store_false",
+        default=True,
+        help=(
+            "Disable eager evaluation of lazy enum hash codes. By default, "
+            "enum hash codes are eagerly evaluated so that non-zero hash values "
+            "are shown in trace visualizations."
+        ),
+    )
     stdin_group = parser.add_mutually_exclusive_group()
     _ = stdin_group.add_argument(
         "--stdin",
@@ -380,5 +400,6 @@ def main() -> None:
         include_enum_static_fields=False,
         stdin=args.stdin,
         stdin_file=args.stdin_file,
+        eval_enum_hash=args.eval_enum_hash,
     )
     _ = sys.stdout.buffer.write(rendered_image)

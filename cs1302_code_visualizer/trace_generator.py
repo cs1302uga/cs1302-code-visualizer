@@ -196,6 +196,7 @@ def generate_trace(
     stdin: str | None = None,
     stdin_file: Path | str | None = None,
     extra_tracer_args: Sequence[str] | None = None,
+    eval_enum_hash: bool = True,
 ) -> str:
     """Generate an execution trace for a Java source program.
 
@@ -213,6 +214,7 @@ def generate_trace(
         stdin: Standard input string provided to the traced Java program.
         stdin_file: Path to file whose content is provided via standard input.
         extra_tracer_args: Additional CLI arguments to pass to code-tracer.
+        eval_enum_hash: Whether to eagerly evaluate lazy enum hash codes.
 
     Returns:
         JSON string representing the execution trace.
@@ -233,6 +235,9 @@ def generate_trace(
 
     if accumulate_breakpoints:
         cli_args.append("--accumulate-breakpoints")
+
+    if not eval_enum_hash:
+        cli_args.append("--no-eval-enum-hash")
 
     if auto_detect:
         cli_args.append("-a")
@@ -656,6 +661,18 @@ def main() -> None:
         help="Type qualification style: fqn (fully-qualified) or simple (default: simple).",
     )
 
+    _ = parser.add_argument(
+        "--no-eval-enum-hash",
+        dest="eval_enum_hash",
+        action="store_false",
+        default=True,
+        help=(
+            "Disable eager evaluation of lazy enum hash codes. By default, "
+            "enum hash codes are eagerly evaluated so that non-zero hash values "
+            "are shown in trace visualizations."
+        ),
+    )
+
     stdin_group = parser.add_mutually_exclusive_group()
     _ = stdin_group.add_argument(
         "--stdin",
@@ -705,6 +722,7 @@ def main() -> None:
         stdin=args.stdin,
         stdin_file=args.stdin_file,
         extra_tracer_args=extra_tracer_args if extra_tracer_args else None,
+        eval_enum_hash=args.eval_enum_hash,
     )
 
     if args.output is None:
