@@ -41,11 +41,21 @@ div.ExecutionVisualizer .stackFrameHeader {
 
 div.ExecutionVisualizer .instTbl,
 div.ExecutionVisualizer .listTbl,
-div.ExecutionVisualizer .colorObjTbl {
+div.ExecutionVisualizer .colorObjTbl,
+div.ExecutionVisualizer .lambdaObjTbl {
   border: var(--object-border) !important;
   border-radius: var(--object-border-radius) !important;
   background-color: var(--value-background-color) !important;
   border-spacing: unset !important;
+}
+
+div.ExecutionVisualizer .lambdaObjElt {
+  padding: 3px 6px !important;
+}
+
+div.ExecutionVisualizer .lambdaObjElt pre.funcCode {
+  margin: 0 !important;
+  font-family: inherit !important;
 }
 
 div.ExecutionVisualizer .colorObjElt {

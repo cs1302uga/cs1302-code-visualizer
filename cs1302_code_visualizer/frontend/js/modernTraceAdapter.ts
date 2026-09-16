@@ -39,10 +39,11 @@ export interface ModernField {
 export interface ModernHeapObject {
   id: number | string;
   type?: string;
-  kind?: "object" | "array" | "string" | "primitive" | "color" | string;
+  kind?: "object" | "array" | "string" | "primitive" | "color" | "lambda" | string;
   fields?: ModernField[];
   elements?: unknown[];
   value?: unknown;
+  sam?: string;
 }
 
 /**
@@ -267,6 +268,15 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): Record<string
             typeof heapObj.value === "string" ? heapObj.value : "",
           ];
           optStep["heap_attrs"][idStr] = { type: objType };
+        } else if (kind === "lambda") {
+          const sam =
+            typeof heapObj.sam === "string"
+              ? heapObj.sam
+              : typeof heapObj.value === "string"
+                ? heapObj.value
+                : "";
+          optStep["heap"][idStr] = ["JAVA_LAMBDA", sam];
+          optStep["heap_attrs"][idStr] = { type: objType || "lambda" };
         } else if (Array.isArray(heapObj as unknown)) {
           optStep["heap"][idStr] = heapObj;
         } else {

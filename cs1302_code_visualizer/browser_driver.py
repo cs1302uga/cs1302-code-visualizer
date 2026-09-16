@@ -537,58 +537,167 @@ def generate_image(
         driver: webdriver.Chrome = frontend["driver"]
         viz: WebElement = frontend["dataViz"]
 
-        if session is None:
-            tidy_set_window_size_for_element(driver, viz)
-        else:
-            _fit_session_viewport(driver, viz, dpi)
-
-        loc = viz.location
-        size = viz.size
-        (left, top, right, bottom) = (
-            int(loc["x"]),
-            int(loc["y"]),
-            int(loc["x"] + size["width"]),
-            int(loc["y"] + size["height"]),
+        return _capture_viz(
+            driver,
+            viz,
+            dpi=dpi,
+            format=format,
+            visualizer=visualizer,
+            session=session,
         )
 
-        if visualizer != "json-pre":
-            _ = driver.execute_script("window.optFrontend.redrawConnectors()")
 
-        if session is not None:
-            # Capture only the diagram rather than the entire browser surface.
-            result = driver.execute_cdp_cmd("Page.captureScreenshot", {
+def _capture_viz(
+    driver: webdriver.Chrome,
+    viz: WebElement,
+    *,
+    dpi: int,
+    format: str,
+    visualizer: str,
+    session: RenderingSession | None,
+) -> bytes:
+    if session is None:
+        tidy_set_window_size_for_element(driver, viz)
+    else:
+        _fit_session_viewport(driver, viz, dpi)
+
+    loc = viz.location
+    size = viz.size
+    (left, top, right, bottom) = (
+        int(loc["x"]),
+        int(loc["y"]),
+        int(loc["x"] + size["width"]),
+        int(loc["y"] + size["height"]),
+    )
+
+    if visualizer != "json-pre":
+        _ = driver.execute_script(
+            "if (window.optFrontend && window.optFrontend.redrawConnectors) "
+            "{ window.optFrontend.redrawConnectors(); }"
+        )
+
+    if session is not None:
+        result = driver.execute_cdp_cmd(
+            "Page.captureScreenshot",
+            {
                 "format": "png",
                 "captureBeyondViewport": True,
                 "clip": {
-                    "x": left, "y": top,
-                    "width": right - left, "height": bottom - top, "scale": 1,
+                    "x": left,
+                    "y": top,
+                    "width": right - left,
+                    "height": bottom - top,
+                    "scale": 1,
                 },
-            })
-            captured = Image.open(BytesIO(base64.b64decode(result["data"])))
-            output = BytesIO()
-            captured.save(output, format=format)
-            return output.getvalue()
-
-        screenshot = driver.get_screenshot_as_png()
-
-        # crop the screenshot down to the element borders
-        screenshot_bytes = BytesIO()
-        pil_img = Image.open(BytesIO(screenshot))
-
-        crop_box: tuple[float, float, float, float] = (
-            float(dpi * left),
-            float(dpi * top),
-            float(dpi * right),
-            float(dpi * bottom),
+            },
         )
-        pil_img = pil_img.crop(crop_box)
+        captured = Image.open(BytesIO(base64.b64decode(result["data"])))
+        output = BytesIO()
+        captured.save(output, format=format)
+        return output.getvalue()
 
-        pil_img.save(
-            screenshot_bytes,
-            format=format,
-        )
+    screenshot = driver.get_screenshot_as_png()
 
-        return screenshot_bytes.getvalue()
+    # crop the screenshot down to the element borders
+    screenshot_bytes = BytesIO()
+    pil_img = Image.open(BytesIO(screenshot))
+
+    crop_box: tuple[float, float, float, float] = (
+        float(dpi * left),
+        float(dpi * top),
+        float(dpi * right),
+        float(dpi * bottom),
+    )
+    pil_img = pil_img.crop(crop_box)
+
+    pil_img.save(
+        screenshot_bytes,
+        format=format,
+    )
+
+    return screenshot_bytes.getvalue()
+
+
+def generate_step_images(
+    trace: str,
+    *,
+    dpi: int = 1,
+    format: str = "PNG",
+    include_types: bool = True,
+    text_memory_labels: bool = False,
+    strip_type_prefixes: Sequence[str] | None = None,
+    breakpoint: int | tuple[int, int] | None = None,
+    visualizer: str = "pytutor",
+    session: RenderingSession | None = None,
+) -> list[bytes]:
+    """Generate images for every step of an execution trace file.
+
+    Args:
+        trace: The execution trace file.
+        dpi: Dots Per Inch (DPI), a positive integer used to scale the driver's display resolution.
+        format: The image output format. This gets passed directly into PIL's ``Image.save()``.
+        include_types: Whether or not type tags should be included in this visualization.
+        text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
+        strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        breakpoint: Breakpoint line to visualize.
+        visualizer: The visualizer implementation to use ('pytutor' or 'json-pre').
+        session: Optional build-scoped browser owner.
+
+    Returns:
+        List of raw image bytes, one for each execution step in chronological order.
+    """
+    trace_json = resolve_trace_payload(trace, breakpoint=breakpoint)
+    num_steps = 1
+    if (
+        isinstance(trace_json, dict)
+        and "trace" in trace_json
+        and isinstance(trace_json["trace"], list)
+    ):
+        num_steps = len(trace_json["trace"])
+
+    if num_steps <= 1 or visualizer == "json-pre":
+        return [
+            generate_image(
+                trace,
+                dpi=dpi,
+                format=format,
+                include_types=include_types,
+                text_memory_labels=text_memory_labels,
+                strip_type_prefixes=strip_type_prefixes,
+                breakpoint=breakpoint,
+                visualizer=visualizer,
+                session=session,
+            )
+        ]
+
+    trace_str = json.dumps(trace_json)
+    images: list[bytes] = []
+
+    with online_python_tutor_frontend(
+        trace=trace_str,
+        dpi=dpi,
+        include_types=include_types,
+        text_memory_labels=text_memory_labels,
+        strip_type_prefixes=strip_type_prefixes,
+        visualizer=visualizer,
+        **({"session": session} if session is not None else {}),
+    ) as frontend:
+        driver = frontend["driver"]
+        viz = frontend["dataViz"]
+
+        for step in range(num_steps):
+            _ = driver.execute_script(f"window.optFrontend.renderStep({step});")
+            img_bytes = _capture_viz(
+                driver,
+                viz,
+                dpi=dpi,
+                format=format,
+                visualizer=visualizer,
+                session=session,
+            )
+            images.append(img_bytes)
+
+    return images
 
 
 def main() -> None:
@@ -622,6 +731,21 @@ def main() -> None:
         "--breakpoint",
         dest="breakpoint",
         help="Breakpoint line to visualize (optional).",
+        default=None,
+    )
+
+    _ = parser.add_argument(
+        "-a",
+        "--all-steps",
+        action="store_true",
+        help="Generate images for all execution steps in the trace.",
+    )
+
+    _ = parser.add_argument(
+        "-o",
+        "--output",
+        dest="output",
+        help="Output image path (e.g. Driver.java.png). When --all-steps is set, numbered step files are also saved.",
         default=None,
     )
 
@@ -677,6 +801,28 @@ def main() -> None:
         sys.stdout.write(html_snippet + "\n")
         return
 
+    if args.all_steps:
+        step_images = generate_step_images(
+            stdin_data,
+            dpi=args.dpi,
+            visualizer=args.visualizer,
+            breakpoint=bp,
+        )
+        if args.output:
+            out_path = Path(args.output)
+            out_dir = out_path.parent
+            base_stem = out_path.stem if out_path.suffix == ".png" else out_path.name
+            main_out = out_path if out_path.suffix == ".png" else (out_dir / f"{base_stem}.png")
+            for i, step_bytes in enumerate(step_images):
+                step_file = out_dir / f"{base_stem}.{i}.png"
+                step_file.write_bytes(step_bytes)
+            if step_images:
+                main_out.write_bytes(step_images[-1])
+        else:
+            if step_images:
+                _ = sys.stdout.buffer.write(step_images[-1])
+        return
+
     image_bytes = generate_image(
         stdin_data,
         dpi=args.dpi,
@@ -684,8 +830,11 @@ def main() -> None:
         breakpoint=bp,
     )
 
-    # dump png to stdout, should be redirected to destination
-    _ = sys.stdout.buffer.write(image_bytes)
+    if args.output:
+        Path(args.output).write_bytes(image_bytes)
+    else:
+        # dump png to stdout, should be redirected to destination
+        _ = sys.stdout.buffer.write(image_bytes)
 
 
 def render_html_cli() -> None:

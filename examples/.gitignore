@@ -1,5 +1,6 @@
 *.trace.json
 *.json
 *.png
+*.pdf
 bin/
 .DS_Store

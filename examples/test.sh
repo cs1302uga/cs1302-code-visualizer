@@ -87,50 +87,79 @@ print(f'{conf_ver} (binary reported: {bin_ver})')
 ")
 echo "Tracer version: ${TRACER_INFO}"
 
-open_file() {
-    local file="${1}"
+HAS_BREAKPOINT_ARG=false
+for arg in "${EXTRA_TRACER_ARGS[@]}"; do
+    case "${arg}" in
+        -a|--all-breakpoints|-b|--breakpoint|--breakpoints|-b=*|--breakpoint=*|--breakpoints=*)
+            HAS_BREAKPOINT_ARG=true
+            break
+            ;;
+    esac
+done
+
+if [ "${HAS_BREAKPOINT_ARG}" = false ]; then
+    EXTRA_TRACER_ARGS=("-a" "${EXTRA_TRACER_ARGS[@]}")
+fi
+
+open_files() {
+    local files=("$@")
     case "${OSTYPE}" in
         darwin*) # macOS
             (
                 set -x
-                qlmanage -p "${file}" >/dev/null 2>&1
+                qlmanage -p "${files[@]}" >/dev/null 2>&1
             )
             ;;
         linux*) # Linux (requires xdg-utils)
             (
                 set -x
-                xdg-open "${file}"
+                for f in "${files[@]}"; do
+                    xdg-open "${f}"
+                done
             )
             ;; # Windows (Git Bash/Cygwin)
         msys*|cygwin*)
             (
                 set -x
-                start "${file}"
+                for f in "${files[@]}"; do
+                    start "${f}"
+                done
             )
             ;;
         *)
             echo "unable to open file automatically: OSTYPE=${OSTYPE} not supported"
             ;;
     esac
-} # open_file
+} # open_files
 
 (
     set -x
     uv run generate_trace "${EXTRA_TRACER_ARGS[@]}" < "${INPUT_FILE}" > "${TRACE_FILE}"
-    uv run generate_visualization < "${TRACE_FILE}" > "${IMAGE_FILE}"
+    uv run generate_visualization --all-steps --output "${IMAGE_FILE}" < "${TRACE_FILE}"
 )
+
+# Collect all generated step images
+STEP_IMAGES=()
+idx=0
+while [ -f "${INPUT_FILE}.${idx}.png" ]; do
+    STEP_IMAGES+=("${INPUT_FILE}.${idx}.png")
+    ((idx++))
+done
+if [ ${#STEP_IMAGES[@]} -eq 0 ] && [ -f "${IMAGE_FILE}" ]; then
+    STEP_IMAGES+=("${IMAGE_FILE}")
+fi
 
 # Open image handling
 if [ "${OPEN_IMAGE}" = true ]; then
-    open_file "${IMAGE_FILE}"
+    open_files "${STEP_IMAGES[@]}"
 elif [ "${OPEN_IMAGE}" = false ]; then
     :
 else
-    echo "Do you want to open ${IMAGE_FILE}?"
+    echo "Do you want to open generated image(s) for ${INPUT_FILE}?"
     select yn in "Yes" "No"; do
         case ${yn} in
             Yes )
-                open_file "${IMAGE_FILE}"
+                open_files "${STEP_IMAGES[@]}"
                 break
                 ;;
             No )
@@ -170,18 +199,18 @@ fi
 if [ "${RM_IMAGE}" = true ]; then
     (
         set -x
-        rm -f "${IMAGE_FILE}"
+        rm -f "${INPUT_FILE}".*.png "${IMAGE_FILE}"
     )
 elif [ "${RM_IMAGE}" = false ]; then
     :
 else
-    echo "Do you want to delete ${IMAGE_FILE}?"
+    echo "Do you want to delete generated image(s) for ${INPUT_FILE}?"
     select yn in "Yes" "No"; do
         case ${yn} in
             Yes )
                 (
                     set -x
-                    rm -f "${IMAGE_FILE}"
+                    rm -f "${INPUT_FILE}".*.png "${IMAGE_FILE}"
                 )
                 break
                 ;;

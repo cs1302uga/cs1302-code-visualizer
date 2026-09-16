@@ -4113,9 +4113,11 @@ class DataVisualizer {
         (p) => (lambdaCode = lambdaCode.replaceAll(p, "")),
       );
       d3DomElement.append(
-        '<pre class="funcCode"><code class="language-java">' +
+        '<table class="lambdaObjTbl"><tr><td class="lambdaObjElt">' +
+          '<pre class="funcCode"><code class="language-java">' +
           htmlsanitize(lambdaCode) +
-          "</code></pre>",
+          "</code></pre>" +
+          "</td></tr></table>",
       );
     } else if (obj[0] == "HEAP_PRIMITIVE") {
       assert(obj.length == 3);

@@ -124,6 +124,12 @@ describe("modernTraceAdapter", () => {
                 kind: "color",
                 value: "#00FF0080",
               },
+              "700": {
+                id: 700,
+                type: "lambda",
+                kind: "lambda",
+                sam: "int apply(int x) {\n  return x * 2;\n}",
+              },
             },
           },
         ],
@@ -179,6 +185,12 @@ describe("modernTraceAdapter", () => {
 
       expect(step.heap["600"]).toEqual(["COLOR", "java.awt.Color", "#00FF0080"]);
       expect(step.heap_attrs["600"]).toEqual({ type: "java.awt.Color" });
+
+      expect(step.heap["700"]).toEqual([
+        "JAVA_LAMBDA",
+        "int apply(int x) {\n  return x * 2;\n}",
+      ]);
+      expect(step.heap_attrs["700"]).toEqual({ type: "lambda" });
     });
 
     it("converts breakpoints-based modern traces", () => {

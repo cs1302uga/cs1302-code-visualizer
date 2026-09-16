@@ -1,6 +1,6 @@
 # Examples Visualizer Gallery
 
-This gallery showcases memory visualizations generated across all 27 example suites in `examples/`.
+This gallery showcases memory visualizations generated across all 34 example suites in `examples/`.
 
 ---
 
@@ -33,6 +33,13 @@ This gallery showcases memory visualizations generated across all 27 example sui
 - [Example 24: Generic Integer Lists & Autoboxing](#example-24-generic-integer-lists--autoboxing)
 - [Example 25: Instance Method Execution & Active Call Stack Frames](#example-25-instance-method-execution--active-call-stack-frames)
 - [Example 26: Polymorphic Generics, Subclass Reification & Wildcards](#example-26-polymorphic-generics-subclass-reification--wildcards)
+- [Example 27: Multi-Level Inheritance, Constructor Chaining & Polymorphism](#example-27-multi-level-inheritance-constructor-chaining--polymorphism)
+- [Example 28: Empty Strings and Zero-Length Array Instances](#example-28-empty-strings-and-zero-length-array-instances)
+- [Example 29: Numeric Primitive Wrapper Classes](#example-29-numeric-primitive-wrapper-classes)
+- [Example 30: Non-Numeric Primitive Wrapper Classes](#example-30-non-numeric-primitive-wrapper-classes)
+- [Example 31: java.awt.Color Objects and Transparency](#example-31-java-awt-color-objects-and-transparency)
+- [Example 32: Guest Standard Input with java.util.Scanner](#example-32-guest-standard-input-with-java-util-scanner)
+- [Example 33: Guest Standard Input with java.lang.IO](#example-33-guest-standard-input-with-java-lang-io)
 
 ---
 
@@ -132,7 +139,7 @@ This gallery showcases memory visualizations generated across all 27 example sui
 ## Example 9: Functional Interfaces & Lambdas
 
 - **Source Code**: [Driver.java](example9/Driver.java)
-- **Concepts**: Java 8+ lambda expressions, standard functional interfaces (`Function`, `Predicate`), functional type attributes.
+- **Concepts**: Java 8+ lambda expressions, standard functional interfaces (`Function`, `Predicate`), functional type attributes, and heap object box representations for lambda expressions.
 
 ![Example 9 Visualization](example9/Driver.java.png)
 
@@ -289,3 +296,65 @@ This gallery showcases memory visualizations generated across all 27 example sui
 
 ![Example 26 Visualization](example26/cs1302/poly/Driver.java.png)
 
+---
+
+## Example 27: Multi-Level Inheritance, Constructor Chaining & Polymorphism
+
+- **Source Code**: [Driver.java](example27/cs1302/inheritance/Driver.java)
+- **Concepts**: Multi-level inheritance (`Person` -> `Employee` -> `Manager`), constructor chaining with `super(...)`, polymorphic reference variables, dynamic method dispatch, and safe downcasting.
+
+![Example 27 Visualization](example27/cs1302/inheritance/Driver.java.png)
+
+---
+
+## Example 28: Empty Strings and Zero-Length Array Instances
+
+- **Source Code**: [Driver.java](example28/cs1302/empty/Driver.java)
+- **Concepts**: Empty String object (`""`) labeled `String (length 0)`, zero-length primitive array (`new int[0]`) labeled `int[] (length 0)`, zero-length reference array (`new String[0]`) labeled `String[] (length 0)`.
+
+![Example 28 Visualization](example28/cs1302/empty/Driver.java.png)
+
+---
+
+## Example 29: Numeric Primitive Wrapper Classes
+
+- **Source Code**: [Driver.java](example29/cs1302/wrappers/numeric/Driver.java)
+- **Concepts**: Boxed numeric wrapper instances (`Byte`, `Short`, `Integer`, `Long`, `Float`, `Double`) with field `value` and primitive type labels.
+
+![Example 29 Visualization](example29/cs1302/wrappers/numeric/Driver.java.png)
+
+---
+
+## Example 30: Non-Numeric Primitive Wrapper Classes
+
+- **Source Code**: [Driver.java](example30/cs1302/wrappers/other/Driver.java)
+- **Concepts**: Boxed boolean and character wrapper instances (`Boolean`, `Character`) with field `value`, primitive type labels, and array of wrapper references.
+
+![Example 30 Visualization](example30/cs1302/wrappers/other/Driver.java.png)
+
+---
+
+## Example 31: java.awt.Color Objects and Transparency
+
+- **Source Code**: [Driver.java](example31/cs1302/color/Driver.java)
+- **Concepts**: `java.awt.Color` instances on the heap with swatch previews, RGB and RGBA hex labels, and alpha transparency rendering.
+
+![Example 31 Visualization](example31/cs1302/color/Driver.java.png)
+
+---
+
+## Example 32: Guest Standard Input with java.util.Scanner
+
+- **Source Code**: [Driver.java](example32/cs1302/scanner/Driver.java)
+- **Concepts**: Guest standard input streaming (`--stdin`), interactive token parsing via `java.util.Scanner`, and standard output trace capture.
+
+![Example 32 Visualization](example32/cs1302/scanner/Driver.java.png)
+
+---
+
+## Example 33: Guest Standard Input with java.lang.IO
+
+- **Source Code**: [Driver.java](example33/cs1302/io/Driver.java)
+- **Concepts**: Java 21+ simplified console I/O (`java.lang.IO.readln`, `java.lang.IO.println`), guest stdin ingestion, and standard output capture.
+
+![Example 33 Visualization](example33/cs1302/io/Driver.java.png)

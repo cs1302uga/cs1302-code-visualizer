@@ -519,6 +519,33 @@ def test_generate_trace_auto_detect_and_extra_args(java_home, monkeypatch):
         assert "src" in cmd
 
 
+def test_generate_trace_all_breakpoints_flag(java_home):
+    mock_run = MagicMock()
+    mock_run.return_value.stdout = '{"trace": []}'
+
+    with patch("subprocess.run", mock_run):
+        _ = generate_trace(
+            java_home,
+            SAMPLE_ENUM_JAVA,
+            all_breakpoints=True,
+        )
+        args, _ = mock_run.call_args
+        cmd = args[0]
+        assert "-a" in cmd
+        assert "-b" not in cmd
+
+    with patch("subprocess.run", mock_run):
+        _ = generate_trace(
+            java_home,
+            SAMPLE_ENUM_JAVA,
+            extra_tracer_args=["--all-breakpoints"],
+        )
+        args, _ = mock_run.call_args
+        cmd = args[0]
+        assert "--all-breakpoints" in cmd
+        assert "-b" not in cmd
+
+
 def test_generate_trace_eval_enum_hash(java_home):
     mock_run = MagicMock()
     mock_run.return_value.stdout = '{"trace": []}'

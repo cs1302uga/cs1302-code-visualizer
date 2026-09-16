@@ -12,6 +12,7 @@ from cs1302_code_visualizer import browser_driver
 from cs1302_code_visualizer.browser_driver import (
     generate_html,
     generate_image,
+    generate_step_images,
     get_default_bundle_url,
     get_webdriver,
     render_html,
@@ -365,5 +366,76 @@ def test_render_html_cli(sample_trace_json, monkeypatch):
     render_html_cli()
     val3 = output_buffer.getvalue()
     assert "<div id=" in val3
+
+
+def test_generate_step_images_single_and_json_pre(sample_trace_json):
+    imgs1 = generate_step_images(sample_trace_json)
+    assert len(imgs1) == 1
+    assert isinstance(imgs1[0], bytes)
+
+    imgs2 = generate_step_images(sample_trace_json, visualizer="json-pre")
+    assert len(imgs2) == 1
+    assert isinstance(imgs2[0], bytes)
+
+
+def test_generate_step_images_multi_step_and_cli(tmp_path, monkeypatch):
+    multi_java = """
+    public class Driver {
+        public static void main(String[] args) {
+            int a = 1;
+            int b = 2;
+        }
+    }
+    """
+    java_home = ensure_jdk_installed()
+    trace_raw = generate_trace(java_home, multi_java, all_breakpoints=True)
+    step_imgs = generate_step_images(trace_raw)
+    assert len(step_imgs) >= 2
+    assert all(isinstance(img, bytes) for img in step_imgs)
+
+    # CLI with --all-steps and -o ending in .png
+    out_file = tmp_path / "Driver.java.png"
+    monkeypatch.setattr(sys, "stdin", io.StringIO(trace_raw))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["generate_visualization", "--all-steps", "-o", str(out_file)],
+    )
+    driver_main()
+    assert out_file.exists()
+    assert (tmp_path / "Driver.java.0.png").exists()
+    assert (tmp_path / "Driver.java.1.png").exists()
+
+    # CLI with --all-steps and -o NOT ending in .png
+    out_no_ext = tmp_path / "OutputNoExt"
+    monkeypatch.setattr(sys, "stdin", io.StringIO(trace_raw))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["generate_visualization", "--all-steps", "-o", str(out_no_ext)],
+    )
+    driver_main()
+    assert (tmp_path / "OutputNoExt.png").exists()
+    assert (tmp_path / "OutputNoExt.0.png").exists()
+
+    # CLI with --all-steps writing to stdout
+    out_buf = io.BytesIO()
+    monkeypatch.setattr(sys, "stdin", io.StringIO(trace_raw))
+    monkeypatch.setattr(sys, "stdout", MockStdout(out_buf))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["generate_visualization", "--all-steps"],
+    )
+    driver_main()
+    assert len(out_buf.getvalue()) > 0
+
+    # CLI without --all-steps with -o
+    single_out = tmp_path / "Single.png"
+    monkeypatch.setattr(sys, "stdin", io.StringIO(trace_raw))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["generate_visualization", "-o", str(single_out)],
+    )
+    driver_main()
+    assert single_out.exists()
+
 
 

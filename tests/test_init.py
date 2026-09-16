@@ -7,7 +7,12 @@ from unittest.mock import patch
 import pytest
 
 import cs1302_code_visualizer
-from cs1302_code_visualizer import main, render_image, render_images
+from cs1302_code_visualizer import (
+    generate_step_images,
+    main,
+    render_image,
+    render_images,
+)
 
 SAMPLE_JAVA = """
 public class Driver {
@@ -84,6 +89,10 @@ def test_render_images_all_occurrences():
     assert isinstance(res[4], list)
     assert len(res[4]) > 0
     assert isinstance(res[4][0], bytes)
+
+
+def test_generate_step_images_export():
+    assert callable(generate_step_images)
 
 
 def test_init_main(monkeypatch):

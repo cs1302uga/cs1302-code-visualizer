@@ -6,6 +6,7 @@ This example demonstrates Java 8+ lambda expressions and standard functional int
 
 - **Lambda Expressions**: `x -> x * x` and `n -> n % 2 == 0`.
 - **Functional Interface Types**: Variable type attributes reflecting `java.util.function.Function` and `java.util.function.Predicate`.
+- **Heap Object Representation**: Each lambda expression on the heap forms an object box labeled `lambda` containing the reconstructed method implementation with syntax highlighting.
 - **Lambda Evaluation**: Tracing calls to `.apply()` and `.test()`.
 
 ## Files

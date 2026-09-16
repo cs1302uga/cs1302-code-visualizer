@@ -311,6 +311,73 @@ describe("CodeVisualizer", () => {
       expect(container.innerHTML).toBe("");
     });
 
+    it("renders an object box table for JAVA_LAMBDA heap objects", () => {
+      const traceObj = {
+        code: "Function<Integer, Integer> f = x -> x * 2;",
+        trace: [
+          {
+            line: 1,
+            event: "step_line",
+            func_name: "main",
+            stack_to_render: [
+              {
+                func_name: "main",
+                frame_id: 1,
+                unique_hash: "main_1",
+                is_parent: false,
+                is_zombie: false,
+                parent_frame_id_list: [],
+                ordered_varnames: ["f"],
+                encoded_locals: { f: ["REF", 1] },
+              },
+            ],
+            globals: {},
+            ordered_globals: [],
+            heap: {
+              "1": [
+                "JAVA_LAMBDA",
+                "java.lang.Integer apply(java.lang.Integer x) {\n    return x * 2;\n}",
+              ],
+            },
+            heap_attrs: {
+              "1": { type: "lambda" },
+            },
+            stdout: "",
+            stderr: "",
+          },
+        ],
+      };
+
+      const instance = create({
+        lang: "java",
+        trace: traceObj,
+        element: container,
+        options: {
+          stripTypePrefixes: ["java.lang."],
+        },
+      });
+
+      const heapObjects = container.querySelectorAll(".heapObject");
+      expect(heapObjects.length).toBe(1);
+
+      const lambdaObj = heapObjects[0];
+      expect(lambdaObj.querySelector(".typeLabel")?.textContent).toBe("lambda");
+      const lambdaTbl = lambdaObj.querySelector("table.lambdaObjTbl");
+      expect(lambdaTbl).not.toBeNull();
+      const lambdaElt = lambdaTbl?.querySelector("td.lambdaObjElt");
+      expect(lambdaElt).not.toBeNull();
+      const codeBlock = lambdaElt?.querySelector(
+        "pre.funcCode code.language-java",
+      );
+      expect(codeBlock).not.toBeNull();
+      expect(codeBlock?.textContent).toBe(
+        "Integer apply(Integer x) {\n    return x * 2;\n}",
+      );
+
+      instance.destroy?.();
+      expect(container.innerHTML).toBe("");
+    });
+
     it("attaches ARIA attributes and handles keyboard arrow navigation", () => {
       const traceObj = {
         code: "int x = 1;",

@@ -430,6 +430,19 @@ div.ExecutionVisualizer table.colorObjTbl td.colorObjElt {
   gap: 6px;
 }
 
+div.ExecutionVisualizer table.lambdaObjTbl {
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 2px;
+  background-color: #ffffc6;
+  border: 1px solid black;
+  border-radius: 0.2rem;
+}
+
+div.ExecutionVisualizer table.lambdaObjTbl td.lambdaObjElt {
+  padding: 3px 6px;
+}
+
 div.ExecutionVisualizer .colorSwatchContainer {
   display: inline-block;
   width: 16px;

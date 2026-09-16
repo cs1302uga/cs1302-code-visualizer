@@ -19,7 +19,12 @@ from typing import Any
 
 from . import browser_driver, trace_generator
 from .breakpoint_lister import list_breakpoints, list_breakpoints_json
-from .browser_driver import generate_image, render_html, render_html_cli
+from .browser_driver import (
+    generate_image,
+    generate_step_images,
+    render_html,
+    render_html_cli,
+)
 from .errors import (
     BreakpointResolutionError,
     CodeVisError,
@@ -48,6 +53,7 @@ __all__ = [
     "TraceGeneratorError",
     "TracerDownloadError",
     "generate_image",
+    "generate_step_images",
     "generate_trace",
     "get_sanitized_java_env",
     "list_breakpoints",

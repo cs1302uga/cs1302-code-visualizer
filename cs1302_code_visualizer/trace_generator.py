@@ -197,6 +197,7 @@ def generate_trace(
     stdin_file: Path | str | None = None,
     extra_tracer_args: Sequence[str] | None = None,
     eval_enum_hash: bool = True,
+    all_breakpoints: bool = False,
 ) -> str:
     """Generate an execution trace for a Java source program.
 
@@ -215,6 +216,7 @@ def generate_trace(
         stdin_file: Path to file whose content is provided via standard input.
         extra_tracer_args: Additional CLI arguments to pass to code-tracer.
         eval_enum_hash: Whether to eagerly evaluate lazy enum hash codes.
+        all_breakpoints: Whether to include all encountered breakpoint instances in chronological order.
 
     Returns:
         JSON string representing the execution trace.
@@ -224,8 +226,18 @@ def generate_trace(
 
     cli_args: list[str] = ["-v"]
 
-    for breakpoint in sorted(breakpoints):
-        cli_args.extend(["-b", str(breakpoint)])
+    has_explicit_breakpoints = breakpoints != DEFAULT_BREAKPOINTS_SET
+    effective_all_breakpoints = all_breakpoints or auto_detect
+    if extra_tracer_args:
+        if "-a" in extra_tracer_args or "--all-breakpoints" in extra_tracer_args:
+            effective_all_breakpoints = True
+
+    if has_explicit_breakpoints:
+        for breakpoint in sorted(breakpoints):
+            cli_args.extend(["-b", str(breakpoint)])
+    elif not effective_all_breakpoints:
+        for breakpoint in sorted(breakpoints):
+            cli_args.extend(["-b", str(breakpoint)])
 
     if inline_strings:
         cli_args.append("--inline-strings")
@@ -239,8 +251,12 @@ def generate_trace(
     if not eval_enum_hash:
         cli_args.append("--no-eval-enum-hash")
 
-    if auto_detect:
-        cli_args.append("-a")
+    if effective_all_breakpoints:
+        if not (
+            extra_tracer_args
+            and ("-a" in extra_tracer_args or "--all-breakpoints" in extra_tracer_args)
+        ):
+            cli_args.append("-a")
 
     if type_style:
         cli_args.append(f"--type-style={type_style}")
@@ -627,8 +643,10 @@ def main() -> None:
 
     _ = parser.add_argument(
         "-a",
+        "--all-breakpoints",
         "--auto-detect",
-        help="Automatically detect and compile dependencies in the source path or packages.",
+        dest="all_breakpoints",
+        help="Include all encountered breakpoint instances in chronological order.",
         action="store_true",
     )
 
@@ -717,7 +735,7 @@ def main() -> None:
         args.trace_timeout,
         include_enum_static_fields=args.include_enum_static_fields,
         breakpoints=breakpoints,
-        auto_detect=args.auto_detect,
+        all_breakpoints=args.all_breakpoints,
         type_style=args.type_style,
         stdin=args.stdin,
         stdin_file=args.stdin_file,
