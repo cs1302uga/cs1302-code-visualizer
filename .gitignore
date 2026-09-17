@@ -13,6 +13,7 @@ wheels/
 .jdk8/
 .coverage
 .pytest_cache/
+/build/gallery/
 
 # Local dependency cache and generated shims
 scripts/cache/

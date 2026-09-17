@@ -2804,7 +2804,11 @@ class DataVisualizer {
 
     sfdEnter
       .append("div")
-      .attr("class", "stackFrameHeader")
+      .attr("class", "stackFrameHeader");
+
+    // A Java frame keeps its identity while its displayed source line changes.
+    sfdEnter.merge(stackFrameDiv as any)
+      .select(".stackFrameHeader")
       .html(function (frame, i) {
         // pretty-print lambdas and display other weird characters
         // (might contain '<' or '>' for weird names like <genexpr>)

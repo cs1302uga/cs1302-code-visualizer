@@ -100,6 +100,25 @@ describe("CodeVisualizer", () => {
   });
 
   describe("create() factory with pytutor", () => {
+    it("updates reused stack frame headers when navigating between steps", () => {
+      const trace = [3, 4].map(line => ({
+        line, event: "step_line", func_name: "main", stdout: "", stderr: "",
+        globals: {}, ordered_globals: [], heap: {},
+        stack_to_render: [{
+          func_name: `main:${line}`, frame_id: 0, unique_hash: "0",
+          is_parent: false, is_zombie: false, is_highlighted: true,
+          parent_frame_id_list: [], ordered_varnames: [], encoded_locals: {},
+        }],
+      }));
+      const instance = create({ lang: "java", trace: { code: "", trace }, element: container });
+      expect(container.querySelector('[data-frame_id="0"] .stackFrameHeader')?.textContent).toBe("main:4");
+      container.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft" }));
+      expect(container.querySelector('[data-frame_id="0"] .stackFrameHeader')?.textContent).toBe("main:3");
+      container.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
+      expect(container.querySelector('[data-frame_id="0"] .stackFrameHeader')?.textContent).toBe("main:4");
+      instance.destroy?.();
+    });
+
     it("initializes pytutor visualizer instance on target element", () => {
       const traceObj = {
         code: "public class Main { public static void main(String[] args) {} }",
@@ -737,4 +756,3 @@ describe("CodeVisualizer", () => {
     });
   });
 });
-

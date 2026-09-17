@@ -7,9 +7,10 @@ import argparse
 import base64
 import json
 import re
-import tomllib
+from html import escape
 from pathlib import Path
 
+from PIL import Image
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers import JavaLexer
@@ -17,47 +18,36 @@ from pygments.lexers import JavaLexer
 from cs1302_code_visualizer.browser_driver import get_webdriver
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-METADATA_PATH = Path(
-    "/Users/mepcott/.gemini/antigravity-ide/brain/23001bca-d34b-4919-879c-5a79a1815fae/scratch/example_metadata.json"
-)
-GALLERY_IMAGES_DIR = Path(
-    "/Users/mepcott/.gemini/antigravity-ide/brain/23001bca-d34b-4919-879c-5a79a1815fae/gallery_images"
-)
-ARTIFACT_DIR = Path(
-    "/Users/mepcott/.gemini/antigravity-ide/brain/23001bca-d34b-4919-879c-5a79a1815fae"
-)
+ARTIFACT_DIR = REPO_ROOT / "build" / "gallery"
 
 
-def get_visualizer_version() -> str:
-    pyproject_path = REPO_ROOT / "pyproject.toml"
-    if pyproject_path.exists():
-        with open(pyproject_path, "rb") as f:
-            data = tomllib.load(f)
-            return str(data.get("project", {}).get("version", "unknown"))
-    return "unknown"
-
-
-def load_metadata() -> list[dict]:
-    if METADATA_PATH.exists():
-        with open(METADATA_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    raise FileNotFoundError(f"Metadata file not found: {METADATA_PATH}")
+def load_metadata(artifact_dir: Path) -> dict:
+    with (artifact_dir / "example_metadata.json").open(encoding="utf-8") as source:
+        metadata = json.load(source)
+    examples = metadata["examples"]
+    if [ex["index"] for ex in examples] != list(range(34)):
+        raise ValueError("Gallery metadata must contain all 34 examples in order")
+    for example in examples:
+        if not example["steps"] or example["step_count"] != len(example["steps"]):
+            raise ValueError(f"Invalid step count for example{example['index']}")
+    return metadata
 
 
 def encode_image(img_path: Path) -> str:
-    if not img_path.exists():
-        return ""
     with open(img_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode("utf-8")
     return f"data:image/png;base64,{b64}"
 
 
-def build_html(examples: list[dict]) -> str:
+def build_html(metadata: dict, artifact_dir: Path) -> str:
+    examples = metadata["examples"]
+    images_dir = artifact_dir / "gallery_images"
     formatter = HtmlFormatter(style="friendly", nowrap=False)
     pygments_css = formatter.get_style_defs(".highlight")
 
     total_steps = sum(ex.get("step_count", 1) for ex in examples)
-    version = get_visualizer_version()
+    version = escape(metadata["visualizer_version"])
+    java_version = escape(metadata["java_version"])
 
     # Build TOC rows
     toc_items_html = []
@@ -68,14 +58,14 @@ def build_html(examples: list[dict]) -> str:
         if title.lower().startswith(f"example {idx}:"):
             title_clean = title
         elif title.lower().startswith(f"example {idx}"):
-            title_clean = f"Example {idx}: " + title[len(f"example {idx}"):].lstrip(" -:").strip()
+            title_clean = f"Example {idx}: " + title[len(f"example {idx}") :].lstrip(" -:").strip()
         else:
             title_clean = f"Example {idx}: {title}"
         slug = f"example-{idx}"
         toc_items_html.append(
             f"""<div class="toc-item">
-                <span class="toc-num">Ex {idx:02d} ({steps}s)</span>
-                <span class="toc-title"><a href="#{slug}">{title_clean}</a></span>
+                <span class="toc-num">Ex {idx:02d} · {steps} steps</span>
+                <span class="toc-title"><a href="#{slug}">{escape(title_clean)}</a></span>
             </div>"""
         )
     toc_html = "\n".join(toc_items_html)
@@ -91,12 +81,12 @@ def build_html(examples: list[dict]) -> str:
         if title.lower().startswith(f"example {idx}:"):
             title_clean = title
         elif title.lower().startswith(f"example {idx}"):
-            title_clean = f"Example {idx}: " + title[len(f"example {idx}"):].lstrip(" -:").strip()
+            title_clean = f"Example {idx}: " + title[len(f"example {idx}") :].lstrip(" -:").strip()
         else:
             title_clean = f"Example {idx}: {title}"
 
         slug = f"example-{idx}"
-        rel_java = ex["java_file"]
+        rel_java = escape(ex["java_file"])
         cmd = ex.get("cmd", "")
 
         # Concepts list
@@ -104,7 +94,7 @@ def build_html(examples: list[dict]) -> str:
         if ex.get("concepts"):
             items = []
             for c in ex["concepts"]:
-                clean_c = c.lstrip("- *").strip()
+                clean_c = escape(re.sub(r"^[-*]\s+", "", c).strip())
                 clean_c = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", clean_c)
                 clean_c = re.sub(r"`([^`]+)`", r"<code>\1</code>", clean_c)
                 items.append(f"<li>{clean_c}</li>")
@@ -118,19 +108,22 @@ def build_html(examples: list[dict]) -> str:
             """
 
         # Diagram images
-        if step_count > 1 and steps_data:
+        if steps_data:
             step_cards = []
             for s in steps_data:
                 s_idx = s["step"]
                 s_line = s.get("line", "?")
-                s_path = GALLERY_IMAGES_DIR / s["filename"]
+                s_path = images_dir / s["filename"]
+                with Image.open(s_path) as diagram:
+                    width, height = (dimension / metadata["dpi"] for dimension in diagram.size)
+                card_class = "step-card wide" if width > 330 or height > 240 else "step-card"
                 s_data = encode_image(s_path)
                 if s_data:
                     step_cards.append(
                         f"""
-                        <div class="step-card">
+                        <div class="{card_class}">
                             <div class="step-card-header">Step {s_idx + 1} of {step_count} (Line {s_line})</div>
-                            <img class="step-card-img" src="{s_data}" alt="Step {s_idx + 1}" />
+                            <img class="step-card-img" style="width: {width}px" src="{s_data}" alt="Step {s_idx + 1}" />
                         </div>
                         """
                     )
@@ -143,26 +136,16 @@ def build_html(examples: list[dict]) -> str:
             </div>
             """
         else:
-            img_path = GALLERY_IMAGES_DIR / f"example{idx}.png"
-            img_data = encode_image(img_path)
-            img_html = ""
-            if img_data:
-                img_html = f"""
-                <div class="diagram-card">
-                    <div class="diagram-badge">Memory Execution State Diagram</div>
-                    <img class="diagram-img" src="{img_data}" alt="{title_clean}" />
-                </div>
-                """
+            raise ValueError(f"No step images for example{idx}")
 
         # Syntax highlighted code
-        code_str = ex.get("code", "")
         code_html = ""
-        if code_str:
-            highlighted = highlight(code_str.strip(), JavaLexer(), formatter)
-            code_html = f"""
+        for source in ex["sources"]:
+            highlighted = highlight(source["code"].strip(), JavaLexer(), formatter)
+            code_html += f"""
             <div class="code-card">
                 <div class="code-card-header">
-                    <span>Source Code: <code>{rel_java}</code></span>
+                    <span>Source Code: <code>{escape(source["path"])}</code></span>
                 </div>
                 <div class="code-card-body">
                     {highlighted}
@@ -170,7 +153,7 @@ def build_html(examples: list[dict]) -> str:
             </div>
             """
 
-        cmd_html = f'<div class="command-box"><code>{cmd}</code></div>' if cmd else ""
+        cmd_html = f'<div class="command-box"><code>{escape(cmd)}</code></div>' if cmd else ""
 
         sections_html.append(
             f"""
@@ -178,15 +161,15 @@ def build_html(examples: list[dict]) -> str:
             <div class="example-header">
                 <div class="example-title-group">
                     <span class="example-badge">Example {idx:02d}</span>
-                    <span class="example-steps-pill">{step_count} {'Step' if step_count == 1 else 'Steps'}</span>
-                    <h2 class="example-heading">{title_clean}</h2>
+                    <span class="example-steps-pill">{step_count} {"Step" if step_count == 1 else "Steps"}</span>
+                    <h2 class="example-heading">{escape(title_clean)}</h2>
                 </div>
                 <span class="example-file-badge">{rel_java}</span>
             </div>
             {cmd_html}
             {concepts_html}
-            {img_html}
             {code_html}
+            {img_html}
         </section>
         """
         )
@@ -336,15 +319,13 @@ body {{
 .toc-num {{
     font-weight: 700;
     color: #0284c7;
-    width: 75px;
+    width: 88px;
     flex-shrink: 0;
 }}
 
 .toc-title {{
     color: #334155;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
 }}
 
 .toc-title a {{
@@ -371,6 +352,7 @@ body {{
 
 .example-title-group {{
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
 }}
@@ -394,6 +376,8 @@ body {{
 }}
 
 .example-file-badge {{
+    overflow-wrap: anywhere;
+    max-width: 35%;
     font-family: monospace;
     font-size: 7.5pt;
     background: #f1f5f9;
@@ -415,6 +399,7 @@ body {{
 
 .command-box code {{
     font-family: monospace;
+    overflow-wrap: anywhere;
 }}
 
 .concepts-box {{
@@ -494,9 +479,13 @@ body {{
     text-align: left;
 }}
 
+.step-card.wide {{
+    flex-basis: 100%;
+}}
+
 .step-card-img {{
     max-width: 100%;
-    max-height: 200px;
+    max-height: 8.5in;
     object-fit: contain;
     display: inline-block;
 }}
@@ -528,6 +517,7 @@ body {{
 }}
 
 .code-card {{
+    break-inside: avoid;
     border: 1px solid #cbd5e1;
     border-radius: 6px;
     overflow: hidden;
@@ -559,6 +549,8 @@ body {{
 .code-card-body pre {{
     margin: 0;
     font-family: monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }}
 
 {pygments_css}
@@ -572,7 +564,7 @@ body {{
     <div class="cover-pill">CS1302 Reference Catalog</div>
     <h1 class="cover-title">Code Visualizer<br><span>Examples Gallery</span></h1>
     <div class="cover-subtitle">
-        A complete catalog of 34 memory execution trace diagrams, heap object graphs, and call stack states.
+        All 34 reference examples, with memory diagrams, heap object graphs, and call stack states at every configured execution step.
     </div>
     <div class="cover-stats">
         <div class="stat-item">
@@ -584,7 +576,7 @@ body {{
             <div class="stat-label">Breakpoint Steps</div>
         </div>
         <div class="stat-item">
-            <div class="stat-value">Java 21</div>
+            <div class="stat-value">Java 25</div>
             <div class="stat-label">LTS Runtime</div>
         </div>
         <div class="stat-item">
@@ -592,6 +584,7 @@ body {{
             <div class="stat-label">Visualizer</div>
         </div>
     </div>
+    <p>JDK {java_version}</p>
 </div>
 
 <!-- Table of Contents -->
@@ -614,15 +607,15 @@ body {{
     return full_html
 
 
-def generate_pdf(output_paths: list[Path]):
+def generate_pdf(output_path: Path, artifact_dir: Path):
     print("Loading example metadata...")
-    examples = load_metadata()
-    print(f"Loaded {len(examples)} examples.")
+    metadata = load_metadata(artifact_dir)
+    print(f"Loaded {len(metadata['examples'])} examples.")
 
     print("Building printable HTML...")
-    html_content = build_html(examples)
+    html_content = build_html(metadata, artifact_dir)
 
-    temp_html = ARTIFACT_DIR / "scratch" / "gallery_print.html"
+    temp_html = artifact_dir / "gallery_print.html"
     temp_html.parent.mkdir(parents=True, exist_ok=True)
     with open(temp_html, "w", encoding="utf-8") as f:
         f.write(html_content)
@@ -632,6 +625,15 @@ def generate_pdf(output_paths: list[Path]):
     driver = get_webdriver(dpi=2)
     try:
         driver.get(f"file://{temp_html.resolve()}")
+        driver.execute_async_script("""
+            const done = arguments[arguments.length - 1];
+            Promise.all([document.fonts.ready, ...Array.from(document.images, image => image.decode())])
+              .then(() => done(true), error => done(String(error)));
+        """)
+        if not driver.execute_script(
+            "return Array.from(document.images).every(image => image.complete && image.naturalWidth > 0)"
+        ):
+            raise ValueError("A gallery image failed to load")
 
         print("Executing Page.printToPDF via CDP...")
         pdf_res = driver.execute_cdp_cmd(
@@ -654,11 +656,9 @@ def generate_pdf(output_paths: list[Path]):
         pdf_bytes = base64.b64decode(pdf_res["data"])
         print(f"Generated PDF payload: {len(pdf_bytes):,} bytes.")
 
-        for out_path in output_paths:
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(out_path, "wb") as f:
-                f.write(pdf_bytes)
-            print(f"Successfully wrote PDF to {out_path} ({len(pdf_bytes):,} bytes)")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(pdf_bytes)
+        print(f"Successfully wrote PDF to {output_path} ({len(pdf_bytes):,} bytes)")
 
     finally:
         driver.quit()
@@ -666,6 +666,7 @@ def generate_pdf(output_paths: list[Path]):
 
 def main():
     parser = argparse.ArgumentParser(description="Generate PDF visualizer gallery")
+    parser.add_argument("--artifact-dir", type=Path, default=ARTIFACT_DIR)
     parser.add_argument(
         "--output",
         "-o",
@@ -675,12 +676,7 @@ def main():
     )
     args = parser.parse_args()
 
-    artifact_pdf = ARTIFACT_DIR / "examples_gallery.pdf"
-    targets = [args.output.resolve()]
-    if artifact_pdf.resolve() != args.output.resolve():
-        targets.append(artifact_pdf.resolve())
-
-    generate_pdf(targets)
+    generate_pdf(args.output.resolve(), args.artifact_dir.resolve())
 
 
 if __name__ == "__main__":

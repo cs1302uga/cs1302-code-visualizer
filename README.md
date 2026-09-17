@@ -122,6 +122,21 @@ Input highlighting follows completed reads rather than reader lookahead.
 characters. Scanner, BufferedReader, and JDK 25 `java.lang.IO.readln` are covered
 by integration tests in both supported trace formats.
 
+## Building the examples PDF
+
+Run `make gallery GALLERY_JDK=/path/to/jdk25` to regenerate all 34 examples and
+write `examples/examples_gallery.pdf`. If JDK 25 is already on `PATH`, run
+`make gallery`. The command installs the optional gallery dependencies through uv.
+
+The PDF includes every configured execution step (including accumulated
+breakpoint hits and modern-format traces), all Java source files, and a table of
+contents. Intermediate traces, images, runtime metadata, and printable HTML are
+stored in `build/gallery/`. Existing example images and JSON files are preserved.
+To rebuild only the PDF from these artifacts, run
+`uv run --extra gallery python -m scripts.generate_gallery_pdf`.
+Both gallery scripts accept `--artifact-dir` for a different intermediate
+directory, and the PDF script accepts `--output` for a different PDF location.
+
 ## Reusing browsers and execution traces
 
 For repeated image requests, own a `RenderingSession` for the duration of a build:

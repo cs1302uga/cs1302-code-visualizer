@@ -1,213 +1,183 @@
 #!/usr/bin/env python3
-"""Run all 34 examples, collect multi-step visualization images, update metadata and markdown gallery."""
+"""Generate all example traces and gallery images with JDK 25, preserving source artifacts."""
 
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import re
-import shutil
+import shlex
 import subprocess
+import sys
+import tomllib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-BRAIN_DIR = Path("/Users/mepcott/.gemini/antigravity-ide/brain/23001bca-d34b-4919-879c-5a79a1815fae")
-GALLERY_IMAGES_DIR = BRAIN_DIR / "gallery_images"
-METADATA_PATH = BRAIN_DIR / "scratch" / "example_metadata.json"
-MARKDOWN_GALLERY_PATH = BRAIN_DIR / "examples_gallery.md"
+from cs1302_code_visualizer import RenderingSession
+from cs1302_code_visualizer.browser_driver import generate_step_images
+from cs1302_code_visualizer.trace_generator import (
+    ensure_code_tracer_installed,
+    ensure_jdk_installed,
+    get_sanitized_java_env,
+    jdk_exists,
+    read_tracer_url_and_sum_from_toml,
+)
 
-GALLERY_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
-METADATA_PATH.parent.mkdir(parents=True, exist_ok=True)
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_ARTIFACT_DIR = REPO_ROOT / "build" / "gallery"
 
 
 def parse_readme(readme_path: Path) -> tuple[str, list[str]]:
-    if not readme_path.exists():
-        return "", []
     content = readme_path.read_text(encoding="utf-8")
-    lines = content.splitlines()
-    title = ""
-    for line in lines:
-        if line.startswith("#"):
-            title = line.lstrip("#").strip()
-            break
-
+    title = next(line.lstrip("#").strip() for line in content.splitlines() if line.startswith("#"))
     concepts = []
     in_concepts = False
-    for line in lines:
+    for line in content.splitlines():
         if re.search(r"##\s*Concepts Illustrated", line, re.IGNORECASE):
             in_concepts = True
-            continue
         elif in_concepts and line.startswith("##"):
             break
         elif in_concepts and line.strip().startswith("-"):
             concepts.append(line.strip())
-
     return title, concepts
 
 
-def main():
-    print("Building multi-step gallery data for all 34 examples...")
-    existing_meta = {}
-    if METADATA_PATH.exists():
-        for item in json.loads(METADATA_PATH.read_text(encoding="utf-8")):
-            existing_meta[item["index"]] = item
+def example_command(example_dir: Path) -> tuple[Path, list[str]]:
+    """Read the source and tracer arguments from an example's existing test command."""
+    lines = (example_dir / "test.sh").read_text().splitlines()
+    commands = [shlex.split(line) for line in lines if line.strip().startswith('../test.sh "$@" ')]
+    if len(commands) != 1 or commands[0][1] != "$@":
+        raise ValueError(f"Expected one example command in {example_dir / 'test.sh'}")
+    source = example_dir / commands[0][2]
+    args = commands[0][3:]
+    breakpoint_flags = ("-a", "--all-breakpoints", "-b", "--breakpoint", "--breakpoints")
+    if not any(arg.split("=", 1)[0] in breakpoint_flags for arg in args):
+        args.insert(0, "-a")
+    return source, args
 
-    all_examples = []
 
-    for idx in range(34):
-        ex_dir = REPO_ROOT / "examples" / f"example{idx}"
-        if not ex_dir.is_dir():
-            continue
+def trace_sequences(data: dict) -> list[dict]:
+    """Expand breakpoint hits without discarding accumulated snapshots."""
+    if isinstance(data.get("trace"), list) or isinstance(data.get("steps"), list):
+        return [data]
+    if data.get("format") == "modern":
+        raise ValueError("Expected chronological modern steps in gallery trace")
+    sequences = []
+    for value in data.values():
+        for item in value if isinstance(value, list) else [value]:
+            if not isinstance(item, dict):
+                raise TypeError("Invalid breakpoint trace")
+            sequences.extend(trace_sequences(item))
+    if not sequences:
+        raise ValueError("No execution steps in gallery trace")
+    return sequences
 
-        test_sh = ex_dir / "test.sh"
-        readme = ex_dir / "README.md"
-        title, concepts = parse_readme(readme)
 
-        # Run test.sh keeping json and images
-        cmd = ["./test.sh", "--no-open", "--no-rm-json", "--no-rm-image"]
-        print(f"Running example{idx}...")
-        subprocess.run(cmd, cwd=ex_dir, check=True, capture_output=True)
-
-        # Find json file
-        json_files = list(ex_dir.rglob("*.java.json"))
-        if not json_files:
-            print(f"Warning: No JSON trace found for example{idx}")
-            continue
-
-        json_file = json_files[0]
-        java_file = json_file.with_name(json_file.name[:-5]) # remove .json
-        rel_java = java_file.relative_to(ex_dir)
-
-        trace_data = json.loads(json_file.read_text(encoding="utf-8"))
-        raw_steps = trace_data.get("trace", [])
-
-        # Find all step pngs
-        step_imgs = []
-        step_idx = 0
-        while True:
-            step_file = java_file.with_name(f"{java_file.name}.{step_idx}.png")
-            if not step_file.exists():
-                break
-            dest_name = f"example{idx}_{step_idx}.png"
-            dest_path = GALLERY_IMAGES_DIR / dest_name
-            shutil.copy2(step_file, dest_path)
-
-            line_num = raw_steps[step_idx].get("line", "?") if step_idx < len(raw_steps) else "?"
-            func_name = raw_steps[step_idx].get("func_name", "") if step_idx < len(raw_steps) else ""
-
-            step_imgs.append({
-                "step": step_idx,
-                "filename": dest_name,
-                "line": line_num,
-                "func": func_name,
-            })
-            step_idx += 1
-
-        # Copy final image as example{idx}.png
-        final_img = java_file.with_name(f"{java_file.name}.png")
-        if final_img.exists():
-            shutil.copy2(final_img, GALLERY_IMAGES_DIR / f"example{idx}.png")
-
-        # Clean up example dir
-        for p in ex_dir.rglob("*.png"):
-            p.unlink()
-        for p in ex_dir.rglob("*.json"):
-            p.unlink()
-
-        # Command from test.sh
-        test_content = test_sh.read_text(encoding="utf-8")
-        test_line = next((line.strip() for line in test_content.splitlines() if "../test.sh" in line), "")
-
-        all_examples.append({
-            "index": idx,
-            "title": title or f"Example {idx}",
-            "java_file": str(rel_java),
-            "code": java_file.read_text(encoding="utf-8"),
-            "concepts": concepts,
-            "cmd": test_line,
-            "step_count": len(step_imgs),
-            "steps": step_imgs,
-        })
-
-    # Save metadata JSON
-    METADATA_PATH.write_text(json.dumps(all_examples, indent=2), encoding="utf-8")
-    print(f"Updated metadata saved to {METADATA_PATH}")
-
-    # Generate Markdown Gallery with Carousels
-    md_lines = [
-        "# Code Visualizer Examples Gallery",
-        "",
-        "A comprehensive visual gallery showcasing memory diagrams generated across all 34 reference example suites (`example0` through `example33`) in `cs1302-code-visualizer`, visualizing all breakpoint steps in execution chronological order.",
-        "",
-        "---",
-        "",
-        "## Table of Contents",
-        "",
+def build_example(index: int, artifact_dir: Path, java_home: Path, dpi: int) -> dict:
+    example_dir = REPO_ROOT / "examples" / f"example{index}"
+    source, args = example_command(example_dir)
+    title, concepts = parse_readme(example_dir / "README.md")
+    env = get_sanitized_java_env()
+    env["PATH"] = str(java_home / "bin") + os.pathsep + env.get("PATH", "")
+    command = [
+        sys.executable,
+        "-m",
+        "cs1302_code_visualizer.trace_generator",
+        "--jdk",
+        str(java_home),
+        *args,
     ]
+    print(f"Tracing example{index}...", flush=True)
+    process = subprocess.run(
+        command,
+        input=source.read_text(encoding="utf-8"),
+        cwd=example_dir,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    data = json.loads(process.stdout)
+    (artifact_dir / "traces" / f"example{index}.json").write_text(process.stdout, encoding="utf-8")
+    steps = []
+    with RenderingSession(max_browsers=1) as session:
+        for sequence in trace_sequences(data):
+            raw_steps = sequence.get("trace", sequence.get("steps", []))
+            if not raw_steps:
+                raise ValueError(f"example{index}: empty execution sequence")
+            images = generate_step_images(json.dumps(sequence), dpi=dpi, session=session)
+            if len(images) != len(raw_steps):
+                raise ValueError(f"example{index}: image and trace step counts differ")
+            for snapshot, image in zip(raw_steps, images, strict=True):
+                step = len(steps)
+                filename = f"example{index}_{step}.png"
+                (artifact_dir / "gallery_images" / filename).write_bytes(image)
+                steps.append({
+                    "step": step,
+                    "filename": filename,
+                    "line": snapshot["line"],
+                    "func": snapshot.get("func_name", snapshot.get("method", "")),
+                })
+    sources = [source, *sorted(p for p in example_dir.rglob("*.java") if p != source)]
+    print(f"example{index}: {len(steps)} steps rendered", flush=True)
+    return {
+        "index": index,
+        "title": title,
+        "java_file": str(source.relative_to(example_dir)),
+        "code": source.read_text(encoding="utf-8"),
+        "concepts": concepts,
+        "sources": [
+            {"path": str(p.relative_to(example_dir)), "code": p.read_text(encoding="utf-8")}
+            for p in sources
+        ],
+        "cmd": f"generate_trace {shlex.join(args)} < {source.relative_to(example_dir)}",
+        "step_count": len(steps),
+        "steps": steps,
+    }
 
-    for ex in all_examples:
-        idx = ex["index"]
-        title = ex["title"]
-        slug = f"example-{idx}"
-        md_lines.append(f"- [Example {idx}: {title}](#{slug}) ({ex['step_count']} steps)")
 
-    md_lines.extend(["", "---", ""])
-
-    for ex in all_examples:
-        idx = ex["index"]
-        title = ex["title"]
-        slug = f"example-{idx}"
-        rel_java = ex["java_file"]
-        cmd = ex["cmd"]
-        step_count = ex["step_count"]
-
-        md_lines.extend([
-            f"## Example {idx}: {title}",
-            "",
-            f"- **Source File**: [`examples/example{idx}/{rel_java}`](file://{REPO_ROOT}/examples/example{idx}/{rel_java})",
-            f"- **Execution Command**: `{cmd}`",
-            f"- **Total Breakpoint Steps**: {step_count}",
-            "- **Concepts Illustrated**:",
-        ])
-
-        for c in ex["concepts"]:
-            md_lines.append(f"  {c}")
-
-        md_lines.extend(["", "### Breakpoint Execution Steps", ""])
-
-        if step_count > 1:
-            md_lines.append("````carousel")
-            for i, s in enumerate(ex["steps"]):
-                img_path = GALLERY_IMAGES_DIR / s["filename"]
-                caption = f"Step {s['step'] + 1} of {step_count} (Line {s['line']}, function: {s['func']})"
-                if i > 0:
-                    md_lines.append("<!-- slide -->")
-                md_lines.append(f"![{caption}]({img_path})")
-            md_lines.append("````")
-        elif step_count == 1:
-            s = ex["steps"][0]
-            img_path = GALLERY_IMAGES_DIR / s["filename"]
-            caption = f"Step 1 of 1 (Line {s['line']})"
-            md_lines.append(f"![{caption}]({img_path})")
-        else:
-            img_path = GALLERY_IMAGES_DIR / f"example{idx}.png"
-            md_lines.append(f"![Final Diagram]({img_path})")
-
-        md_lines.extend([
-            "",
-            "<details>",
-            f"<summary>View Source Code (examples/example{idx}/{rel_java})</summary>",
-            "",
-            "```java",
-            ex["code"].strip(),
-            "```",
-            "</details>",
-            "",
-            "---",
-            "",
-        ])
-
-    MARKDOWN_GALLERY_PATH.write_text("\n".join(md_lines), encoding="utf-8")
-    print(f"Updated markdown gallery saved to {MARKDOWN_GALLERY_PATH}")
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--artifact-dir", type=Path, default=DEFAULT_ARTIFACT_DIR)
+    parser.add_argument("--jdk", type=Path, help="JDK 25 home; otherwise use Java on PATH")
+    parser.add_argument("--jobs", type=int, default=2)
+    parser.add_argument("--dpi", type=int, default=2)
+    args = parser.parse_args()
+    if args.jobs < 1 or args.dpi < 1:
+        parser.error("--jobs and --dpi must be positive")
+    java_home = (args.jdk or ensure_jdk_installed()).resolve()
+    if not jdk_exists(java_home):
+        parser.error(f"Invalid JDK home: {java_home}")
+    release = (java_home / "release").read_text()
+    match = re.search(r'JAVA_VERSION="([^"]+)"', release)
+    if not match or match[1].split(".")[0] != "25":
+        parser.error("Gallery generation requires JDK 25; supply --jdk /path/to/jdk25")
+    ensure_code_tracer_installed()
+    artifact_dir = args.artifact_dir.resolve()
+    for name in ("gallery_images", "traces"):
+        (artifact_dir / name).mkdir(parents=True, exist_ok=True)
+    # Do not leave an old manifest looking like a successful build after a failure.
+    metadata_path = artifact_dir / "example_metadata.json"
+    metadata_path.unlink(missing_ok=True)
+    with ThreadPoolExecutor(max_workers=args.jobs) as workers:
+        examples = list(
+            workers.map(
+                lambda index: build_example(index, artifact_dir, java_home, args.dpi), range(34)
+            )
+        )
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+    pin = read_tracer_url_and_sum_from_toml()
+    metadata = {
+        "visualizer_version": project["project"]["version"],
+        "java_version": match[1],
+        "tracer_url": pin[0] if pin else None,
+        "tracer_sha256": pin[1] if pin else None,
+        "dpi": args.dpi,
+        "examples": examples,
+    }
+    metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    print(f"Saved {len(examples)} examples to {metadata_path}", flush=True)
 
 
 if __name__ == "__main__":

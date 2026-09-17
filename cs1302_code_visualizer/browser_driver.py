@@ -655,12 +655,10 @@ def generate_step_images(
     """
     trace_json = resolve_trace_payload(trace, breakpoint=breakpoint)
     num_steps = 1
-    if (
-        isinstance(trace_json, dict)
-        and "trace" in trace_json
-        and isinstance(trace_json["trace"], list)
-    ):
-        num_steps = len(trace_json["trace"])
+    if isinstance(trace_json, dict):
+        steps = trace_json.get("trace", trace_json.get("steps"))
+        if isinstance(steps, list):
+            num_steps = len(steps)
 
     if num_steps <= 1 or visualizer == "json-pre":
         return [

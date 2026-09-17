@@ -7,13 +7,14 @@
         build build-frontend build-py watch-frontend \
         test test-py test-frontend test-frontend-watch test-examples test-all \
         lint lint-py deptry format format-py typecheck check \
-        clean clean-py clean-frontend update-tracer all
+        clean clean-py clean-frontend update-tracer gallery all
 
 # --- Configuration & Commands ---
 PYTHON ?= uv run python
 UV ?= uv
 NPM ?= npm
 FRONTEND_DIR := cs1302_code_visualizer/frontend
+GALLERY_JDK ?=
 
 ##@ 🛠️ General & Help
 help: ## Display this interactive help menu
@@ -46,6 +47,10 @@ build-py: ## Build Python package distributables (sdist and wheel)
 
 watch-frontend: ## Run frontend Webpack watcher in development mode
 	$(NPM) --prefix $(FRONTEND_DIR) run watch
+
+gallery: ## Generate the complete PDF gallery with JDK 25 (GALLERY_JDK=/path/to/jdk25)
+	$(UV) run --extra gallery python -m scripts.build_gallery_data $(if $(GALLERY_JDK),--jdk "$(GALLERY_JDK)",)
+	$(UV) run --extra gallery python -m scripts.generate_gallery_pdf
 
 ##@ 🧪 Testing
 test: test-py test-frontend ## Run Python pytest and Frontend Vitest unit tests
