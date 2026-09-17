@@ -1,6 +1,6 @@
 [project]
 name = "cs1302-code-visualizer"
-version = "0.12.0"
+version = "0.13.0"
 description = "Visualize Java program memory state and output a screenshot."
 authors = [
     {name = "Gabe Livengood", email = "timothy.livengood@uga.edu"},
@@ -30,8 +30,8 @@ dependencies = [
 ]
 
 [tool.cs1302-code-visualizer]
-tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v2.11.5/code-tracer.jar"
-tracer-sha256 = "a35a24d05dff90eea4db76dff352508b32f3685a6dcb77aa2f306ab8bd21e7aa"
+tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v2.12.2/code-tracer.jar"
+tracer-sha256 = "eea14c0878b572f01827f7bb74abdc51dd08c1f008197a3c6713ce1622d51be5"
 
 [tool.cs1302book.system-dependencies]
 system-dependencies = [
@@ -127,6 +127,9 @@ exclude = [
     "cs1302_code_visualizer/frontend/node_modules",
     "cs1302_code_visualizer/frontend/tests",
 ]
+
+[tool.hatch.build.targets.wheel.force-include]
+"pyproject.toml" = "cs1302_code_visualizer/pyproject.toml"
 
 [tool.hatch.build.targets.sdist]
 exclude = [

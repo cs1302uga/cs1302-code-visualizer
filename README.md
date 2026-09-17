@@ -91,6 +91,37 @@ When making a new release, make sure that the version of the tracer program that
 you want to use is specified in the `tool.cs1302-code-visualizer` object of
 `pyproject.toml`.
 
+The pinned tracer is also included as configuration in built wheels so installed
+packages use the same release and checksum as the source checkout.
+An existing cached JAR must match that checksum before it can be reused offline
+or accepted after an HTTP 304 response. Upgrade and rollback downloads ignore
+cached response headers when the existing JAR does not match the target release.
+
+### Tracer execution limits
+
+Tracer 2.12.2 applies finite budgets to ordinary traces: a 10-second tracing
+deadline, 10,000 snapshots, 1 MiB of output per stream, 10,000 heap objects and
+100,000 elements per snapshot, 64 MiB of accounted trace data, 1 MiB of submitted
+source, and 128 streamed source files. The tracing deadline excludes compilation;
+the Python `timeout_secs` option separately limits the entire tracer subprocess.
+
+A tracer budget stop raises `CodeVisTraceGeneratorError` with `exit_status == 3`,
+empty `stdout`, and the reason in `stderr` and the exception notes. A Python
+process timeout raises `subprocess.TimeoutExpired`. Failed traces are not cached.
+
+Override individual budgets through `extra_tracer_args`, for example
+`["--timeout-ms=20000", "--max-snapshots=20000"]`. For trusted workloads that need
+unlimited tracing, explicitly pass `["--unlimited"]`; individual limits still
+apply when supplied alongside it. The `generate_trace` CLI accepts these tracer
+options directly. Keep the Python process timeout large enough for compilation
+plus the intended tracing time. The result-envelope format is not enabled by
+this upgrade.
+
+Input highlighting follows completed reads rather than reader lookahead.
+`stdinOffset` uses Java UTF-16 indices, including two units for supplementary
+characters. Scanner, BufferedReader, and JDK 25 `java.lang.IO.readln` are covered
+by integration tests in both supported trace formats.
+
 ## Reusing browsers and execution traces
 
 For repeated image requests, own a `RenderingSession` for the duration of a build:

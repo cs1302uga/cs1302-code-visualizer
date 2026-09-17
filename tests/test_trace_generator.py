@@ -319,6 +319,10 @@ def test_ensure_code_tracer_installed_304(tmp_path, monkeypatch):
     monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
     target_jar = tmp_path / "code-tracer.jar"
     target_jar.touch()
+    monkeypatch.setattr(
+        trace_generator, "read_tracer_url_and_sum_from_toml",
+        lambda: ("https://example.test/tracer.jar", hashlib.sha256(b"").hexdigest()),
+    )
     dl_info = tmp_path / "code_tracer_dl_headers.json"
     dl_info.write_text('{"Last-Modified": "Fri, 14 Aug 2026 00:00:00 GMT"}')
 
@@ -773,7 +777,10 @@ def test_ensure_code_tracer_installed_oserror_reading_jar(tmp_path, monkeypatch)
         mock_resp = MagicMock()
         mock_resp.__enter__.return_value = mock_resp
         mock_resp.status_code = 304
-        with patch("requests.get", return_value=mock_resp):
+        with (
+            patch("requests.get", return_value=mock_resp),
+            pytest.raises(trace_generator.TracerDownloadError, match="304"),
+        ):
             ensure_code_tracer_installed(update_existing=False)
 
 
@@ -928,6 +935,5 @@ def test_trace_generator_main_stdin_file(tmp_path, monkeypatch):
     data = json.loads(out)
     assert "-1" in data
     assert data["-1"].get("stdin") == "Hello 1302"
-
 
 

@@ -227,5 +227,22 @@ describe("modernTraceAdapter", () => {
       expect(traceArray[1].stdinConsumed).toBe("42");
       expect(traceArray[1].stdinOffset).toBe(2);
     });
+
+    it("preserves logical UTF-16 input offsets without consuming reader lookahead", () => {
+      const stdin = "é😀\nrest\n";
+      const result = convertModernTraceToOpt({
+        code: "String first = input.nextLine();",
+        stdin,
+        steps: [
+          { line: 1, stdinConsumed: "", stdinOffset: 0 },
+          { line: 2, stdinConsumed: "é😀\n", stdinOffset: 4 },
+        ],
+      });
+      const steps = result["trace"] as any[];
+      expect(result["stdin"]).toBe(stdin);
+      expect(steps[1].stdinConsumed).toBe("é😀\n");
+      expect(stdin.slice(0, steps[1].stdinOffset)).toBe(steps[1].stdinConsumed);
+      expect(stdin.slice(steps[1].stdinOffset)).toBe("rest\n");
+    });
   });
 });

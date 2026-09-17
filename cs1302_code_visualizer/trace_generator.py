@@ -482,9 +482,12 @@ def ensure_jdk_installed(install_dir: str | PathLike[str] = JDK_CACHE_DIR) -> Pa
 
 
 def read_tracer_url_and_sum_from_toml() -> tuple[str, str] | None:
-    """Load tracer URL and SHA256 sum from pyproject.toml if present."""
+    """Load the pin from the wheel's bundled config or the source checkout."""
+    config_path = PACKAGE_DIR / "pyproject.toml"
+    if not config_path.is_file():
+        config_path = PACKAGE_DIR.parent / "pyproject.toml"
     try:
-        with open(PACKAGE_DIR.parent / "pyproject.toml", "rb") as t:
+        with open(config_path, "rb") as t:
             pyproject = tomllib.load(t)
             package_constants = pyproject.get("tool", {}).get("cs1302-code-visualizer", {})
             tracer_url = package_constants.get("tracer-url")
@@ -506,24 +509,29 @@ def ensure_code_tracer_installed(update_existing: bool = False) -> None:
     with _TRACER_INSTALL_LOCK:
         target_jar = CACHE_DIR / "code-tracer.jar"
         tracer_url_and_sum = read_tracer_url_and_sum_from_toml()
+        cache_usable = False
         if target_jar.is_file():
-            if not update_existing:
-                if tracer_url_and_sum and tracer_url_and_sum[1]:
-                    try:
-                        with open(target_jar, "rb") as f:
-                            if hashlib.sha256(f.read()).hexdigest() == tracer_url_and_sum[1]:
-                                return
-                    except OSError:
-                        pass
-                else:
-                    return
+            if tracer_url_and_sum and tracer_url_and_sum[1]:
+                try:
+                    with open(target_jar, "rb") as f:
+                        cache_usable = hashlib.sha256(f.read()).hexdigest() == tracer_url_and_sum[1]
+                except OSError:
+                    pass
+            else:
+                cache_usable = True
+            if cache_usable and not update_existing:
+                return
             # make sure we have an internet connection before proceeding
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(1)
                 sock.connect(("1.1.1.1", 53))
                 sock.close()
-            except OSError:
+            except OSError as exc:
+                if not cache_usable:
+                    raise TracerDownloadError(
+                        "Cached tracer does not match the pinned checksum and cannot be updated offline."
+                    ) from exc
                 logger.debug(
                     "The code tracer jar already exists, but we can't update it because we're offline."
                 )
@@ -534,7 +542,7 @@ def ensure_code_tracer_installed(update_existing: bool = False) -> None:
 
         headers: dict[str, str] = {}
 
-        if target_jar.is_file() and dl_info_path.is_file():
+        if cache_usable and dl_info_path.is_file():
             try:
                 with open(dl_info_path, "r") as dl_info_file:
                     dl_info = json.load(dl_info_file)
@@ -542,8 +550,6 @@ def ensure_code_tracer_installed(update_existing: bool = False) -> None:
                     headers["If-Modified-Since"] = dl_info["Last-Modified"]
             except (OSError, json.JSONDecodeError):
                 pass
-
-        tracer_url_and_sum = read_tracer_url_and_sum_from_toml()
 
         ensure_certifi_bundle()
         with requests.get(
@@ -556,6 +562,10 @@ def ensure_code_tracer_installed(update_existing: bool = False) -> None:
         ) as resp:
 
             if resp.status_code == 304:
+                if not cache_usable:
+                    raise TracerDownloadError(
+                        "Tracer download returned HTTP 304 without a usable cached JAR."
+                    )
                 return
 
             resp.raise_for_status()
