@@ -524,7 +524,7 @@ def find_download_asset_url(
     package = binary.get("package", {})
     if isinstance(package, dict) and package.get("link"):
         url = str(package["link"])
-        name = str(package.get("name", url.split("/")[-1]))
+        name = str(package.get("name", url.rsplit("/", maxsplit=1)[-1]))
         cfg.log(f"Found Adoptium package: {name} at {url}")
         return url, name
 

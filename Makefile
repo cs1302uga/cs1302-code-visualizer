@@ -6,7 +6,7 @@
 .PHONY: help install install-py install-frontend install-sys-deps \
         build build-frontend build-py watch-frontend \
         test test-py test-frontend test-frontend-watch test-examples test-all \
-        lint lint-py format format-py typecheck check \
+        lint lint-py deptry format format-py typecheck check \
         clean clean-py clean-frontend update-tracer all
 
 # --- Configuration & Commands ---
@@ -69,6 +69,9 @@ lint: lint-py ## Run all code linters
 
 lint-py: ## Run Ruff linter on Python codebase
 	$(UV) run ruff check
+
+deptry: ## Check Python dependency declarations and imports
+	$(UV) run deptry .
 
 format: format-py ## Format Python source code
 

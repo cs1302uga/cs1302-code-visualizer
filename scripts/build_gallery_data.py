@@ -172,9 +172,7 @@ def main():
         for c in ex["concepts"]:
             md_lines.append(f"  {c}")
 
-        md_lines.append("")
-        md_lines.append("### Breakpoint Execution Steps")
-        md_lines.append("")
+        md_lines.extend(["", "### Breakpoint Execution Steps", ""])
 
         if step_count > 1:
             md_lines.append("````carousel")

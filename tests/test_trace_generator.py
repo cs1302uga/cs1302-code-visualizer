@@ -301,6 +301,7 @@ def test_ensure_code_tracer_existing_hash_mismatch(tmp_path, monkeypatch):
     new_hash = hashlib.sha256(new_content).hexdigest()
 
     mock_resp = MagicMock()
+    mock_resp.__enter__.return_value = mock_resp
     mock_resp.status_code = 200
     mock_resp.raise_for_status = MagicMock()
     mock_resp.iter_content.return_value = [new_content]
@@ -322,6 +323,7 @@ def test_ensure_code_tracer_installed_304(tmp_path, monkeypatch):
     dl_info.write_text('{"Last-Modified": "Fri, 14 Aug 2026 00:00:00 GMT"}')
 
     mock_resp = MagicMock()
+    mock_resp.__enter__.return_value = mock_resp
     mock_resp.status_code = 304
     with patch("requests.get", return_value=mock_resp):
         ensure_code_tracer_installed(update_existing=True)
@@ -338,6 +340,7 @@ def test_ensure_code_tracer_download_full(tmp_path, monkeypatch):
     mock_hash = hashlib.sha256(content).hexdigest()
 
     mock_resp = MagicMock()
+    mock_resp.__enter__.return_value = mock_resp
     mock_resp.status_code = 200
     mock_resp.raise_for_status = MagicMock()
     mock_resp.iter_content.return_value = [content]
@@ -354,6 +357,7 @@ def test_ensure_code_tracer_download_full(tmp_path, monkeypatch):
 def test_ensure_code_tracer_download_sha_mismatch(tmp_path, monkeypatch):
     monkeypatch.setattr("cs1302_code_visualizer.trace_generator.CACHE_DIR", tmp_path)
     mock_resp = MagicMock()
+    mock_resp.__enter__.return_value = mock_resp
     mock_resp.status_code = 200
     mock_resp.raise_for_status = MagicMock()
     mock_resp.iter_content.return_value = [b"BAD_CONTENT"]
@@ -600,13 +604,13 @@ def test_normalize_heap_primitives():
             {
                 "heap": {
                     "101": 42,
-                    "102": 3.14,
+                    "102": 3.14,  # noqa: FURB152 - Preserve literal trace data.
                     "103": True,
                     "104": "text",
                     "105": object(),
                     "106": 99,
                     "107": ["INSTANCE", "Integer", ["value", 5]],
-                    "108": ["INSTANCE", "Double", ["value", 2.718]],
+                    "108": ["INSTANCE", "Double", ["value", 2.718]],  # noqa: FURB152 - Preserve literal trace data.
                     "109": ["INSTANCE", "Character", ["value", "c"]],
                     "110": ["INSTANCE", "Byte", ["value", 1]],
                     "111": ["INSTANCE", "Short", ["value", 2]],
@@ -633,7 +637,7 @@ def test_normalize_heap_primitives():
     attrs = t3["trace"][0]["heap_attrs"]
     assert heap["101"] == ["INSTANCE", "Integer", ["value", 42]]
     assert attrs["101"]["type"] == ["int"]
-    assert heap["102"] == ["INSTANCE", "Double", ["value", 3.14]]
+    assert heap["102"] == ["INSTANCE", "Double", ["value", 3.14]]  # noqa: FURB152 - Preserve literal trace data.
     assert attrs["102"]["type"] == ["double"]
     assert heap["103"] == ["INSTANCE", "Boolean", ["value", True]]
     assert attrs["103"]["type"] == ["boolean"]
@@ -725,6 +729,7 @@ def test_ensure_code_tracer_installed_cached_304(tmp_path, monkeypatch):
     ):
         mock_sock.return_value.connect.return_value = None
         mock_resp = MagicMock()
+        mock_resp.__enter__.return_value = mock_resp
         mock_resp.status_code = 304
         with patch("requests.get", return_value=mock_resp) as mock_get:
             ensure_code_tracer_installed(update_existing=True)
@@ -744,6 +749,7 @@ def test_ensure_code_tracer_installed_malformed_dl_info(tmp_path, monkeypatch):
     ), patch("socket.socket") as mock_sock:
         mock_sock.return_value.connect.return_value = None
         mock_resp = MagicMock()
+        mock_resp.__enter__.return_value = mock_resp
         mock_resp.status_code = 304
         with patch("requests.get", return_value=mock_resp) as mock_get:
             ensure_code_tracer_installed(update_existing=True)
@@ -765,6 +771,7 @@ def test_ensure_code_tracer_installed_oserror_reading_jar(tmp_path, monkeypatch)
     ):
         mock_sock.return_value.connect.return_value = None
         mock_resp = MagicMock()
+        mock_resp.__enter__.return_value = mock_resp
         mock_resp.status_code = 304
         with patch("requests.get", return_value=mock_resp):
             ensure_code_tracer_installed(update_existing=False)

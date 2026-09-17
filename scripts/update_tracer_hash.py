@@ -9,15 +9,19 @@ import re
 import subprocess
 import sys
 import tempfile
-import urllib.error
-import urllib.request
 from pathlib import Path
+
+import certifi
+import requests
 
 from cs1302_code_visualizer.trace_generator import (
     CACHE_DIR,
+    DEFAULT_REQUEST_TIMEOUT,
+    DOWNLOAD_CHUNK_SIZE,
     ensure_jdk_installed,
     get_sanitized_java_env,
 )
+from cs1302_code_visualizer.util.certificates import ensure_certifi_bundle
 
 
 def parse_args() -> argparse.Namespace:
@@ -81,19 +85,20 @@ def update_pyproject_toml(
 
 
 def download_and_hash(url: str) -> tuple[bytes, str]:
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "cs1302-code-visualizer/updater"},
-    )
+    ensure_certifi_bundle()
     hasher = hashlib.sha256()
     chunks: list[bytes] = []
 
     print(f"Downloading: {url} ...")
-    with urllib.request.urlopen(req) as resp:
-        while True:
-            chunk = resp.read(64 * 1024)
-            if not chunk:
-                break
+    with requests.get(
+        url,
+        headers={"User-Agent": "cs1302-code-visualizer/updater"},
+        stream=True,
+        timeout=DEFAULT_REQUEST_TIMEOUT,
+        verify=certifi.where(),
+    ) as resp:
+        resp.raise_for_status()
+        for chunk in resp.iter_content(DOWNLOAD_CHUNK_SIZE):
             chunks.append(chunk)
             hasher.update(chunk)
 
@@ -152,7 +157,7 @@ def main() -> int:
 
     try:
         jar_data, sha256_sum = download_and_hash(target_url)
-    except (urllib.error.URLError, OSError, ValueError) as exc:
+    except (requests.RequestException, OSError, ValueError) as exc:
         print(f"Error downloading {target_url}: {exc}", file=sys.stderr)
         return 1
 

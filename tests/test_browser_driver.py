@@ -1,6 +1,7 @@
 import importlib
 import io
 import json
+import os
 import runpy
 import sys
 from unittest.mock import MagicMock, patch
@@ -63,6 +64,28 @@ def test_get_webdriver_with_explicit_chromedriver_path(monkeypatch):
     ):
         driver = get_webdriver(dpi=1)
         assert driver is mock_driver
+
+
+@pytest.mark.parametrize("existing", [None, "", "/old/cacert.pem", "/current/cacert.pem"])
+@pytest.mark.parametrize("driver_path", [None, "/usr/local/bin/chromedriver"])
+def test_webdriver_configures_certifi_before_startup(monkeypatch, existing, driver_path):
+    bundle = "/current/cacert.pem"
+    if existing is None:
+        monkeypatch.delenv("SSL_CERT_FILE", raising=False)
+    else:
+        monkeypatch.setenv("SSL_CERT_FILE", existing)
+    monkeypatch.setattr("certifi.where", lambda: bundle)
+    monkeypatch.setattr(browser_driver.shutil, "which", lambda _: driver_path)
+    driver = MagicMock()
+
+    def start_chrome(*, service, options):
+        assert os.environ["SSL_CERT_FILE"] == bundle
+        assert service.env["SSL_CERT_FILE"] == bundle
+        return driver
+
+    with patch.object(browser_driver.webdriver, "Chrome", side_effect=start_chrome):
+        assert get_webdriver() is driver
+    driver.implicitly_wait.assert_called_once_with(4)
 
 
 def test_generate_html(sample_trace_json):
@@ -437,6 +460,4 @@ def test_generate_step_images_multi_step_and_cli(tmp_path, monkeypatch):
     )
     driver_main()
     assert single_out.exists()
-
-
 

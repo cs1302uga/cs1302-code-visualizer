@@ -44,6 +44,7 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
 
 from .errors import CodeVisRenderError
+from .util.certificates import ensure_certifi_bundle
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -115,6 +116,10 @@ def new_webdriver(dpi: int = 1) -> webdriver.Chrome:
         The webdriver used to display the frontend.
     """
     logger.debug(f"creating new webdriver instance for {dpi=}")
+
+    # Configure trust before Selenium Manager or ChromeDriver starts. Refresh a
+    # stale override on every launch using this environment's installed bundle.
+    ensure_certifi_bundle()
 
     options: Options = new_webdriver_options(dpi)
     service: Service = Service()

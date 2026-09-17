@@ -33,6 +33,7 @@ from pathlib import Path
 from subprocess import CalledProcessError
 from typing import Any, Final, cast
 
+import certifi
 import platformdirs
 import requests
 
@@ -41,6 +42,7 @@ from .errors import (
     JDKInstallationError,
     TracerDownloadError,
 )
+from .util.certificates import ensure_certifi_bundle
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.addHandler(logging.StreamHandler(sys.stderr))
@@ -543,37 +545,39 @@ def ensure_code_tracer_installed(update_existing: bool = False) -> None:
 
         tracer_url_and_sum = read_tracer_url_and_sum_from_toml()
 
-        resp = requests.get(
+        ensure_certifi_bundle()
+        with requests.get(
             (tracer_url_and_sum and tracer_url_and_sum[0])
             or "https://github.com/cs1302uga/cs1302-tracer/releases/latest/download/code-tracer.jar",
             headers=headers,
             stream=True,
             timeout=DEFAULT_REQUEST_TIMEOUT,
-        )
+            verify=certifi.where(),
+        ) as resp:
 
-        if resp.status_code == 304:
-            return
+            if resp.status_code == 304:
+                return
 
-        resp.raise_for_status()
+            resp.raise_for_status()
 
-        tmp_jar_path = CACHE_DIR / f"code-tracer.jar.tmp.{os.getpid()}"
-        with open(tmp_jar_path, "wb") as jar_file:
-            sha256_hash = hashlib.sha256()
-            for chunk in resp.iter_content(DOWNLOAD_CHUNK_SIZE):
-                _ = jar_file.write(chunk)
-                sha256_hash.update(chunk)
+            tmp_jar_path = CACHE_DIR / f"code-tracer.jar.tmp.{os.getpid()}"
+            with open(tmp_jar_path, "wb") as jar_file:
+                sha256_hash = hashlib.sha256()
+                for chunk in resp.iter_content(DOWNLOAD_CHUNK_SIZE):
+                    _ = jar_file.write(chunk)
+                    sha256_hash.update(chunk)
 
-        if tracer_url_and_sum and tracer_url_and_sum[1] != sha256_hash.hexdigest():
-            if tmp_jar_path.exists():
-                tmp_jar_path.unlink()
-            raise TracerDownloadError(
-                f"Downloaded tracer JAR doesn't have the correct SHA256 sum. Expected: {tracer_url_and_sum[1]}, got {sha256_hash.hexdigest()}."
-            )
+            if tracer_url_and_sum and tracer_url_and_sum[1] != sha256_hash.hexdigest():
+                if tmp_jar_path.exists():
+                    tmp_jar_path.unlink()
+                raise TracerDownloadError(
+                    f"Downloaded tracer JAR doesn't have the correct SHA256 sum. Expected: {tracer_url_and_sum[1]}, got {sha256_hash.hexdigest()}."
+                )
 
-        _ = tmp_jar_path.replace(target_jar)
+            _ = tmp_jar_path.replace(target_jar)
 
-        with open(dl_info_path, "w") as dl_info_file:
-            json.dump(dict(resp.headers), dl_info_file)
+            with open(dl_info_path, "w") as dl_info_file:
+                json.dump(dict(resp.headers), dl_info_file)
 
 
 def get_enum_types(trace_json: dict[str, Any]) -> list[str]:
@@ -741,7 +745,7 @@ def main() -> None:
                 item_trimmed = item.strip()
                 if item_trimmed:
                     parsed_breakpoints.add(int(item_trimmed))
-    breakpoints = parsed_breakpoints if parsed_breakpoints else DEFAULT_BREAKPOINTS_SET
+    breakpoints = parsed_breakpoints or DEFAULT_BREAKPOINTS_SET
 
     trace = generate_trace(
         java_home,
@@ -753,7 +757,7 @@ def main() -> None:
         type_style=args.type_style,
         stdin=args.stdin,
         stdin_file=args.stdin_file,
-        extra_tracer_args=extra_tracer_args if extra_tracer_args else None,
+        extra_tracer_args=extra_tracer_args or None,
         eval_enum_hash=args.eval_enum_hash,
     )
 
