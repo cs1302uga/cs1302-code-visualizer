@@ -7,17 +7,21 @@ Normative References:
 """
 
 import argparse
+import concurrent.futures
 import fileinput
 import json
 import logging
 import os
 import sys
+import uuid
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from . import browser_driver, trace_generator
+from .batch_tracer import BatchTraceJob, BatchTracerClient
 from .breakpoint_lister import list_breakpoints, list_breakpoints_json
 from .browser_driver import (
     generate_image,
@@ -38,9 +42,12 @@ from .errors import (
     TracerDownloadError,
 )
 from .session import RenderingSession
-from .trace_generator import generate_trace, get_sanitized_java_env
+from .trace_generator import generate_trace, generate_traces, get_sanitized_java_env
 
 __all__ = [
+    "BatchRenderJob",
+    "BatchTraceJob",
+    "BatchTracerClient",
     "BreakpointResolutionError",
     "CodeVisError",
     "CodeVisRenderError",
@@ -55,10 +62,12 @@ __all__ = [
     "generate_image",
     "generate_step_images",
     "generate_trace",
+    "generate_traces",
     "get_sanitized_java_env",
     "list_breakpoints",
     "list_breakpoints_json",
     "main",
+    "render_batch_images",
     "render_html",
     "render_html_cli",
     "render_image",
@@ -170,12 +179,89 @@ def render_images(
     )
 
     logger.debug(f"{render_all_breakpoint_occurrences=}")
-    if render_all_breakpoint_occurrences:
-        traces_accumulated: dict[str, list[dict[str, Any]]] = json.loads(trace)
-        out_accumulated: dict[int, list[bytes]] = defaultdict(list)
+    return _resolve_and_render_trace(
+        trace,
+        breakpoints,
+        dpi=dpi,
+        format=format,
+        include_types=include_types,
+        text_memory_labels=text_memory_labels,
+        strip_type_prefixes=strip_type_prefixes,
+        render_all_occurrences=render_all_breakpoint_occurrences,
+        session=session,
+    )
+
+
+def _resolve_and_render_trace(
+    trace: str,
+    breakpoints: set[int],
+    *,
+    dpi: int = 1,
+    format: str = "PNG",
+    include_types: bool = True,
+    text_memory_labels: bool = False,
+    strip_type_prefixes: Sequence[str] | None = None,
+    render_all_occurrences: bool = False,
+    session: RenderingSession | None = None,
+) -> dict[int, bytes] | dict[int, list[bytes]]:
+    parsed_trace: Any = json.loads(trace)
+    is_chronological = (
+        isinstance(parsed_trace, dict)
+        and "trace" in parsed_trace
+        and isinstance(parsed_trace["trace"], list)
+    )
+
+    if is_chronological:
+        source_code: str = parsed_trace.get("code", "")
+        frames_list: list[dict[str, Any]] = [
+            f for f in parsed_trace["trace"] if isinstance(f, dict)
+        ]
+        if render_all_occurrences:
+            out_accumulated: dict[int, list[bytes]] = defaultdict(list)
+            for frame in frames_list:
+                line_no = frame.get("line")
+                if line_no is not None and (line_no in breakpoints or -1 in breakpoints):
+                    target_key = line_no if line_no in breakpoints else -1
+                    frame_payload = {"code": source_code, "trace": [frame]}
+                    out_accumulated[target_key].append(
+                        browser_driver.generate_image(
+                            json.dumps(frame_payload),
+                            dpi=dpi,
+                            format=format,
+                            include_types=include_types,
+                            text_memory_labels=text_memory_labels,
+                            strip_type_prefixes=strip_type_prefixes,
+                            session=session,
+                        )
+                    )
+            return out_accumulated
+        else:
+            latest_by_line: dict[int, dict[str, Any]] = {}
+            for frame in frames_list:
+                line_no = frame.get("line")
+                if line_no is not None and line_no in breakpoints:
+                    latest_by_line[line_no] = frame
+            if -1 in breakpoints and frames_list:
+                latest_by_line[-1] = frames_list[-1]
+            out_single: dict[int, bytes] = {}
+            for line_no, frame in latest_by_line.items():
+                frame_payload = {"code": source_code, "trace": [frame]}
+                out_single[line_no] = browser_driver.generate_image(
+                    json.dumps(frame_payload),
+                    dpi=dpi,
+                    format=format,
+                    include_types=include_types,
+                    text_memory_labels=text_memory_labels,
+                    strip_type_prefixes=strip_type_prefixes,
+                    session=session,
+                )
+            return out_single
+    elif render_all_occurrences:
+        traces_accumulated: dict[str, list[dict[str, Any]]] = parsed_trace
+        out_accumulated_dict: dict[int, list[bytes]] = defaultdict(list)
         for line, occurrences in traces_accumulated.items():
             for occurrence in occurrences:
-                out_accumulated[int(line)].append(
+                out_accumulated_dict[int(line)].append(
                     browser_driver.generate_image(
                         json.dumps(occurrence),
                         dpi=dpi,
@@ -186,12 +272,12 @@ def render_images(
                         session=session,
                     )
                 )
-        return out_accumulated
+        return out_accumulated_dict
     else:
-        traces: dict[str, dict[str, Any]] = json.loads(trace)
-        out_single: dict[int, bytes] = {}
-        for line, trace_dict in traces.items():
-            out_single[int(line)] = browser_driver.generate_image(
+        traces_dict: dict[str, dict[str, Any]] = parsed_trace
+        out_single_dict: dict[int, bytes] = {}
+        for line, trace_dict in traces_dict.items():
+            out_single_dict[int(line)] = browser_driver.generate_image(
                 json.dumps(trace_dict),
                 dpi=dpi,
                 format=format,
@@ -200,7 +286,7 @@ def render_images(
                 strip_type_prefixes=strip_type_prefixes,
                 session=session,
             )
-        return out_single
+        return out_single_dict
 
 
 def render_image(
@@ -360,6 +446,115 @@ def render_image(
         raise CodeVisRenderError(
             f"Unable to generate image from execution trace:\n\n{trace}\n",
         ) from exc
+
+
+@dataclass(frozen=True)
+class BatchRenderJob:
+    """Specification for a batch rendering job."""
+
+    java_source: str
+    breakpoints: set[int]
+    job_id: str | None = None
+    all_breakpoints: bool = False
+    accumulate_breakpoints: bool = False
+    inline_strings: bool = True
+    remove_main_args: bool = True
+    include_types: bool = True
+    text_memory_labels: bool = False
+    strip_type_prefixes: Sequence[str] | None = None
+    render_all_breakpoint_occurrences: bool = False
+    include_enum_static_fields: bool = False
+    dpi: int = 1
+    format: str = "PNG"
+    type_style: str = "simple"
+    stdin: str = ""
+    timeout_secs: int | None = None
+
+
+def _render_batch_with_session(
+    jobs: Sequence[BatchRenderJob], session: RenderingSession
+) -> Iterator[dict[int, bytes] | dict[int, list[bytes]]]:
+    trace_futures: list[tuple[BatchRenderJob, concurrent.futures.Future[dict[str, Any]]]] = []
+    for i, job in enumerate(jobs):
+        job_id = job.job_id or f"render_job_{i}_{uuid.uuid4().hex}"
+        all_breakpoints = job.all_breakpoints or not job.breakpoints
+        trace_job = BatchTraceJob(
+            id=job_id,
+            source=job.java_source,
+            stdin=job.stdin,
+            breakpoints=sorted(job.breakpoints) if not all_breakpoints else None,
+            all_breakpoints=all_breakpoints,
+            accumulate_breakpoints=(
+                job.accumulate_breakpoints or job.render_all_breakpoint_occurrences
+            ),
+            remove_main_args=job.remove_main_args,
+            inline_strings=job.inline_strings,
+            type_style=job.type_style,
+            timeout_ms=int(job.timeout_secs * 1000) if job.timeout_secs else 30000,
+            include_enum_static_fields=job.include_enum_static_fields,
+        )
+        fut = session.batch_tracer.submit(trace_job)
+        trace_futures.append((job, fut))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=session.max_browsers) as executor:
+
+        def _render_one(
+            job_spec: BatchRenderJob, trace_fut: concurrent.futures.Future[dict[str, Any]]
+        ) -> dict[int, bytes] | dict[int, list[bytes]]:
+            trace_dict = trace_fut.result()
+            trace_json_str = json.dumps(trace_dict)
+            return _resolve_and_render_trace(
+                trace_json_str,
+                job_spec.breakpoints,
+                dpi=job_spec.dpi,
+                format=job_spec.format,
+                include_types=job_spec.include_types,
+                text_memory_labels=job_spec.text_memory_labels,
+                strip_type_prefixes=job_spec.strip_type_prefixes,
+                render_all_occurrences=job_spec.render_all_breakpoint_occurrences,
+                session=session,
+            )
+
+        render_futures = [executor.submit(_render_one, job, fut) for job, fut in trace_futures]
+        for f in render_futures:
+            yield f.result()
+
+
+def render_batch_images(
+    jobs: Sequence[BatchRenderJob],
+    *,
+    session: RenderingSession | None = None,
+    max_browsers: int = 2,
+    tracer_workers: int = 1,
+) -> Iterator[dict[int, bytes] | dict[int, list[bytes]]]:
+    """Render execution traces for multiple Java programs in parallel.
+
+    Traces are generated concurrently using the session's BatchTracerClient and streamed
+    directly into available pooled browsers for rendering. Results are yielded as a generator
+    in the same deterministic order as the input jobs, allowing constant peak memory usage.
+
+    Args:
+        jobs: A sequence of BatchRenderJob specifications.
+        session: Optional shared RenderingSession. If None, a new session is created and managed.
+        max_browsers: Number of concurrent browser instances when session is not provided.
+        tracer_workers: Number of guest worker JVMs when session is not provided.
+
+    Yields:
+        Rendered image mappings in the same order as input jobs.
+    """
+    if not jobs:
+        return
+
+    if session is not None:
+        yield from _render_batch_with_session(jobs, session)
+        return
+
+    with RenderingSession(
+        max_browsers=max_browsers,
+        tracer_workers=tracer_workers,
+        use_batch_tracer=True,
+    ) as managed_session:
+        yield from _render_batch_with_session(jobs, managed_session)
 
 
 def main() -> None:

@@ -43,6 +43,7 @@ system-dependencies = [
 ]
 
 [project.scripts]
+code-visualizer = "cs1302_code_visualizer.cli:main"
 generate_trace = "cs1302_code_visualizer.trace_generator:main"
 generate_visualization = "cs1302_code_visualizer.browser_driver:main"
 install-deps = "scripts.install_deps:main"

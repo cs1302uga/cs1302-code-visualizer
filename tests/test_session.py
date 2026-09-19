@@ -3,7 +3,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -386,3 +386,127 @@ def test_close_while_preparing_cache_key_prevents_trace_execution(tracing, monke
         with pytest.raises(RuntimeError, match="closed"):
             session.generate_trace(Path("/jdk"), "source")
     tracing.assert_not_called()
+
+
+def test_session_batch_tracer_lifecycle_and_validation():
+    with pytest.raises(ValueError, match="tracer_workers must be positive"):
+        RenderingSession(tracer_workers=0)
+    with pytest.raises(ValueError, match="max_jobs_per_worker must be positive"):
+        RenderingSession(max_jobs_per_worker=0)
+
+    with patch("cs1302_code_visualizer.batch_tracer.ensure_jdk_installed"), patch(
+        "cs1302_code_visualizer.batch_tracer.ensure_code_tracer_installed"
+    ):
+        session = RenderingSession(tracer_workers=2, max_jobs_per_worker=50, extra_jvm_args=["-Xmx128m"])
+        # Lazily created
+        bt = session.batch_tracer
+        assert bt is not None
+        assert session.batch_tracer is bt
+        session.close()
+        assert session._closed is True
+        with pytest.raises(RuntimeError, match="closed"):
+            _ = session.batch_tracer
+
+
+def test_session_generate_trace_batch_tracer(tmp_path):
+    mock_batch_client = Mock()
+    mock_batch_client.execute.return_value = {
+        "status": "completed",
+        "trace": [{"line": 1, "event": "step_line"}],
+    }
+
+    stdin_file = tmp_path / "in.txt"
+    stdin_file.write_text("file content", encoding="utf-8")
+
+    session = RenderingSession(use_batch_tracer=True, cache_traces=True, cache_dir=tmp_path / "cache")
+    session._batch_tracer = mock_batch_client
+
+    with patch("cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml", return_value=("u", "s")):
+        # First call hits batch_tracer.execute
+        res = session.generate_trace(
+            Path("/jdk"),
+            "public class A {}",
+            stdin_file=stdin_file,
+            breakpoints={5, 10},
+            extra_tracer_args=["-a"],
+        )
+        assert json.loads(res) == mock_batch_client.execute.return_value
+        assert mock_batch_client.execute.call_count == 1
+        job_arg = mock_batch_client.execute.call_args[0][0]
+        assert job_arg.stdin == "file content"
+        assert job_arg.all_breakpoints is True
+        assert job_arg.breakpoints == [5, 10]
+
+        # Second identical call hits memory cache
+        res2 = session.generate_trace(
+            Path("/jdk"),
+            "public class A {}",
+            stdin_file=stdin_file,
+            breakpoints={5, 10},
+            extra_tracer_args=["-a"],
+        )
+        assert res2 == res
+        assert mock_batch_client.execute.call_count == 1
+
+        # Unsupported extra args triggers fallback to trace_generator.generate_trace
+        with patch("cs1302_code_visualizer.trace_generator.generate_trace", return_value='{"legacy": true}') as mock_gen, patch(
+            "cs1302_code_visualizer.trace_generator.ensure_code_tracer_installed"
+        ):
+            fallback_res = session.generate_trace(
+                Path("/jdk"),
+                "public class B {}",
+                extra_tracer_args=["--some-unsupported-arg"],
+            )
+            assert fallback_res == '{"legacy": true}'
+            assert mock_gen.call_count == 1
+
+    session.close()
+
+
+def test_session_generate_trace_uncached_batch(tmp_path):
+    mock_batch_client = Mock()
+    mock_batch_client.execute.return_value = {"trace": []}
+
+    session = RenderingSession(use_batch_tracer=True, cache_traces=False)
+    session._batch_tracer = mock_batch_client
+
+    res = session.generate_trace(
+        Path("/jdk"),
+        "public class C {}",
+        timeout_secs=5,
+    )
+    assert json.loads(res) == {"trace": []}
+    assert mock_batch_client.execute.call_count == 1
+    session.close()
+
+
+def test_session_generate_trace_batch_extra_args_all_breakpoints():
+    mock_batch_client = Mock()
+    mock_batch_client.execute.return_value = {"trace": []}
+
+    session = RenderingSession(use_batch_tracer=True, cache_traces=False)
+    session._batch_tracer = mock_batch_client
+
+    res = session.generate_trace(
+        Path("/jdk"),
+        "public class C {}",
+        extra_tracer_args=["-a"],
+    )
+    assert json.loads(res) == {"trace": []}
+    job_arg = mock_batch_client.execute.call_args[0][0]
+    assert job_arg.all_breakpoints is True
+    session.close()
+
+
+def test_session_generate_trace_batch_unreadable_stdin_file(tmp_path):
+    from cs1302_code_visualizer.errors import CodeVisTraceGeneratorError
+
+    session = RenderingSession(use_batch_tracer=True, cache_traces=False)
+    session._batch_tracer = Mock()
+    with pytest.raises(CodeVisTraceGeneratorError, match="Unable to read stdin file"):
+        session.generate_trace(
+            Path("/jdk"),
+            "public class D {}",
+            stdin_file=tmp_path / "non_existent.txt",
+        )
+    session.close()
