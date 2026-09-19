@@ -537,3 +537,70 @@ def test_batch_tracer_custom_java_home(tmp_path):
         proc = client._ensure_process()
         assert proc is mock_proc
         client.close()
+
+
+def test_batch_tracer_rejects_pending_duplicate_and_allows_completed_id(
+    mock_tracer_env, monkeypatch
+):
+    proc = MockProcess()
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: proc)
+    job = BatchTraceJob(id="same", source="class A {}")
+    with BatchTracerClient() as client:
+        first = client.submit(job)
+        with pytest.raises(ValueError, match="already pending: same"):
+            client.submit(job)
+        assert client._pending[job.id][0] is first
+        assert len(proc.stdin.getvalue().splitlines()) == 1
+        response = json.dumps({
+            "id": job.id,
+            "result": {"status": "completed", "trace": {"trace": []}},
+        })
+        proc.stdout.feed_line(response)
+        assert first.result(timeout=2) == {"trace": []}
+        second = client.submit(job)
+        proc.stdout.feed_line(response)
+        assert second.result(timeout=2) == {"trace": []}
+        assert len(proc.stdin.getvalue().splitlines()) == 2
+
+
+def test_batch_tracer_concurrent_duplicate_has_one_winner(mock_tracer_env, monkeypatch):
+    proc = MockProcess()
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: proc)
+    barrier = threading.Barrier(2)
+    job = BatchTraceJob(id="same", source="class A {}")
+    with BatchTracerClient() as client:
+
+        def submit():
+            barrier.wait(timeout=2)
+            return client.submit(job)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            attempts = [executor.submit(submit) for _ in range(2)]
+            results = []
+            rejected = 0
+            for attempt in attempts:
+                try:
+                    results.append(attempt.result(timeout=2))
+                except ValueError:
+                    rejected += 1
+        assert rejected == 1
+        assert len(results) == 1
+        assert len(proc.stdin.getvalue().splitlines()) == 1
+        proc.stdout.feed_line(
+            json.dumps({
+                "id": job.id,
+                "result": {"status": "completed", "trace": {"trace": []}},
+            })
+        )
+        assert results[0].result(timeout=2) == {"trace": []}
+
+
+def test_batch_tracer_serialization_failure_does_not_register_request():
+    with BatchTracerClient() as client, patch.object(client, "_ensure_process") as start:
+        with (
+            patch.object(BatchTraceJob, "to_request_dict", return_value={"invalid": object()}),
+            pytest.raises(TypeError),
+        ):
+            client.submit(BatchTraceJob(id="retry", source="class A {}"))
+        assert client._pending == {}
+        start.assert_not_called()

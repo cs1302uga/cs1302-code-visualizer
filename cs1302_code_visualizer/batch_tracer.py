@@ -371,17 +371,22 @@ class BatchTracerClient:
 
         Returns:
             A Future resolving to the trace dictionary.
+
+        Raises:
+            ValueError: The job ID already belongs to an outstanding request.
         """
         with self._lock:
             if not job.id:
                 job = dataclasses.replace(job, id=uuid.uuid4().hex)
             if self._closed:
                 raise RuntimeError("BatchTracerClient is closed")
+            if job.id in self._pending:
+                raise ValueError(f"Batch trace job ID is already pending: {job.id}")
+            req_json = json.dumps(job.to_request_dict()) + "\n"
             proc = self._ensure_process()
             future: concurrent.futures.Future[dict[str, Any]] = concurrent.futures.Future()
             self._pending[job.id] = (future, job)
 
-        req_json = json.dumps(job.to_request_dict()) + "\n"
         with self._stdin_lock:
             try:
                 if proc.stdin is None or proc.stdin.closed:

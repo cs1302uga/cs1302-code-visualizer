@@ -95,9 +95,9 @@ uv run code-visualizer --batch -a --output-pattern "{dirname}/{basename}.step{st
 
 **Key Safety and Execution Features:**
 - **Automatic Directory Creation**: Parent directories specified by `{dirname}` or destination paths are created automatically on demand (`mkdir -p`).
-- **Collision Protection**: Multi-step jobs (`-a` or breakpoints) fail fast with a validation error unless `{step}` or `{line}` is included in `--output-pattern`.
+- **Collision Protection**: Multi-step jobs (`-a` or breakpoints) fail fast with a validation error unless `{step}` or `{line}` is included in `--output-pattern`. `{line}` uses each rendered frame's source line (the final frame for a single image) and requires line metadata. Repeated destinations are rejected even with `--force`; combine `{line}` with `{step}` for loops.
 - **Overwrite Protection**: Destination files will not be overwritten unless `--force` (`-f`) is passed.
-- **Atomic Streaming Writes**: Output files are staged into temporary files (`.<file>.tmp.<pid>_<uuid>`) and committed atomically on job success. If a job fails, partial temporary files are cleaned up immediately.
+- **Rollback-Protected Writes**: Output files are staged into temporary files (`.<file>.tmp.<pid>_<uuid>`) and published using per-file atomic replacements. If publication fails, earlier outputs are removed and overwritten originals are restored from backups. This is not a crash-atomic multi-file transaction; rollback failures are reported with recovery backup paths.
 - **Concurrency Tuning**: Configure background tracer worker JVMs with `-w` / `--workers <N>` (default: `1`) and pooled browser instances with `--browsers <M>` (default: `2`). Use `--keep-going` to continue processing remaining jobs if an individual job fails.
 
 ### Low-Level Utilities
@@ -196,6 +196,9 @@ To benchmark the streaming performance of the unified CLI across sequential and 
 ```sh
 python -m scripts.benchmark_cli_batch --num-examples 6
 ```
+
+With `--skip-sequential`, speedups are reported as `N/A` rather than comparing
+batch configurations against an absent sequential baseline.
 
 Persistent traces are not removed automatically. Use
 `cs1302_code_visualizer.session.prune_trace_cache(cache_dir)` to remove entries

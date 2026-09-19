@@ -1,9 +1,13 @@
+import concurrent.futures
 import hashlib
 import importlib
 import io
 import json
+import os
 import runpy
 import sys
+import threading
+import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
@@ -974,12 +978,29 @@ def test_generate_traces_creates_client():
         assert res == [{"trace": []}]
 
 
-def test_trace_generator_main_batch_ndjson(tmp_path, monkeypatch):
-    import concurrent.futures
-    input_ndjson = "\n" + json.dumps({"id": "j1", "source": "class A {}"}) + "\n\n"
+@pytest.mark.parametrize("request_id", ["j1", "", None])
+def test_trace_generator_main_batch_ndjson(tmp_path, monkeypatch, request_id):
+    request = {"source": "class A {}"}
+    if request_id is not None:
+        request["id"] = request_id
+    input_ndjson = "\n" + json.dumps(request) + "\n\n"
     monkeypatch.setattr(sys, "stdin", io.StringIO(input_ndjson))
+    monkeypatch.setattr(trace_generator, "ensure_jdk_installed", lambda: Path("/jdk"))
+    monkeypatch.setattr(trace_generator, "ensure_code_tracer_installed", lambda: None)
     out_file = tmp_path / "batch_out.ndjson"
-    monkeypatch.setattr("sys.argv", ["generate_trace", "--batch", "-o", str(out_file), "--workers", "2", "--max-jobs-per-worker", "50"])
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "generate_trace",
+            "--batch",
+            "-o",
+            str(out_file),
+            "--workers",
+            "2",
+            "--max-jobs-per-worker",
+            "50",
+        ],
+    )
 
     mock_client = Mock()
     mock_client.__enter__ = Mock(return_value=mock_client)
@@ -995,11 +1016,25 @@ def test_trace_generator_main_batch_ndjson(tmp_path, monkeypatch):
     out = out_file.read_text(encoding="utf-8").strip()
     assert len(out) > 0
     resp_obj = json.loads(out)
-    assert resp_obj["id"] == "j1"
+    assert resp_obj["id"] == mock_client.submit.call_args.args[0].id
+    assert resp_obj["id"]
+    if request_id:
+        assert resp_obj["id"] == request_id
     assert resp_obj["result"] == {"status": "completed", "trace": []}
+    mock_client.execute.assert_not_called()
 
 
-def test_generator_main_batch_invalid_inputs(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "request_line",
+    [
+        '{"source": 123}',
+        '{"source": "code", "breakpoints": ["abc"]}',
+        '{"source": "code", "id": 123}',
+        '{"source":',
+        "null",
+    ],
+)
+def test_generator_main_batch_invalid_inputs(monkeypatch, request_line):
     from cs1302_code_visualizer.trace_generator import main as generator_main
 
     mock_client = Mock()
@@ -1009,20 +1044,230 @@ def test_generator_main_batch_invalid_inputs(tmp_path, monkeypatch):
     monkeypatch.setattr(trace_generator, "ensure_jdk_installed", lambda: Path("/jdk"))
     monkeypatch.setattr(trace_generator, "ensure_code_tracer_installed", lambda: None)
 
-    # 1. Non-string source
-    monkeypatch.setattr(sys, "stdin", io.StringIO('{"source": 123}\n'))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(request_line + "\n"))
     monkeypatch.setattr("sys.argv", ["generate_trace", "--batch"])
-    with patch("cs1302_code_visualizer.batch_tracer.BatchTracerClient", return_value=mock_client), pytest.raises(ValueError, match="Invalid batch request line"):
+    with (
+        patch("cs1302_code_visualizer.batch_tracer.BatchTracerClient", return_value=mock_client),
+        pytest.raises(ValueError, match="Invalid batch request line"),
+    ):
         generator_main()
 
-    # 2. Invalid JSON / invalid breakpoints
-    monkeypatch.setattr(sys, "stdin", io.StringIO('{"source": "code", "breakpoints": ["abc"]}\n'))
-    monkeypatch.setattr("sys.argv", ["generate_trace", "--batch"])
-    with patch("cs1302_code_visualizer.batch_tracer.BatchTracerClient", return_value=mock_client), pytest.raises(ValueError, match="Invalid batch request line"):
-        generator_main()
 
-    # 3. Non-string id
-    monkeypatch.setattr(sys, "stdin", io.StringIO('{"source": "code", "id": 123}\n'))
-    monkeypatch.setattr("sys.argv", ["generate_trace", "--batch"])
-    with patch("cs1302_code_visualizer.batch_tracer.BatchTracerClient", return_value=mock_client), pytest.raises(ValueError, match="Invalid batch request line"):
-        generator_main()
+@pytest.mark.parametrize("value", [None, [], 1, True, "source", {"source": 1}])
+def test_parse_batch_request_rejects_nonobjects_and_invalid_source(value):
+    with pytest.raises(ValueError, match="Invalid batch request line"):
+        trace_generator._parse_batch_request(json.dumps(value))
+
+
+@pytest.mark.parametrize("raw_id", [None, "", "explicit"])
+def test_batch_stream_emits_effective_request_id(raw_id):
+    client = Mock()
+    future = concurrent.futures.Future()
+    future.set_result({"trace": []})
+    client.submit.return_value = future
+    request = {"source": "class A {}"}
+    if raw_id is not None:
+        request["id"] = raw_id
+    output = io.StringIO()
+    trace_generator._stream_batch_requests([json.dumps(request)], output, client, max_pending=2)
+    job = client.submit.call_args.args[0]
+    emitted_id = json.loads(output.getvalue())["id"]
+    assert emitted_id == job.id
+    if raw_id:
+        assert emitted_id == raw_id
+    else:
+        assert uuid.UUID(emitted_id).hex == emitted_id
+
+
+def test_parse_batch_request_options():
+    job = trace_generator._parse_batch_request(
+        json.dumps({
+            "source": "class A {}",
+            "breakpoints": ["2", 3],
+            "all_breakpoints": False,
+            "accumulate_breakpoints": True,
+            "remove_main_args": False,
+            "inline_strings": True,
+            "type_style": "fqn",
+            "stdin": "hello",
+            "timeout_ms": 100,
+            "include_enum_static_fields": True,
+        })
+    )
+    assert job.breakpoints == [2, 3]
+    assert not job.all_breakpoints
+    assert job.accumulate_breakpoints
+    assert not job.remove_main_args
+    assert job.inline_strings
+    assert job.type_style == "fqn"
+    assert job.stdin == "hello"
+    assert job.timeout_ms == 100
+    assert job.include_enum_static_fields
+
+
+def test_batch_stream_pipelines_in_order_with_bounded_capacity():
+    emitted = 0
+    submitted = []
+    first = concurrent.futures.Future()
+
+    class Output(io.StringIO):
+        def flush(self):
+            nonlocal emitted
+            emitted += 1
+
+    def submit(job):
+        submitted.append(job.id)
+        assert len(submitted) <= emitted + 2
+        if job.id == "0":
+            return first
+        future = concurrent.futures.Future()
+        future.set_result({"job": job.id})
+        if job.id == "1":
+            first.set_result({"job": "0"})
+        return future
+
+    def requests():
+        for index in range(10):
+            assert index < emitted + 2
+            yield json.dumps({"id": str(index), "source": "class A {}"})
+
+    output = Output()
+    trace_generator._stream_batch_requests(requests(), output, Mock(submit=submit), max_pending=2)
+    assert [json.loads(line)["id"] for line in output.getvalue().splitlines()] == [
+        str(index) for index in range(10)
+    ]
+    assert emitted == 10
+
+
+def test_batch_stream_emits_before_next_input_or_eof():
+    flushed = threading.Event()
+
+    class Output(io.StringIO):
+        def flush(self):
+            flushed.set()
+
+    def requests():
+        yield '{"id":"first","source":"class A {}"}'
+        assert flushed.wait(2), "Output waited for another input line"
+        yield '{"id":"second","source":"class B {}"}'
+
+    future = concurrent.futures.Future()
+    future.set_result({"trace": []})
+    output = Output()
+    trace_generator._stream_batch_requests(
+        requests(), output, Mock(submit=Mock(return_value=future)), max_pending=2
+    )
+    assert len(output.getvalue().splitlines()) == 2
+
+
+@pytest.mark.parametrize("failure", ["parse", "submit", "result", "write"])
+def test_batch_stream_failure_propagates_without_cancelling_futures(failure):
+    future = concurrent.futures.Future()
+    if failure == "result":
+        future.set_exception(RuntimeError("failed result"))
+    else:
+        future.set_result({"trace": []})
+    client = Mock()
+    client.submit.return_value = future
+    if failure == "submit":
+        client.submit.side_effect = RuntimeError("failed submit")
+    output = (
+        Mock(write=Mock(side_effect=OSError("failed write")))
+        if failure == "write"
+        else io.StringIO()
+    )
+    lines = ["[]" if failure == "parse" else '{"source":"class A {}"}']
+    with pytest.raises((ValueError, RuntimeError, OSError)):
+        trace_generator._stream_batch_requests(lines, output, client, max_pending=1)
+    assert not future.cancelled()
+
+
+def test_batch_stream_stops_after_blocked_input_returns():
+    reading = threading.Event()
+    release = threading.Event()
+    returned = threading.Event()
+    future = concurrent.futures.Future()
+    client = Mock(submit=Mock(return_value=future))
+
+    def requests():
+        yield '{"source":"class A {}"}'
+        reading.set()
+        assert release.wait(2)
+        returned.set()
+        yield '{"source":"class B {}"}'
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        running = executor.submit(
+            trace_generator._stream_batch_requests,
+            requests(),
+            io.StringIO(),
+            client,
+            max_pending=2,
+        )
+        try:
+            assert reading.wait(2)
+            future.set_exception(RuntimeError("failed result"))
+            with pytest.raises(RuntimeError, match="failed result"):
+                running.result(timeout=2)
+            assert not future.cancelled()
+        finally:
+            release.set()
+        assert returned.wait(2)
+    client.submit.assert_called_once()
+
+
+def test_batch_stream_rejects_nonpositive_capacity():
+    with pytest.raises(ValueError, match="max_pending must be positive"):
+        trace_generator._stream_batch_requests([], io.StringIO(), Mock(), max_pending=0)
+
+
+def test_batch_main_output_failure_does_not_close_or_wait_for_live_stdin(monkeypatch):
+    blocked = threading.Event()
+    returned = threading.Event()
+    future = concurrent.futures.Future()
+    client = Mock()
+    client.__enter__ = Mock(return_value=client)
+    client.__exit__ = Mock(return_value=False)
+    client.submit.return_value = future
+    read_fd, write_fd = os.pipe()
+    with os.fdopen(read_fd, "r") as reader, os.fdopen(write_fd, "w") as writer:
+        reads = 0
+
+        def readline():
+            nonlocal reads
+            reads += 1
+            if reads == 2:
+                blocked.set()
+            line = reader.readline()
+            if reads == 2:
+                returned.set()
+            return line
+
+        live_input = Mock(readline=readline, close=Mock(side_effect=reader.close))
+        output = Mock(write=Mock(side_effect=OSError("failed output")))
+        monkeypatch.setattr(sys, "stdin", live_input)
+        monkeypatch.setattr(sys, "stdout", output)
+        monkeypatch.setattr(sys, "argv", ["generate_trace", "--batch"])
+        monkeypatch.setattr(trace_generator, "ensure_jdk_installed", lambda: Path("/jdk"))
+        monkeypatch.setattr(trace_generator, "ensure_code_tracer_installed", lambda: None)
+        writer.write('{"source":"class A {}"}\n')
+        writer.flush()
+        with (
+            patch("cs1302_code_visualizer.batch_tracer.BatchTracerClient", return_value=client),
+            concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor,
+        ):
+            running = executor.submit(generator_main)
+            try:
+                assert blocked.wait(2)
+                future.set_result({"trace": []})
+                with pytest.raises(OSError, match="failed output"):
+                    running.result(timeout=2)
+                live_input.close.assert_not_called()
+                client.__exit__.assert_called_once()
+            finally:
+                if not future.done():
+                    future.set_exception(RuntimeError("test cleanup"))
+                writer.write("\n")
+                writer.flush()
+                assert returned.wait(2)
+        client.submit.assert_called_once()

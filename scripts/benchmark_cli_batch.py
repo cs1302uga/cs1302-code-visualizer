@@ -86,6 +86,7 @@ def run_benchmark_run(
 
 
 def main() -> None:
+    """Run CLI benchmarks and report speedups when a sequential baseline exists."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--num-examples",
@@ -128,6 +129,7 @@ def main() -> None:
     benchmarks_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[dict[str, float | int | str]] = []
+    baseline_time: float | None = None
 
     # 1. Sequential CLI run
     if not args.skip_sequential:
@@ -153,6 +155,7 @@ def main() -> None:
                 print(f"Error on sequential {src}: {res.stderr}", file=sys.stderr)
 
         seq_total = time.perf_counter() - start_seq
+        baseline_time = seq_total
         stop_seq.set()
         mon.join(timeout=0.5)
         seq_pngs = len(list(seq_out.rglob("*.png")))
@@ -200,10 +203,9 @@ def main() -> None:
         )
 
     # Calculate speedups
-    baseline_time = float(results[0]["total_seconds"])
     for r in results:
         t = float(r["total_seconds"])
-        r["speedup"] = f"{baseline_time / t:.2f}x" if t > 0 else "1.00x"
+        r["speedup"] = f"{baseline_time / t:.2f}x" if baseline_time is not None and t > 0 else "N/A"
 
     # Print summary table
     print("\n" + "=" * 90)

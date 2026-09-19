@@ -63,6 +63,7 @@ class RenderingSession:
         self._trace_locks: dict[str, threading.Lock] = {}
         self._traces: dict[str, str] = {}
         self._batch_tracer: BatchTracerClient | None = None
+        self._batch_java_home: Path | None = None
 
     def __enter__(self) -> Self:
         """Return this session for explicit ownership in a with statement."""
@@ -80,10 +81,33 @@ class RenderingSession:
                 raise RuntimeError("Rendering session is closed")
             if self._batch_tracer is None:
                 self._batch_tracer = BatchTracerClient(
+                    java_home=self._batch_java_home,
                     workers=self.tracer_workers,
                     max_jobs_per_worker=self.max_jobs_per_worker,
                     extra_jvm_args=self.extra_jvm_args,
                 )
+            return self._batch_tracer
+
+    def _batch_tracer_for_home(self, java_home: Path | None) -> BatchTracerClient | None:
+        """Bind the first executed batch request to its requested JDK.
+
+        Args:
+            java_home: Resolved JDK directory, or None for automatic selection.
+
+        Returns:
+            The compatible shared client, or None if a different JDK is bound.
+
+        Raises:
+            RuntimeError: If the session is closed.
+        """
+        with self._condition:
+            if self._closed:
+                raise RuntimeError("Rendering session is closed")
+            if self._batch_tracer is None:
+                self._batch_java_home = java_home
+                return self.batch_tracer
+            if java_home != self._batch_java_home:
+                return None
             return self._batch_tracer
 
     @staticmethod
@@ -150,7 +174,23 @@ class RenderingSession:
                 self._condition.notify_all()
 
     def generate_trace(self, *args: Any, **kwargs: Any) -> str:
-        """Execute Java trace generator unless trace caching was explicitly enabled."""
+        """Generate a trace, optionally reusing cached results.
+
+        The first batch request binds the session's tracer to its JDK. Requests
+        for another JDK or unsupported options use the one-shot tracer instead.
+        ``auto_detect`` retains the legacy alias for ``all_breakpoints``.
+
+        Args:
+            *args: Positional arguments accepted by ``generate_trace``.
+            **kwargs: Keyword arguments accepted by ``generate_trace``.
+
+        Returns:
+            The execution trace as JSON.
+
+        Raises:
+            RuntimeError: If the session is closed.
+            ValueError: If both stdin and stdin_file are provided.
+        """
         with self._condition:
             if self._closed:
                 raise RuntimeError("Rendering session is closed")
@@ -161,6 +201,10 @@ class RenderingSession:
         bound = _TRACE_SIGNATURE.bind(*args, **kwargs)
         bound.apply_defaults()
         values = dict(bound.arguments)
+        if values["stdin"] is not None and values["stdin_file"] is not None:
+            raise ValueError("Cannot specify both stdin and stdin_file")
+        if not values["eval_enum_hash"]:
+            use_batch = False
 
         extra_args: list[str] | None = values.get("extra_tracer_args")
         if extra_args:
@@ -169,8 +213,15 @@ class RenderingSession:
                     use_batch = False
                     break
 
+        requested_home = None
+        if use_batch:
+            requested_home = values["java_home"]
+            requested_home = Path(requested_home).resolve() if requested_home is not None else None
+
         def _execute_raw() -> str:
-            if use_batch:
+            """Execute an uncached request using a compatible batch client or legacy tracer."""
+            batch_client = self._batch_tracer_for_home(requested_home) if use_batch else None
+            if batch_client is not None:
                 stdin_val: str = values.get("stdin") or ""
                 stdin_file = values.get("stdin_file")
                 if stdin_file is not None:
@@ -185,10 +236,10 @@ class RenderingSession:
                             exit_status=1,
                         ).with_property_notes() from err
 
-                breakpoints_arg: set[int] = values.get("breakpoints", set())
+                breakpoints_arg = set(values.get("breakpoints", set()))
                 has_explicit = breakpoints_arg != trace_generator.DEFAULT_BREAKPOINTS_SET
                 all_bps = bool(
-                    values.get("all_breakpoints") or values.get("auto_detect") or (not has_explicit)
+                    values.get("all_breakpoints") or values.get("auto_detect")
                 )
                 if extra_args and ("-a" in extra_args or "--all-breakpoints" in extra_args):
                     all_bps = True
@@ -210,7 +261,7 @@ class RenderingSession:
                     timeout_ms=int(timeout_s * 1000) if timeout_s else 30000,
                     include_enum_static_fields=values.get("include_enum_static_fields", False),
                 )
-                trace_dict = self.batch_tracer.execute(job, timeout_secs=timeout_s)
+                trace_dict = batch_client.execute(job, timeout_secs=timeout_s)
                 return json.dumps(trace_dict)
 
             trace_generator.ensure_code_tracer_installed()
@@ -219,14 +270,16 @@ class RenderingSession:
         if not self.cache_traces:
             return _execute_raw()
 
-        values["java_home"] = str(values["java_home"])
-        release = Path(values["java_home"]) / "release"
+        java_home_key = str(values["java_home"])
+        values["java_home"] = java_home_key
+        release = Path(java_home_key) / "release"
         values["jdk_release"] = release.read_text() if release.is_file() else None
         values["breakpoints"] = sorted(values["breakpoints"])
         values["tracer"] = trace_generator.read_tracer_url_and_sum_from_toml()
-        values["schema"] = 1
-        if values.get("stdin_file") is not None:
-            file_path = Path(values["stdin_file"])
+        values["schema"] = 2
+        cached_stdin_file = values.get("stdin_file")
+        if cached_stdin_file is not None:
+            file_path = Path(cached_stdin_file)
             values["stdin_file_content"] = (
                 file_path.read_text(encoding="utf-8") if file_path.is_file() else None
             )

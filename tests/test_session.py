@@ -420,6 +420,7 @@ def test_session_generate_trace_batch_tracer(tmp_path):
 
     session = RenderingSession(use_batch_tracer=True, cache_traces=True, cache_dir=tmp_path / "cache")
     session._batch_tracer = mock_batch_client
+    session._batch_java_home = Path("/jdk")
 
     with patch("cs1302_code_visualizer.trace_generator.read_tracer_url_and_sum_from_toml", return_value=("u", "s")):
         # First call hits batch_tracer.execute
@@ -469,6 +470,7 @@ def test_session_generate_trace_uncached_batch(tmp_path):
 
     session = RenderingSession(use_batch_tracer=True, cache_traces=False)
     session._batch_tracer = mock_batch_client
+    session._batch_java_home = Path("/jdk")
 
     res = session.generate_trace(
         Path("/jdk"),
@@ -486,6 +488,7 @@ def test_session_generate_trace_batch_extra_args_all_breakpoints():
 
     session = RenderingSession(use_batch_tracer=True, cache_traces=False)
     session._batch_tracer = mock_batch_client
+    session._batch_java_home = Path("/jdk")
 
     res = session.generate_trace(
         Path("/jdk"),
@@ -503,6 +506,7 @@ def test_session_generate_trace_batch_unreadable_stdin_file(tmp_path):
 
     session = RenderingSession(use_batch_tracer=True, cache_traces=False)
     session._batch_tracer = Mock()
+    session._batch_java_home = Path("/jdk")
     with pytest.raises(CodeVisTraceGeneratorError, match="Unable to read stdin file"):
         session.generate_trace(
             Path("/jdk"),
@@ -510,3 +514,110 @@ def test_session_generate_trace_batch_unreadable_stdin_file(tmp_path):
             stdin_file=tmp_path / "non_existent.txt",
         )
     session.close()
+
+
+def test_session_binds_first_jdk_and_falls_back_for_mismatch(monkeypatch, tmp_path):
+    client = Mock()
+    client.execute.return_value = {"trace": []}
+    factory = Mock(return_value=client)
+    monkeypatch.setattr("cs1302_code_visualizer.session.BatchTracerClient", factory)
+    calls = []
+
+    def legacy(*args, **kwargs):
+        calls.append((args, kwargs))
+        return '{"legacy": true}'
+
+    monkeypatch.setattr(trace_generator, "generate_trace", legacy)
+    monkeypatch.setattr(trace_generator, "ensure_code_tracer_installed", lambda: None)
+    first = tmp_path / "jdk"
+    other = tmp_path / "other"
+    with RenderingSession() as session:
+        session.generate_trace(first, "one")
+        session.generate_trace(first / ".." / "jdk", "two")
+        assert session.generate_trace(other, "three") == '{"legacy": true}'
+    assert factory.call_count == 1
+    assert factory.call_args.kwargs["java_home"] == first.resolve()
+    assert client.execute.call_count == 2
+    assert calls == [((other, "three"), {})]
+    client.close.assert_called_once()
+
+
+@pytest.mark.parametrize("options", [
+    {"eval_enum_hash": False},
+    {"extra_tracer_args": ["--format=modern"]},
+])
+def test_session_unsupported_options_use_real_fallback_dispatch(monkeypatch, options):
+    calls = []
+
+    def legacy(*args, **kwargs):
+        calls.append((args, kwargs))
+        return '{"legacy": true}'
+
+    monkeypatch.setattr(trace_generator, "generate_trace", legacy)
+    monkeypatch.setattr(trace_generator, "ensure_code_tracer_installed", lambda: None)
+    with RenderingSession() as session:
+        assert session.generate_trace(Path("/jdk"), "source", **options) == '{"legacy": true}'
+        assert session._batch_tracer is None
+    assert calls == [((Path("/jdk"), "source"), options)]
+
+
+@pytest.mark.parametrize("cache_traces", [False, True])
+@pytest.mark.parametrize("options,expected_all,expected_bps", [
+    ({}, False, [-1]),
+    ({"auto_detect": False}, False, [-1]),
+    ({"auto_detect": True}, True, None),
+    ({"all_breakpoints": True}, True, None),
+    ({"auto_detect": True, "breakpoints": {4}}, True, [4]),
+    ({"breakpoints": {4}}, False, [4]),
+])
+def test_session_batch_breakpoint_alias_parity(
+    monkeypatch, options, expected_all, expected_bps, cache_traces
+):
+    client = Mock()
+    client.execute.return_value = {"trace": []}
+    monkeypatch.setattr("cs1302_code_visualizer.session.BatchTracerClient", lambda **_: client)
+    with RenderingSession(cache_traces=cache_traces) as session:
+        session.generate_trace(Path("/jdk"), "source", **options)
+    job = client.execute.call_args.args[0]
+    assert job.all_breakpoints is expected_all
+    assert job.breakpoints == expected_bps
+
+
+def test_session_rejects_conflicting_stdin_before_client_creation():
+    with RenderingSession() as session:
+        with pytest.raises(ValueError, match="both stdin and stdin_file"):
+            session.generate_trace(Path("/jdk"), "source", stdin="data", stdin_file="file")
+        assert session._batch_tracer is None
+
+
+def test_session_default_batch_client_does_not_change_jdk(monkeypatch):
+    client = Mock()
+    monkeypatch.setattr("cs1302_code_visualizer.session.BatchTracerClient", lambda **_: client)
+    monkeypatch.setattr(trace_generator, "generate_trace", lambda *args, **kwargs: "{}")
+    monkeypatch.setattr(trace_generator, "ensure_code_tracer_installed", lambda: None)
+    with RenderingSession() as session:
+        assert session.batch_tracer is client
+        assert session.generate_trace(Path("/custom"), "source") == "{}"
+    client.execute.assert_not_called()
+
+
+def test_persistent_batch_cache_hit_does_not_create_client(monkeypatch, tmp_path):
+    client = Mock()
+    client.execute.return_value = {"trace": []}
+    factory = Mock(return_value=client)
+    monkeypatch.setattr("cs1302_code_visualizer.session.BatchTracerClient", factory)
+    with RenderingSession(cache_dir=tmp_path) as first:
+        expected = first.generate_trace(Path("/jdk"), "source")
+    with RenderingSession(cache_dir=tmp_path) as second:
+        assert second.generate_trace(Path("/jdk"), "source") == expected
+        assert second._batch_tracer is None
+        assert second._batch_java_home is None
+    factory.assert_called_once()
+    client.execute.assert_called_once()
+
+
+def test_closed_session_cannot_bind_batch_client():
+    session = RenderingSession()
+    session.close()
+    with pytest.raises(RuntimeError, match="closed"):
+        session._batch_tracer_for_home(Path("/jdk"))

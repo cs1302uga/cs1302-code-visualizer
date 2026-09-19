@@ -11,6 +11,8 @@ import pytest
 
 from cs1302_code_visualizer.cli import (
     AtomicJobWriter,
+    _image_lines,
+    _process_batch_job,
     format_output_path,
     main,
     run_batch_cli,
@@ -115,6 +117,222 @@ def test_atomic_job_writer_cleanup_oserror(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(Path, "unlink", mock_unlink)
     # Should not raise exception
     writer.cleanup()
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_atomic_job_writer_rolls_back_later_failure(tmp_path, monkeypatch, existing):
+    targets = [tmp_path / f"{i}.png" for i in range(3)]
+    if existing:
+        targets[0].write_bytes(b"original")
+        targets[2].write_bytes(b"last")
+    writer = AtomicJobWriter(force=existing)
+    staged = [writer.stage_file(target, b"new") for target in targets]
+    replace = Path.replace
+
+    def fail_last(path, destination):
+        if path == staged[-1]:
+            raise OSError("publication failed")
+        return replace(path, destination)
+
+    monkeypatch.setattr(Path, "replace", fail_last)
+    with pytest.raises(OSError, match="publication failed"):
+        writer.commit()
+    writer.cleanup()
+    assert not writer.committed
+    assert not targets[1].exists()
+    if existing:
+        assert targets[0].read_bytes() == b"original"
+        assert targets[2].read_bytes() == b"last"
+    else:
+        assert not any(target.exists() for target in targets)
+    assert not list(tmp_path.glob(".*"))
+
+
+def test_atomic_job_writer_rechecks_existing_destination(tmp_path):
+    target = tmp_path / "out"
+    writer = AtomicJobWriter()
+    writer.stage_file(target, b"new")
+    target.write_bytes(b"original")
+    with pytest.raises(FileExistsError):
+        writer.commit()
+    writer.cleanup()
+    assert target.read_bytes() == b"original"
+
+
+def test_atomic_job_writer_missing_stage_rolls_back(tmp_path):
+    writer = AtomicJobWriter()
+    first = tmp_path / "first"
+    writer.stage_file(first, b"first")
+    writer.stage_file(tmp_path / "second", b"second").unlink()
+    with pytest.raises(FileNotFoundError):
+        writer.commit()
+    writer.cleanup()
+    assert not list(tmp_path.iterdir())
+
+
+def test_atomic_job_writer_duplicate_destinations(tmp_path):
+    writer = AtomicJobWriter(force=True)
+    writer.stage_file(tmp_path / "out", b"first")
+    with pytest.raises(ValueError, match="Duplicate output destination"):
+        writer.stage_file(tmp_path / "sub" / ".." / "out", b"second")
+    writer.cleanup()
+
+
+def test_atomic_job_writer_partial_write_is_cleanable(tmp_path, monkeypatch):
+    writer = AtomicJobWriter()
+    write_bytes = Path.write_bytes
+
+    def partial_write(path, data):
+        write_bytes(path, data[:1])
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Path, "write_bytes", partial_write)
+    with pytest.raises(OSError, match="disk full"):
+        writer.stage_file(tmp_path / "out", b"new")
+    writer.cleanup()
+    assert not list(tmp_path.iterdir())
+
+
+def test_atomic_job_writer_backup_failure(tmp_path, monkeypatch):
+    target = tmp_path / "out"
+    target.write_bytes(b"original")
+    writer = AtomicJobWriter(force=True)
+    writer.stage_file(target, b"new")
+
+    def partial_copy(source, destination):
+        destination.write_bytes(b"partial")
+        raise OSError("backup failed")
+
+    monkeypatch.setattr("cs1302_code_visualizer.cli.shutil.copy2", partial_copy)
+    with pytest.raises(OSError, match="backup failed"):
+        writer.commit()
+    writer.cleanup()
+    assert list(tmp_path.iterdir()) == [target]
+    assert target.read_bytes() == b"original"
+
+
+def test_atomic_job_writer_retains_backup_when_rollback_fails(tmp_path, monkeypatch):
+    target = tmp_path / "out"
+    target.write_bytes(b"original")
+    writer = AtomicJobWriter(force=True)
+    writer.stage_file(target, b"new")
+    replace = Path.replace
+
+    def fail_replace(path, destination):
+        if path.name.endswith(".backup"):
+            raise OSError("restore failed")
+        if destination == target:
+            raise OSError("publish failed")
+        return replace(path, destination)
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+    with pytest.raises(OSError, match="publish failed") as error:
+        writer.commit()
+    writer.cleanup()
+    assert "restore failed" in error.value.__notes__[0]
+    assert next(tmp_path.glob("*.backup")).read_bytes() == b"original"
+
+
+def test_atomic_job_writer_backup_cleanup_failure_does_not_fail_commit(tmp_path, monkeypatch):
+    target = tmp_path / "out"
+    target.write_bytes(b"original")
+    writer = AtomicJobWriter(force=True)
+    writer.stage_file(target, b"new")
+    unlink = Path.unlink
+
+    def fail_backup_cleanup(path, **kwargs):
+        if path.name.endswith(".backup"):
+            raise OSError("cleanup failed")
+        return unlink(path, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_backup_cleanup)
+    assert writer.commit() == [target]
+    assert writer.committed
+    assert target.read_bytes() == b"new"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        [],
+        {"trace": []},
+        {"trace": "bad"},
+        {"trace": [{}]},
+        {"trace": [None]},
+        {"trace": [{"line": None}]},
+        {"trace": [{"line": True}]},
+    ],
+)
+def test_image_lines_requires_metadata(payload):
+    with pytest.raises(ValueError, match="requires source line metadata"):
+        _image_lines(json.dumps(payload), 1)
+
+
+def test_image_lines_resolves_frames_and_checks_count():
+    trace = json.dumps({"-1": {"trace": [{"line": 4}, {"line": 7}]}})
+    assert _image_lines(trace, 2) == [4, 7]
+    assert _image_lines(trace, 1) == [7]
+    with pytest.raises(ValueError, match="every frame"):
+        _image_lines(trace, 3)
+
+
+@pytest.mark.parametrize("all_steps", [False, True])
+def test_process_batch_job_line_paths(tmp_path, all_steps):
+    session = MagicMock()
+    session.generate_trace.return_value = json.dumps({"-1": {"trace": [{"line": 4}, {"line": 7}]}})
+    with (
+        patch("cs1302_code_visualizer.cli.generate_step_images", return_value=[b"a", b"b"]),
+        patch("cs1302_code_visualizer.cli.browser_driver.generate_image", return_value=b"b"),
+    ):
+        paths = _process_batch_job(
+            job_id="test",
+            source_code="class Test {}",
+            source_path=None,
+            out_dir=tmp_path,
+            output_pattern="{id}.{line}.{step}.png",
+            trace_pattern=None,
+            all_steps=all_steps,
+            breakpoints=set(),
+            dpi=1,
+            format="PNG",
+            force=True,
+            include_types=True,
+            text_memory_labels=False,
+            strip_type_prefixes=None,
+            session=session,
+            java_home=None,
+        )
+    expected = ["test.L4.0.png", "test.L7.1.png"] if all_steps else ["test.L7.final.png"]
+    assert [path.name for path in paths] == expected
+
+
+def test_process_batch_job_repeated_lines_do_not_publish(tmp_path):
+    session = MagicMock()
+    session.generate_trace.return_value = json.dumps({"trace": [{"line": 4}, {"line": 4}]})
+    with (
+        patch("cs1302_code_visualizer.cli.generate_step_images", return_value=[b"a", b"b"]),
+        pytest.raises(ValueError, match="Duplicate output destination"),
+    ):
+        _process_batch_job(
+            job_id="test",
+            source_code="class Test {}",
+            source_path=None,
+            out_dir=tmp_path,
+            output_pattern="{id}.{line}.png",
+            trace_pattern="{id}.json",
+            all_steps=True,
+            breakpoints=set(),
+            dpi=1,
+            format="PNG",
+            force=True,
+            include_types=True,
+            text_memory_labels=False,
+            strip_type_prefixes=None,
+            session=session,
+            java_home=None,
+        )
+    assert not list(tmp_path.iterdir())
 
 
 def test_run_batch_cli_invalid_pattern(capsys):

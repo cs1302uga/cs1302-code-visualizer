@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import shutil
 import sys
 import uuid
 from collections.abc import Sequence
@@ -77,7 +78,22 @@ class AtomicJobWriter:
         self.committed = False
 
     def stage_file(self, target_path: Path, data: bytes | str) -> Path:
-        """Stage a file write into a temporary file alongside the target destination."""
+        """Stage data alongside its destination without publishing it.
+
+        Args:
+            target_path: Destination to publish on successful commit.
+            data: Bytes or UTF-8 text to write.
+
+        Returns:
+            The temporary file path, tracked for cleanup even if writing fails.
+
+        Raises:
+            ValueError: The job already stages this destination.
+            FileExistsError: The destination exists and force is disabled.
+            OSError: Creating or writing the temporary file fails.
+        """
+        if any(target.resolve() == target_path.resolve() for _, target in self.temp_files):
+            raise ValueError(f"Duplicate output destination: {target_path}. Include '{{step}}'.")
         if target_path.exists() and not self.force:
             raise FileExistsError(
                 f"Destination file already exists: {target_path}. Use --force to overwrite."
@@ -85,23 +101,61 @@ class AtomicJobWriter:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         temp_name = f".{target_path.name}.tmp.{os.getpid()}_{uuid.uuid4().hex[:8]}"
         temp_path = target_path.with_name(temp_name)
+        self.temp_files.append((temp_path, target_path))
 
         if isinstance(data, str):
             temp_path.write_text(data, encoding="utf-8")
         else:
             temp_path.write_bytes(data)
 
-        self.temp_files.append((temp_path, target_path))
         return temp_path
 
     def commit(self) -> list[Path]:
-        """Atomically rename staged temporary files to their target destinations."""
+        """Publish staged files, rolling back earlier replacements on failure.
+
+        Returns:
+            Published destination paths in staging order.
+
+        Raises:
+            OSError: Publication failed. Rollback failures are attached as notes,
+                and any unrestored backup is retained for recovery.
+        """
         committed_paths: list[Path] = []
-        for temp_path, target_path in self.temp_files:
-            if temp_path.exists():
+        backups: list[tuple[Path, Path | None]] = []
+        try:
+            for temp_path, target_path in self.temp_files:
+                backup = None
+                if target_path.exists():
+                    if not self.force:
+                        raise FileExistsError(f"Destination file already exists: {target_path}")
+                    backup = temp_path.with_name(f"{temp_path.name}.backup")
+                    try:
+                        shutil.copy2(target_path, backup)
+                    except OSError:
+                        backup.unlink(missing_ok=True)
+                        raise
+                backups.append((target_path, backup))
                 temp_path.replace(target_path)
                 committed_paths.append(target_path)
+        except OSError as exc:
+            for target_path, backup in reversed(backups):
+                try:
+                    if backup is not None:
+                        backup.replace(target_path)
+                    else:
+                        target_path.unlink(missing_ok=True)
+                except OSError as rollback_error:
+                    exc.add_note(
+                        f"Could not restore {target_path}: {rollback_error}; backup: {backup}"
+                    )
+            raise
         self.committed = True
+        for _, backup in backups:
+            if backup is not None:
+                try:
+                    backup.unlink(missing_ok=True)
+                except OSError:
+                    pass
         return committed_paths
 
     def cleanup(self) -> None:
@@ -168,6 +222,7 @@ def _process_batch_job(
                 strip_type_prefixes=strip_type_prefixes,
                 session=session,
             )
+            lines = _image_lines(trace_text, len(images)) if "{line}" in output_pattern else []
             for idx, img_bytes in enumerate(images):
                 img_path = format_output_path(
                     output_pattern,
@@ -175,6 +230,7 @@ def _process_batch_job(
                     job_id=job_id,
                     source_path=source_path,
                     step=idx,
+                    line=lines[idx] if lines else "",
                     format=format,
                 )
                 writer.stage_file(img_path, img_bytes)
@@ -194,6 +250,7 @@ def _process_batch_job(
                 job_id=job_id,
                 source_path=source_path,
                 step="final",
+                line=_image_lines(trace_text, 1)[-1] if "{line}" in output_pattern else "",
                 format=format,
             )
             writer.stage_file(img_path, img_bytes)
@@ -202,6 +259,31 @@ def _process_batch_job(
     except Exception:
         writer.cleanup()
         raise
+
+
+def _image_lines(trace_text: str, count: int) -> list[int]:
+    """Resolve source lines for the frames selected by the image renderer.
+
+    Args:
+        trace_text: Raw or breakpoint-keyed execution trace JSON.
+        count: Number of rendered frames; one selects the final frame.
+
+    Returns:
+        Source line numbers in rendering order.
+
+    Raises:
+        ValueError: A rendered frame has no integer source line.
+    """
+    payload = browser_driver.resolve_trace_payload(trace_text)
+    frames = payload.get("trace") if isinstance(payload, dict) else None
+    if not isinstance(frames, list) or not frames:
+        raise ValueError("Output pattern '{line}' requires source line metadata.")
+    selected = frames[-1:] if count == 1 else frames
+    if len(selected) != count or any(
+        not isinstance(frame, dict) or type(frame.get("line")) is not int for frame in selected
+    ):
+        raise ValueError("Output pattern '{line}' requires source line metadata for every frame.")
+    return [frame["line"] for frame in selected]
 
 
 def run_batch_cli(args: argparse.Namespace) -> int:

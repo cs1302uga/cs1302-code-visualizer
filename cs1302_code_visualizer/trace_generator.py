@@ -13,12 +13,14 @@ Normative References:
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import fileinput
 import hashlib
 import json
 import logging
 import os
 import platform
+import queue
 import re
 import shutil
 import socket
@@ -28,13 +30,14 @@ import tarfile
 import tempfile
 import threading
 import tomllib
+import uuid
 import zipfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from contextlib import ExitStack
 from os import PathLike
 from pathlib import Path
 from subprocess import CalledProcessError
-from typing import TYPE_CHECKING, Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final, TextIO, cast
 
 if TYPE_CHECKING:
     from .batch_tracer import BatchTraceJob, BatchTracerClient
@@ -235,7 +238,7 @@ def generate_trace(
         breakpoints: Set of breakpoint line numbers.
         accumulate_breakpoints: Whether to accumulate multiple hits per breakpoint.
         include_enum_static_fields: Whether to keep enum constants in global static fields.
-        auto_detect: Whether to automatically detect and compile dependent source files.
+        auto_detect: Compatibility alias for all_breakpoints.
         type_style: Type qualification style ('fqn' or 'simple').
         stdin: Standard input string provided to the traced Java program.
         stdin_file: Path to file whose content is provided via standard input.
@@ -660,6 +663,126 @@ def delete_globals(trace_json: dict[str, Any], global_keys: Sequence[str] | None
                 ordered_globals.remove(global_key)
 
 
+def _parse_batch_request(line: str) -> BatchTraceJob:
+    """Parse one NDJSON object, assigning its effective ID before submission.
+
+    Args:
+        line: JSON-encoded trace request containing a string source field.
+
+    Returns:
+        A trace job with its supplied ID, or a generated UUID when absent or empty.
+
+    Raises:
+        ValueError: The JSON, request shape, source, ID, or breakpoints are invalid.
+    """
+    from .batch_tracer import BatchTraceJob
+
+    try:
+        data = json.loads(line)
+        if not isinstance(data, dict):
+            raise TypeError("Batch request must be a JSON object")
+        source = data.get("source")
+        if not isinstance(source, str):
+            raise TypeError("Batch request must include string field 'source'")
+        bps_val = data.get("breakpoints")
+        bps_list = [int(x) for x in bps_val] if bps_val is not None else None
+        raw_id = data.get("id")
+        if raw_id is not None and not isinstance(raw_id, str):
+            raise TypeError("Batch request ID must be a string")
+    except (json.JSONDecodeError, TypeError, ValueError) as err:
+        raise ValueError(f"Invalid batch request line: {line}") from err
+    return BatchTraceJob(
+        id=raw_id or uuid.uuid4().hex,
+        source=source,
+        stdin=data.get("stdin", ""),
+        breakpoints=bps_list,
+        all_breakpoints=data.get("allBreakpoints", data.get("all_breakpoints", True)),
+        accumulate_breakpoints=data.get(
+            "accumulateBreakpoints", data.get("accumulate_breakpoints", False)
+        ),
+        remove_main_args=data.get("removeMainArgs", data.get("remove_main_args", True)),
+        inline_strings=data.get("inlineStrings", data.get("inline_strings", False)),
+        type_style=data.get("typeStyle", data.get("type_style", "simple")),
+        timeout_ms=data.get("timeout_ms", 30000),
+        include_enum_static_fields=data.get("include_enum_static_fields", False),
+    )
+
+
+def _stream_batch_requests(
+    lines: Iterable[str], output: TextIO, client: BatchTracerClient, *, max_pending: int
+) -> None:
+    """Emit ordered responses while independently reading bounded NDJSON requests.
+
+    Capacity includes completed responses until they are written and flushed.
+    Input errors follow already submitted responses. On failure, a daemon reader
+    blocked in caller-owned input exits when that read returns; input is never
+    closed here, and submitted trace futures are never cancelled.
+
+    Args:
+        lines: Iterable of NDJSON requests; blank lines are ignored.
+        output: Caller-owned text stream receiving one flushed response per job.
+        client: Persistent tracer client used to submit jobs asynchronously.
+        max_pending: Maximum submitted requests whose responses are not yet emitted.
+
+    Returns:
+        None after all requests have been read and their responses emitted.
+
+    Raises:
+        ValueError: Capacity is nonpositive or a request is invalid or duplicated.
+        OSError: Reading requests or writing responses fails.
+        Exception: A submission or trace future fails; the original error propagates.
+    """
+    if max_pending < 1:
+        raise ValueError("max_pending must be positive")
+    responses: queue.Queue[
+        tuple[str, concurrent.futures.Future[dict[str, Any]]] | Exception | None
+    ] = queue.Queue()
+    capacity = threading.Semaphore(max_pending)
+    stopped = threading.Event()
+
+    def produce() -> None:
+        try:
+            iterator = iter(lines)
+            while not stopped.is_set():
+                capacity.acquire()
+                if stopped.is_set():
+                    break
+                try:
+                    line = next(iterator).strip()
+                except StopIteration:
+                    break
+                if stopped.is_set():
+                    break
+                if not line:
+                    capacity.release()
+                    continue
+                job = _parse_batch_request(line)
+                responses.put((job.id, client.submit(job)))
+        except Exception as err:  # noqa: BLE001 -- Re-raise producer failures in the consumer.
+            responses.put(err)
+        finally:
+            responses.put(None)
+
+    reader = threading.Thread(target=produce, name="BatchRequestReader", daemon=True)
+    reader.start()
+    try:
+        while True:
+            response = responses.get()
+            if response is None:
+                break
+            if isinstance(response, Exception):
+                raise response
+            job_id, future = response
+            result = future.result()
+            output.write(json.dumps({"id": job_id, "result": result}) + "\n")
+            output.flush()
+            capacity.release()
+    finally:
+        stopped.set()
+        capacity.release()
+        reader.join(timeout=0.1)
+
+
 def main() -> None:
     """Command-line entry point for generating Java execution traces."""
     parser = argparse.ArgumentParser(description="Java program trace generator and visualizer")
@@ -797,7 +920,7 @@ def main() -> None:
     ensure_code_tracer_installed()
 
     if args.batch:
-        from .batch_tracer import BatchTraceJob, BatchTracerClient
+        from .batch_tracer import BatchTracerClient
 
         client = BatchTracerClient(
             java_home=java_home,
@@ -810,41 +933,7 @@ def main() -> None:
                 if args.output
                 else sys.stdout
             )
-            for line in f:
-                line_s = line.strip()
-                if not line_s:
-                    continue
-                try:
-                    data = json.loads(line_s)
-                    source = data.get("source")
-                    if not isinstance(source, str):
-                        raise TypeError("Batch request must include string field 'source'")
-                    bps_val = data.get("breakpoints")
-                    bps_list = [int(x) for x in bps_val] if bps_val is not None else None
-                except (json.JSONDecodeError, TypeError, ValueError) as err:
-                    raise ValueError(f"Invalid batch request line: {line_s}") from err
-                raw_id = data.get("id")
-                if raw_id is not None and not isinstance(raw_id, str):
-                    raise ValueError(f"Invalid batch request line: {line_s}")
-                job = BatchTraceJob(
-                    id=raw_id or "",
-                    source=source,
-                    stdin=data.get("stdin", ""),
-                    breakpoints=bps_list,
-                    all_breakpoints=data.get("allBreakpoints", data.get("all_breakpoints", True)),
-                    accumulate_breakpoints=data.get(
-                        "accumulateBreakpoints",
-                        data.get("accumulate_breakpoints", False),
-                    ),
-                    remove_main_args=data.get("removeMainArgs", data.get("remove_main_args", True)),
-                    inline_strings=data.get("inlineStrings", data.get("inline_strings", False)),
-                    type_style=data.get("typeStyle", data.get("type_style", "simple")),
-                    timeout_ms=data.get("timeout_ms", 30000),
-                    include_enum_static_fields=data.get("include_enum_static_fields", False),
-                )
-                result = client.execute(job)
-                out_file.write(json.dumps({"id": job.id, "result": result}) + "\n")
-                out_file.flush()
+            _stream_batch_requests(f, out_file, client, max_pending=2 * args.workers)
         return
 
     # get java file from stdin

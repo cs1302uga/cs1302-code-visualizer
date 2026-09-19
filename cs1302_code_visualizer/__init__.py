@@ -14,7 +14,7 @@ import logging
 import os
 import sys
 import uuid
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -474,8 +474,26 @@ class BatchRenderJob:
 def _render_batch_with_session(
     jobs: Sequence[BatchRenderJob], session: RenderingSession
 ) -> Iterator[dict[int, bytes] | dict[int, list[bytes]]]:
-    trace_futures: list[tuple[BatchRenderJob, concurrent.futures.Future[dict[str, Any]]]] = []
-    for i, job in enumerate(jobs):
+    """Yield ordered rendered jobs while bounding submitted and retained work.
+
+    Args:
+        jobs: Rendering specifications in their desired output order.
+        session: Shared tracer and browser pool, owned by the caller.
+
+    Yields:
+        Image mappings for each input job in order.
+    """
+
+    def _submit_trace(i: int, job: BatchRenderJob) -> concurrent.futures.Future[dict[str, Any]]:
+        """Submit one job without waiting for its trace.
+
+        Args:
+            i: Input position used when generating a job identifier.
+            job: Source and tracing options for the request.
+
+        Returns:
+            The submitted trace future.
+        """
         job_id = job.job_id or f"render_job_{i}_{uuid.uuid4().hex}"
         all_breakpoints = job.all_breakpoints or not job.breakpoints
         trace_job = BatchTraceJob(
@@ -493,14 +511,23 @@ def _render_batch_with_session(
             timeout_ms=int(job.timeout_secs * 1000) if job.timeout_secs else 30000,
             include_enum_static_fields=job.include_enum_static_fields,
         )
-        fut = session.batch_tracer.submit(trace_job)
-        trace_futures.append((job, fut))
+        return session.batch_tracer.submit(trace_job)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=session.max_browsers) as executor:
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=session.max_browsers)
+    try:
 
         def _render_one(
             job_spec: BatchRenderJob, trace_fut: concurrent.futures.Future[dict[str, Any]]
         ) -> dict[int, bytes] | dict[int, list[bytes]]:
+            """Render one submitted trace using the shared browser pool.
+
+            Args:
+                job_spec: Rendering options and selected breakpoints.
+                trace_fut: Future providing the execution trace.
+
+            Returns:
+                Rendered images keyed by breakpoint.
+            """
             trace_dict = trace_fut.result()
             trace_json_str = json.dumps(trace_dict)
             return _resolve_and_render_trace(
@@ -515,9 +542,21 @@ def _render_batch_with_session(
                 session=session,
             )
 
-        render_futures = [executor.submit(_render_one, job, fut) for job, fut in trace_futures]
-        for f in render_futures:
-            yield f.result()
+        pending = deque()
+        remaining = iter(enumerate(jobs))
+        window = max(session.max_browsers, session.tracer_workers)
+        for i, job in remaining:
+            pending.append(executor.submit(_render_one, job, _submit_trace(i, job)))
+            if len(pending) == window:
+                break
+        while pending:
+            yield pending.popleft().result()
+            next_job = next(remaining, None)
+            if next_job is not None:
+                i, job = next_job
+                pending.append(executor.submit(_render_one, job, _submit_trace(i, job)))
+    finally:
+        executor.shutdown(wait=True, cancel_futures=True)
 
 
 def render_batch_images(
@@ -531,7 +570,9 @@ def render_batch_images(
 
     Traces are generated concurrently using the session's BatchTracerClient and streamed
     directly into available pooled browsers for rendering. Results are yielded as a generator
-    in the same deterministic order as the input jobs, allowing constant peak memory usage.
+    in the same deterministic order as the input jobs. At most the larger of the
+    browser and tracer worker counts is submitted ahead of consumption; memory
+    also depends on the size of each trace and its rendered images.
 
     Args:
         jobs: A sequence of BatchRenderJob specifications.

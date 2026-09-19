@@ -359,6 +359,7 @@ def test_render_batch_images_with_session():
 
     mock_session = Mock()
     mock_session.max_browsers = 2
+    mock_session.tracer_workers = 1
     mock_batch_tracer = Mock()
     mock_session.batch_tracer = mock_batch_tracer
 
@@ -389,6 +390,7 @@ def test_render_batch_images_creates_session():
 
     mock_session = Mock()
     mock_session.max_browsers = 2
+    mock_session.tracer_workers = 2
     mock_session.__enter__ = Mock(return_value=mock_session)
     mock_session.__exit__ = Mock(return_value=None)
     mock_batch_tracer = Mock()
@@ -413,3 +415,98 @@ def test_render_batch_images_creates_session():
         results = list(gen)
         assert len(results) == 1
         assert results[0] == {4: b"BATCH_IMG"}
+
+
+def test_render_batch_window_is_bounded_and_ordered(monkeypatch):
+    import concurrent.futures
+    import threading
+
+    submitted = []
+    window_filled = threading.Event()
+    first = concurrent.futures.Future()
+
+    def submit(job):
+        submitted.append(job)
+        future = first if len(submitted) == 1 else concurrent.futures.Future()
+        if future is not first:
+            future.set_result({"index": job.source})
+        if len(submitted) == 2:
+            window_filled.set()
+        return future
+
+    session = Mock(max_browsers=2, tracer_workers=1)
+    session.batch_tracer.submit.side_effect = submit
+    monkeypatch.setattr(
+        cs1302_code_visualizer, "_resolve_and_render_trace",
+        lambda trace, *args, **kwargs: {1: json.loads(trace)["index"].encode()},
+    )
+    jobs = [
+        cs1302_code_visualizer.BatchRenderJob(java_source=str(index), breakpoints={1})
+        for index in range(8)
+    ]
+    gen = cs1302_code_visualizer.render_batch_images(jobs, session=session)
+    assert not submitted
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        result = executor.submit(next, gen)
+        assert window_filled.wait(2)
+        assert len(submitted) == 2
+        assert not result.done()
+        first.set_result({"index": "0"})
+        assert result.result(timeout=2) == {1: b"0"}
+    assert len(submitted) == 2
+    assert next(gen) == {1: b"1"}
+    assert len(submitted) == 3
+    assert list(gen) == [{1: str(index).encode()} for index in range(2, 8)]
+    session.close.assert_not_called()
+
+
+def test_render_batch_close_stops_submission(monkeypatch):
+    import concurrent.futures
+
+    client = Mock()
+
+    def submit(job):
+        future = concurrent.futures.Future()
+        future.set_result({})
+        return future
+
+    client.submit.side_effect = submit
+    session = Mock(max_browsers=1, tracer_workers=2, batch_tracer=client)
+    monkeypatch.setattr(cs1302_code_visualizer, "_resolve_and_render_trace", lambda *a, **k: {})
+    jobs = [
+        cs1302_code_visualizer.BatchRenderJob(java_source="source", breakpoints=set())
+        for _ in range(10)
+    ]
+    gen = cs1302_code_visualizer.render_batch_images(jobs, session=session)
+    assert next(gen) == {}
+    gen.close()
+    assert client.submit.call_count == 2
+    session.close.assert_not_called()
+
+
+@pytest.mark.parametrize("failure_stage", ["trace", "render", "submit"])
+def test_render_batch_errors_close_owned_session(monkeypatch, failure_stage):
+    import concurrent.futures
+
+    session = Mock(max_browsers=1, tracer_workers=1)
+    session.__enter__ = Mock(return_value=session)
+    session.__exit__ = Mock(return_value=None)
+    future = concurrent.futures.Future()
+    if failure_stage == "trace":
+        future.set_exception(ValueError("trace failed"))
+    else:
+        future.set_result({})
+    session.batch_tracer.submit.return_value = future
+    if failure_stage == "submit":
+        session.batch_tracer.submit.side_effect = ValueError("submit failed")
+    monkeypatch.setattr(cs1302_code_visualizer, "RenderingSession", lambda **kwargs: session)
+
+    def render(*args, **kwargs):
+        raise ValueError("render failed")
+
+    monkeypatch.setattr(cs1302_code_visualizer, "_resolve_and_render_trace", render)
+    jobs = [cs1302_code_visualizer.BatchRenderJob(java_source="source", breakpoints={1})]
+    with pytest.raises(ValueError, match=f"{failure_stage} failed"):
+        list(cs1302_code_visualizer.render_batch_images(jobs))
+    session.__exit__.assert_called_once()
+    assert not future.cancelled()

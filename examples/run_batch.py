@@ -3,16 +3,21 @@
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import os
 import shlex
 import subprocess
 import sys
 import time
+from collections import deque
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from cs1302_code_visualizer.browser_driver import generate_step_images
+from cs1302_code_visualizer.errors import CodeVisError, CodeVisualizerError
 from cs1302_code_visualizer.session import RenderingSession
+from cs1302_code_visualizer.trace_generator import ensure_jdk_installed
 
 
 def open_files(files: Sequence[Path]) -> None:
@@ -69,7 +74,19 @@ def run_batch_examples(
     max_browsers: int = 2,
     tracer_workers: int = 1,
 ) -> int:
-    """Run trace generation and batch-rendered visualizations for all examples."""
+    """Trace and render examples concurrently using one persistent session.
+
+    Args:
+        examples_dir: Directory containing the numbered example directories.
+        rm_json: Whether to remove successful trace output files.
+        rm_image: Whether to remove successful image output files.
+        open_image: Whether to open generated step images.
+        max_browsers: Maximum number of concurrently leased browsers.
+        tracer_workers: Number of persistent tracer workers.
+
+    Returns:
+        Zero on success, or one if tracing or rendering an example fails.
+    """
     configs: list[tuple[int, Path, str, list[str]]] = []
     for i in range(34):
         example_dir = examples_dir / f"example{i}"
@@ -88,73 +105,77 @@ def run_batch_examples(
     )
     start_time = time.perf_counter()
 
-    # Phase 1: Trace Generation
-    traces: list[tuple[int, Path, str, str, Path, Path]] = []
-    print("--- Generating traces ---")
-    for i, example_dir, input_file, extra_args in configs:
+    traces: list[tuple[Path, Path, list[Path]]] = []
+    all_step_images: list[Path] = []
+
+    def process_example(
+        config: tuple[int, Path, str, list[str]],
+    ) -> tuple[Path, Path, list[Path]]:
+        """Trace, render, and save one example without changing working directory.
+
+        Args:
+            config: Example index, directory, source filename, and trace arguments.
+
+        Returns:
+            Trace path, final image path, and ordered step image paths.
+        """
+        i, example_dir, input_file, extra_args = config
         target_java = example_dir / input_file
         trace_file = example_dir / f"{input_file}.json"
         image_file = example_dir / f"{input_file}.png"
-
-        has_bp = any(
-            arg in ("-a", "--all-breakpoints", "-b", "--breakpoint")
-            or arg.startswith(("-b=", "--breakpoint="))
-            for arg in extra_args
+        options = _trace_options(extra_args, example_dir)
+        trace_text = session.generate_trace(
+            java_home,
+            target_java.read_text(encoding="utf-8"),
+            **options,
         )
-        tracer_args = list(extra_args)
-        if not has_bp:
-            tracer_args = ["-a", *tracer_args]
-
-        cmd = ["uv", "run", "generate_trace", *tracer_args]
-        with open(target_java, "r", encoding="utf-8") as f_in:
-            proc = subprocess.run(
-                cmd,
-                stdin=f_in,
-                capture_output=True,
-                text=True,
-                cwd=example_dir,
-                check=False,
-            )
-        if proc.returncode != 0:
-            print(
-                f"Failed to generate trace for example{i} ({input_file}):",
-                file=sys.stderr,
-            )
-            print(proc.stderr, file=sys.stderr)
-            return 1
-
-        trace_text = proc.stdout
         trace_file.write_text(trace_text, encoding="utf-8")
-        traces.append((i, example_dir, input_file, trace_text, trace_file, image_file))
         print(f"  example{i:2d}: trace generated ({len(trace_text)} bytes)")
+        t0 = time.perf_counter()
+        images = generate_step_images(trace_text, session=session)
+        if images:
+            image_file.write_bytes(images[-1])
+        step_files = []
+        for idx, img_data in enumerate(images):
+            sf = example_dir / f"{input_file}.{idx}.png"
+            sf.write_bytes(img_data)
+            step_files.append(sf)
+        if not step_files and image_file.exists():
+            step_files.append(image_file)
+        print(
+            f"  example{i:2d}: {len(images):2d} images rendered "
+            f"in {time.perf_counter() - t0:.2f}s"
+        )
+        return trace_file, image_file, step_files
 
-    # Phase 2: Batch Visualization Rendering
-    print("--- Rendering visualizations with pooled RenderingSession ---")
-    all_step_images: list[Path] = []
+    print("--- Tracing and rendering with pooled RenderingSession ---")
     with RenderingSession(
         max_browsers=max_browsers,
         tracer_workers=tracer_workers,
         use_batch_tracer=True,
     ) as session:
-        for i, example_dir, input_file, trace_text, _trace_file, image_file in traces:
-            t0 = time.perf_counter()
-            images = generate_step_images(trace_text, session=session)
-            duration = time.perf_counter() - t0
-
-            # Save generated step images
-            if images:
-                image_file.write_bytes(images[-1])
-            step_files: list[Path] = []
-            for idx, img_data in enumerate(images):
-                sf = example_dir / f"{input_file}.{idx}.png"
-                sf.write_bytes(img_data)
-                step_files.append(sf)
-
-            if not step_files and image_file.exists():
-                step_files.append(image_file)
-
-            all_step_images.extend(step_files)
-            print(f"  example{i:2d}: {len(images):2d} images rendered in {duration:.2f}s")
+        java_home = ensure_jdk_installed() if configs else None
+        workers = max(max_browsers, tracer_workers)
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+        try:
+            remaining = iter(configs)
+            pending = deque()
+            for config in remaining:
+                pending.append(executor.submit(process_example, config))
+                if len(pending) == workers:
+                    break
+            while pending:
+                result = pending.popleft().result()
+                traces.append(result)
+                all_step_images.extend(result[2])
+                next_config = next(remaining, None)
+                if next_config is not None:
+                    pending.append(executor.submit(process_example, next_config))
+        except (CodeVisError, CodeVisualizerError, OSError, ValueError, RuntimeError) as exc:
+            print(f"Failed to process examples: {exc}", file=sys.stderr)
+            return 1
+        finally:
+            executor.shutdown(wait=True, cancel_futures=True)
 
     elapsed = time.perf_counter() - start_time
     print(
@@ -169,17 +190,59 @@ def run_batch_examples(
 
     if rm_json:
         print("Cleaning up generated JSON trace files...")
-        for _, _, _, _, trace_file, _ in traces:
+        for trace_file, _, _ in traces:
             trace_file.unlink(missing_ok=True)
 
     if rm_image:
         print("Cleaning up generated PNG image files...")
-        for _, example_dir, input_file, _, _, image_file in traces:
+        for _, image_file, _ in traces:
             image_file.unlink(missing_ok=True)
-            for f in example_dir.glob(f"{Path(input_file).name}.*.png"):
+            for f in image_file.parent.glob(f"{image_file.stem}.*.png"):
                 f.unlink(missing_ok=True)
 
     return 0
+
+
+def _trace_options(extra_args: list[str], example_dir: Path) -> dict[str, Any]:
+    """Translate supported flags, retaining unsupported flags for legacy tracing.
+
+    Args:
+        extra_args: Arguments extracted from the example's test script.
+        example_dir: Base directory for relative stdin file paths.
+
+    Returns:
+        Keyword arguments for ``RenderingSession.generate_trace``.
+    """
+    parser = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    parser.add_argument("-a", "--all-breakpoints", "--auto-detect", action="store_true")
+    parser.add_argument("-b", "--breakpoint", action="append", default=[])
+    parser.add_argument("--accumulate-breakpoints", action="store_true")
+    parser.add_argument("--include-enum-static-fields", action="store_true")
+    parser.add_argument("--inline-strings", action="store_true")
+    parser.add_argument("--no-eval-enum-hash", action="store_false", dest="eval_enum_hash")
+    parser.add_argument("--type-style", default="simple")
+    parser.add_argument("--trace-timeout", type=float)
+    parser.add_argument("--stdin")
+    parser.add_argument("--stdin-file")
+    args, unsupported = parser.parse_known_args(extra_args)
+    breakpoints = {
+        int(value) for group in args.breakpoint for value in group.split(",") if value.strip()
+    }
+    return {
+        "breakpoints": breakpoints or {-1},
+        "all_breakpoints": args.all_breakpoints or not args.breakpoint,
+        "accumulate_breakpoints": args.accumulate_breakpoints,
+        "include_enum_static_fields": args.include_enum_static_fields,
+        "inline_strings": args.inline_strings,
+        "eval_enum_hash": args.eval_enum_hash,
+        "type_style": args.type_style,
+        "timeout_secs": args.trace_timeout,
+        "stdin": args.stdin,
+        "stdin_file": (
+            (example_dir / args.stdin_file).resolve() if args.stdin_file is not None else None
+        ),
+        "extra_tracer_args": unsupported,
+    }
 
 
 def main() -> None:
