@@ -10,13 +10,17 @@ Normative References:
     Adoptium API v3 Specification (https://api.adoptium.net/v3/)
 """
 
+from __future__ import annotations
+
 import argparse
+import concurrent.futures
 import fileinput
 import hashlib
 import json
 import logging
 import os
 import platform
+import queue
 import re
 import shutil
 import socket
@@ -26,12 +30,17 @@ import tarfile
 import tempfile
 import threading
 import tomllib
+import uuid
 import zipfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from contextlib import ExitStack
 from os import PathLike
 from pathlib import Path
 from subprocess import CalledProcessError
-from typing import Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final, TextIO, cast
+
+if TYPE_CHECKING:
+    from .batch_tracer import BatchTraceJob, BatchTracerClient
 
 import certifi
 import platformdirs
@@ -229,7 +238,7 @@ def generate_trace(
         breakpoints: Set of breakpoint line numbers.
         accumulate_breakpoints: Whether to accumulate multiple hits per breakpoint.
         include_enum_static_fields: Whether to keep enum constants in global static fields.
-        auto_detect: Whether to automatically detect and compile dependent source files.
+        auto_detect: Compatibility alias for all_breakpoints.
         type_style: Type qualification style ('fqn' or 'simple').
         stdin: Standard input string provided to the traced Java program.
         stdin_file: Path to file whose content is provided via standard input.
@@ -349,6 +358,40 @@ def generate_trace(
                         delete_globals(item, line_enum_globals)
 
     return json.dumps(trace_json)
+
+
+def generate_traces(
+    jobs: Sequence[BatchTraceJob],
+    *,
+    java_home: Path | None = None,
+    workers: int = 1,
+    max_jobs_per_worker: int = 100,
+    client: BatchTracerClient | None = None,
+) -> list[dict[str, Any]]:
+    """Execute multiple trace jobs in parallel using code-tracer batch-trace.
+
+    Args:
+        jobs: A sequence of BatchTraceJob specifications to execute.
+        java_home: Optional path to a JDK installation home.
+        workers: Number of guest worker JVMs to run in parallel (default: 1).
+        max_jobs_per_worker: Maximum jobs before recycling a guest worker JVM (default: 100).
+        client: Optional existing BatchTracerClient instance to reuse.
+
+    Returns:
+        List of trace dictionaries in the same order as input jobs.
+    """
+    from .batch_tracer import BatchTracerClient
+
+    if client is not None:
+        futures = [client.submit(job) for job in jobs]
+        return [f.result() for f in futures]
+    with BatchTracerClient(
+        java_home=java_home,
+        workers=workers,
+        max_jobs_per_worker=max_jobs_per_worker,
+    ) as c:
+        futures = [c.submit(job) for job in jobs]
+        return [f.result() for f in futures]
 
 
 def jdk_exists(maybe_java_home: str | PathLike[str]) -> bool:
@@ -554,7 +597,6 @@ def ensure_code_tracer_installed(update_existing: bool = False) -> None:
             timeout=DEFAULT_REQUEST_TIMEOUT,
             verify=certifi.where(),
         ) as resp:
-
             if resp.status_code == 304:
                 return
 
@@ -619,6 +661,126 @@ def delete_globals(trace_json: dict[str, Any], global_keys: Sequence[str] | None
             globals_attrs.pop(global_key, None)
             if global_key in ordered_globals:
                 ordered_globals.remove(global_key)
+
+
+def _parse_batch_request(line: str) -> BatchTraceJob:
+    """Parse one NDJSON object, assigning its effective ID before submission.
+
+    Args:
+        line: JSON-encoded trace request containing a string source field.
+
+    Returns:
+        A trace job with its supplied ID, or a generated UUID when absent or empty.
+
+    Raises:
+        ValueError: The JSON, request shape, source, ID, or breakpoints are invalid.
+    """
+    from .batch_tracer import BatchTraceJob
+
+    try:
+        data = json.loads(line)
+        if not isinstance(data, dict):
+            raise TypeError("Batch request must be a JSON object")
+        source = data.get("source")
+        if not isinstance(source, str):
+            raise TypeError("Batch request must include string field 'source'")
+        bps_val = data.get("breakpoints")
+        bps_list = [int(x) for x in bps_val] if bps_val is not None else None
+        raw_id = data.get("id")
+        if raw_id is not None and not isinstance(raw_id, str):
+            raise TypeError("Batch request ID must be a string")
+    except (json.JSONDecodeError, TypeError, ValueError) as err:
+        raise ValueError(f"Invalid batch request line: {line}") from err
+    return BatchTraceJob(
+        id=raw_id or uuid.uuid4().hex,
+        source=source,
+        stdin=data.get("stdin", ""),
+        breakpoints=bps_list,
+        all_breakpoints=data.get("allBreakpoints", data.get("all_breakpoints", True)),
+        accumulate_breakpoints=data.get(
+            "accumulateBreakpoints", data.get("accumulate_breakpoints", False)
+        ),
+        remove_main_args=data.get("removeMainArgs", data.get("remove_main_args", True)),
+        inline_strings=data.get("inlineStrings", data.get("inline_strings", False)),
+        type_style=data.get("typeStyle", data.get("type_style", "simple")),
+        timeout_ms=data.get("timeout_ms", 30000),
+        include_enum_static_fields=data.get("include_enum_static_fields", False),
+    )
+
+
+def _stream_batch_requests(
+    lines: Iterable[str], output: TextIO, client: BatchTracerClient, *, max_pending: int
+) -> None:
+    """Emit ordered responses while independently reading bounded NDJSON requests.
+
+    Capacity includes completed responses until they are written and flushed.
+    Input errors follow already submitted responses. On failure, a daemon reader
+    blocked in caller-owned input exits when that read returns; input is never
+    closed here, and submitted trace futures are never cancelled.
+
+    Args:
+        lines: Iterable of NDJSON requests; blank lines are ignored.
+        output: Caller-owned text stream receiving one flushed response per job.
+        client: Persistent tracer client used to submit jobs asynchronously.
+        max_pending: Maximum submitted requests whose responses are not yet emitted.
+
+    Returns:
+        None after all requests have been read and their responses emitted.
+
+    Raises:
+        ValueError: Capacity is nonpositive or a request is invalid or duplicated.
+        OSError: Reading requests or writing responses fails.
+        Exception: A submission or trace future fails; the original error propagates.
+    """
+    if max_pending < 1:
+        raise ValueError("max_pending must be positive")
+    responses: queue.Queue[
+        tuple[str, concurrent.futures.Future[dict[str, Any]]] | Exception | None
+    ] = queue.Queue()
+    capacity = threading.Semaphore(max_pending)
+    stopped = threading.Event()
+
+    def produce() -> None:
+        try:
+            iterator = iter(lines)
+            while not stopped.is_set():
+                capacity.acquire()
+                if stopped.is_set():
+                    break
+                try:
+                    line = next(iterator).strip()
+                except StopIteration:
+                    break
+                if stopped.is_set():
+                    break
+                if not line:
+                    capacity.release()
+                    continue
+                job = _parse_batch_request(line)
+                responses.put((job.id, client.submit(job)))
+        except Exception as err:  # noqa: BLE001 -- Re-raise producer failures in the consumer.
+            responses.put(err)
+        finally:
+            responses.put(None)
+
+    reader = threading.Thread(target=produce, name="BatchRequestReader", daemon=True)
+    reader.start()
+    try:
+        while True:
+            response = responses.get()
+            if response is None:
+                break
+            if isinstance(response, Exception):
+                raise response
+            job_id, future = response
+            result = future.result()
+            output.write(json.dumps({"id": job_id, "result": result}) + "\n")
+            output.flush()
+            capacity.release()
+    finally:
+        stopped.set()
+        capacity.release()
+        reader.join(timeout=0.1)
 
 
 def main() -> None:
@@ -709,6 +871,29 @@ def main() -> None:
         ),
     )
 
+    _ = parser.add_argument(
+        "--batch",
+        action="store_true",
+        help=(
+            "Run in batch mode, processing an NDJSON stream of trace requests "
+            "from input and writing NDJSON responses to output."
+        ),
+    )
+
+    _ = parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Number of concurrent guest worker JVMs in batch mode (default: 1).",
+    )
+
+    _ = parser.add_argument(
+        "--max-jobs-per-worker",
+        type=int,
+        default=100,
+        help="Maximum jobs before recycling a guest worker JVM in batch mode (default: 100).",
+    )
+
     stdin_group = parser.add_mutually_exclusive_group()
     _ = stdin_group.add_argument(
         "--stdin",
@@ -733,6 +918,23 @@ def main() -> None:
         java_home = ensure_jdk_installed()
 
     ensure_code_tracer_installed()
+
+    if args.batch:
+        from .batch_tracer import BatchTracerClient
+
+        client = BatchTracerClient(
+            java_home=java_home,
+            workers=args.workers,
+            max_jobs_per_worker=args.max_jobs_per_worker,
+        )
+        with client, ExitStack() as stack, fileinput.input(args.input) as f:
+            out_file = (
+                stack.enter_context(open(args.output, "w", encoding="utf-8"))
+                if args.output
+                else sys.stdout
+            )
+            _stream_batch_requests(f, out_file, client, max_pending=2 * args.workers)
+        return
 
     # get java file from stdin
     with fileinput.input(args.input) as f:

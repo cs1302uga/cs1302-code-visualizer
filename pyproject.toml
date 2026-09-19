@@ -1,6 +1,6 @@
 [project]
 name = "cs1302-code-visualizer"
-version = "0.12.0"
+version = "0.13.0"
 description = "Visualize Java program memory state and output a screenshot."
 authors = [
     {name = "Gabe Livengood", email = "timothy.livengood@uga.edu"},
@@ -43,6 +43,7 @@ system-dependencies = [
 ]
 
 [project.scripts]
+code-visualizer = "cs1302_code_visualizer.cli:main"
 generate_trace = "cs1302_code_visualizer.trace_generator:main"
 generate_visualization = "cs1302_code_visualizer.browser_driver:main"
 install-deps = "scripts.install_deps:main"
