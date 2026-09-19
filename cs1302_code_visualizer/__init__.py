@@ -15,7 +15,7 @@ import os
 import sys
 import uuid
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -473,7 +473,7 @@ class BatchRenderJob:
 
 def _render_batch_with_session(
     jobs: Sequence[BatchRenderJob], session: RenderingSession
-) -> list[dict[int, bytes] | dict[int, list[bytes]]]:
+) -> Iterator[dict[int, bytes] | dict[int, list[bytes]]]:
     trace_futures: list[tuple[BatchRenderJob, concurrent.futures.Future[dict[str, Any]]]] = []
     for i, job in enumerate(jobs):
         job_id = job.job_id or f"render_job_{i}_{uuid.uuid4().hex}"
@@ -497,6 +497,7 @@ def _render_batch_with_session(
         trace_futures.append((job, fut))
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=session.max_browsers) as executor:
+
         def _render_one(
             job_spec: BatchRenderJob, trace_fut: concurrent.futures.Future[dict[str, Any]]
         ) -> dict[int, bytes] | dict[int, list[bytes]]:
@@ -514,10 +515,9 @@ def _render_batch_with_session(
                 session=session,
             )
 
-        render_futures = [
-            executor.submit(_render_one, job, fut) for job, fut in trace_futures
-        ]
-        return [f.result() for f in render_futures]
+        render_futures = [executor.submit(_render_one, job, fut) for job, fut in trace_futures]
+        for f in render_futures:
+            yield f.result()
 
 
 def render_batch_images(
@@ -526,11 +526,12 @@ def render_batch_images(
     session: RenderingSession | None = None,
     max_browsers: int = 2,
     tracer_workers: int = 1,
-) -> list[dict[int, bytes] | dict[int, list[bytes]]]:
+) -> Iterator[dict[int, bytes] | dict[int, list[bytes]]]:
     """Render execution traces for multiple Java programs in parallel.
 
     Traces are generated concurrently using the session's BatchTracerClient and streamed
-    directly into available pooled browsers for rendering.
+    directly into available pooled browsers for rendering. Results are yielded as a generator
+    in the same deterministic order as the input jobs, allowing constant peak memory usage.
 
     Args:
         jobs: A sequence of BatchRenderJob specifications.
@@ -538,21 +539,22 @@ def render_batch_images(
         max_browsers: Number of concurrent browser instances when session is not provided.
         tracer_workers: Number of guest worker JVMs when session is not provided.
 
-    Returns:
-        List of rendered image mappings in the same order as input jobs.
+    Yields:
+        Rendered image mappings in the same order as input jobs.
     """
     if not jobs:
-        return []
+        return
 
     if session is not None:
-        return _render_batch_with_session(jobs, session)
+        yield from _render_batch_with_session(jobs, session)
+        return
 
     with RenderingSession(
         max_browsers=max_browsers,
         tracer_workers=tracer_workers,
         use_batch_tracer=True,
     ) as managed_session:
-        return _render_batch_with_session(jobs, managed_session)
+        yield from _render_batch_with_session(jobs, managed_session)
 
 
 def main() -> None:
