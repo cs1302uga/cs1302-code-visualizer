@@ -413,10 +413,12 @@ def test_batch_tracer_close_with_pending_and_exceptions(mock_tracer_env):
     mock_proc = Mock()
     mock_proc.__enter__ = Mock(return_value=mock_proc)
     mock_proc.__exit__ = Mock(return_value=None)
+    mock_proc.poll.return_value = None
     mock_proc.stdin = Mock()
     mock_proc.stdin.closed = False
     mock_proc.stdout = Mock()
     mock_proc.stdout.readline.return_value = ""
+    mock_proc.stderr = None
     mock_proc.stdin.close.side_effect = Exception("stdin close err")
     mock_proc.terminate.side_effect = Exception("terminate err")
     mock_proc.kill.side_effect = Exception("kill err")
