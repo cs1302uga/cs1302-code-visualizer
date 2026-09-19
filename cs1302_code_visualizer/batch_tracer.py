@@ -379,14 +379,19 @@ class BatchTracerClient:
                     proc.stdin.close()
                 except Exception:
                     logger.debug("Failed to close batch tracer stdin", exc_info=True)
-            try:
-                proc.terminate()
-                proc.wait(timeout=2)
-            except subprocess.TimeoutExpired:
+
+            def _kill_process() -> None:
                 try:
                     proc.kill()
                     proc.wait(timeout=1)
                 except Exception:
                     logger.debug("Failed to kill batch tracer process", exc_info=True)
+
+            try:
+                proc.terminate()
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                _kill_process()
             except Exception:
                 logger.debug("Failed to terminate batch tracer process", exc_info=True)
+                _kill_process()
