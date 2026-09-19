@@ -5,7 +5,7 @@ import json
 import runpy
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -931,3 +931,67 @@ def test_trace_generator_main_stdin_file(tmp_path, monkeypatch):
 
 
 
+
+
+def test_generate_traces_with_custom_client():
+    import concurrent.futures
+    from cs1302_code_visualizer.batch_tracer import BatchTraceJob
+    from cs1302_code_visualizer.trace_generator import generate_traces
+
+    mock_client = Mock()
+    f1 = concurrent.futures.Future()
+    f1.set_result({"trace": [1]})
+    f2 = concurrent.futures.Future()
+    f2.set_result({"trace": [2]})
+    mock_client.submit.side_effect = [f1, f2]
+
+    jobs = [
+        BatchTraceJob(id="j1", source="class A {}"),
+        BatchTraceJob(id="j2", source="class B {}"),
+    ]
+    results = generate_traces(jobs, client=mock_client)
+    assert results == [{"trace": [1]}, {"trace": [2]}]
+    assert mock_client.submit.call_count == 2
+
+
+def test_generate_traces_creates_client():
+    import concurrent.futures
+    from cs1302_code_visualizer.batch_tracer import BatchTraceJob
+    from cs1302_code_visualizer.trace_generator import generate_traces
+
+    mock_client = Mock()
+    f1 = concurrent.futures.Future()
+    f1.set_result({"trace": []})
+    mock_client.submit.return_value = f1
+    mock_client.__enter__ = Mock(return_value=mock_client)
+    mock_client.__exit__ = Mock(return_value=None)
+
+    with patch("cs1302_code_visualizer.batch_tracer.BatchTracerClient", return_value=mock_client):
+        jobs = [BatchTraceJob(id="j1", source="class A {}")]
+        res = generate_traces(jobs, workers=2, max_jobs_per_worker=50)
+        assert res == [{"trace": []}]
+
+
+def test_trace_generator_main_batch_ndjson(tmp_path, monkeypatch):
+    import concurrent.futures
+    input_ndjson = "\n" + json.dumps({"id": "j1", "source": "class A {}"}) + "\n\n"
+    monkeypatch.setattr(sys, "stdin", io.StringIO(input_ndjson))
+    out_file = tmp_path / "batch_out.ndjson"
+    monkeypatch.setattr("sys.argv", ["generate_trace", "--batch", "-o", str(out_file), "--workers", "2", "--max-jobs-per-worker", "50"])
+
+    mock_client = Mock()
+    mock_client.__enter__ = Mock(return_value=mock_client)
+    mock_client.__exit__ = Mock(return_value=None)
+    mock_client.execute.return_value = {"status": "completed", "trace": []}
+    f1 = concurrent.futures.Future()
+    f1.set_result({"status": "completed", "trace": []})
+    mock_client.submit.return_value = f1
+
+    with patch("cs1302_code_visualizer.batch_tracer.BatchTracerClient", return_value=mock_client):
+        generator_main()
+
+    out = out_file.read_text(encoding="utf-8").strip()
+    assert len(out) > 0
+    resp_obj = json.loads(out)
+    assert resp_obj["id"] == "j1"
+    assert resp_obj["result"] == {"status": "completed", "trace": []}

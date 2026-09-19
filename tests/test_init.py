@@ -2,7 +2,7 @@ import importlib
 import io
 import json
 import sys
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -269,3 +269,110 @@ def test_init_main_with_no_eval_enum_hash(monkeypatch):
 
 
 
+
+
+def test_resolve_and_render_trace_modern():
+    from cs1302_code_visualizer import _resolve_and_render_trace
+
+    modern_trace = {
+        "trace": [
+            {"line": 2, "event": "step_line"},
+            {"line": 4, "event": "step_line"},
+            {"line": 4, "event": "step_line"},
+        ]
+    }
+    with patch("cs1302_code_visualizer.browser_driver.generate_image", return_value=b"IMG"):
+        # Breakpoints with -1
+        res_default = _resolve_and_render_trace(json.dumps(modern_trace), {-1})
+        assert -1 in res_default
+        assert res_default[-1] == b"IMG"
+
+        # Single occurrence
+        res_single = _resolve_and_render_trace(json.dumps(modern_trace), {4})
+        assert res_single[4] == b"IMG"
+
+        # All occurrences
+        res_all = _resolve_and_render_trace(json.dumps(modern_trace), {4}, render_all_occurrences=True)
+        assert isinstance(res_all[4], list)
+        assert len(res_all[4]) == 2
+
+
+def test_resolve_and_render_trace_legacy():
+    from cs1302_code_visualizer import _resolve_and_render_trace
+
+    legacy_trace = {
+        "4": [
+            {"line": 4, "event": "step_line"},
+            {"line": 4, "event": "step_line"},
+        ]
+    }
+    with patch("cs1302_code_visualizer.browser_driver.generate_image", return_value=b"IMG"):
+        res_all = _resolve_and_render_trace(json.dumps(legacy_trace), {4}, render_all_occurrences=True)
+        assert res_all[4] == [b"IMG", b"IMG"]
+
+        legacy_single = {
+            "4": {"line": 4, "event": "step_line"}
+        }
+        res_single = _resolve_and_render_trace(json.dumps(legacy_single), {4}, render_all_occurrences=False)
+        assert res_single[4] == b"IMG"
+
+
+def test_render_batch_images_empty():
+    from cs1302_code_visualizer import render_batch_images
+
+    assert render_batch_images([]) == []
+
+
+def test_render_batch_images_with_session():
+    import concurrent.futures
+    from cs1302_code_visualizer import BatchRenderJob, render_batch_images
+
+    mock_session = Mock()
+    mock_session.max_browsers = 2
+    mock_batch_tracer = Mock()
+    mock_session.batch_tracer = mock_batch_tracer
+
+    f1 = concurrent.futures.Future()
+    f1.set_result({"trace": [{"line": 4, "event": "step_line"}]})
+    mock_batch_tracer.submit.return_value = f1
+
+    with patch("cs1302_code_visualizer.browser_driver.generate_image", return_value=b"BATCH_IMG"):
+        jobs = [
+            BatchRenderJob(
+                java_source="class A {}",
+                breakpoints={4},
+                job_id="custom_id",
+            )
+        ]
+        results = render_batch_images(jobs, session=mock_session)
+        assert len(results) == 1
+        assert results[0] == {4: b"BATCH_IMG"}
+
+
+def test_render_batch_images_creates_session():
+    import concurrent.futures
+    from cs1302_code_visualizer import BatchRenderJob, render_batch_images
+
+    mock_session = Mock()
+    mock_session.max_browsers = 2
+    mock_session.__enter__ = Mock(return_value=mock_session)
+    mock_session.__exit__ = Mock(return_value=None)
+    mock_batch_tracer = Mock()
+    mock_session.batch_tracer = mock_batch_tracer
+
+    f1 = concurrent.futures.Future()
+    f1.set_result({"trace": [{"line": 4, "event": "step_line"}]})
+    mock_batch_tracer.submit.return_value = f1
+
+    with patch("cs1302_code_visualizer.RenderingSession", return_value=mock_session), patch(
+        "cs1302_code_visualizer.browser_driver.generate_image", return_value=b"BATCH_IMG"
+    ):
+        jobs = [
+            BatchRenderJob(
+                java_source="class A {}",
+                breakpoints={4},
+            )
+        ]
+        results = render_batch_images(jobs, tracer_workers=2)
+        assert len(results) == 1
+        assert results[0] == {4: b"BATCH_IMG"}

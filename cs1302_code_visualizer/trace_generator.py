@@ -10,6 +10,8 @@ Normative References:
     Adoptium API v3 Specification (https://api.adoptium.net/v3/)
 """
 
+from __future__ import annotations
+
 import argparse
 import fileinput
 import hashlib
@@ -31,7 +33,10 @@ from collections.abc import Mapping, Sequence
 from os import PathLike
 from pathlib import Path
 from subprocess import CalledProcessError
-from typing import Any, Final, cast
+from typing import TYPE_CHECKING, Any, Final, cast
+
+if TYPE_CHECKING:
+    from .batch_tracer import BatchTraceJob, BatchTracerClient
 
 import certifi
 import platformdirs
@@ -349,6 +354,40 @@ def generate_trace(
                         delete_globals(item, line_enum_globals)
 
     return json.dumps(trace_json)
+
+
+def generate_traces(
+    jobs: Sequence[BatchTraceJob],
+    *,
+    java_home: Path | None = None,
+    workers: int = 1,
+    max_jobs_per_worker: int = 100,
+    client: BatchTracerClient | None = None,
+) -> list[dict[str, Any]]:
+    """Execute multiple trace jobs in parallel using code-tracer batch-trace.
+
+    Args:
+        jobs: A sequence of BatchTraceJob specifications to execute.
+        java_home: Optional path to a JDK installation home.
+        workers: Number of guest worker JVMs to run in parallel (default: 1).
+        max_jobs_per_worker: Maximum jobs before recycling a guest worker JVM (default: 100).
+        client: Optional existing BatchTracerClient instance to reuse.
+
+    Returns:
+        List of trace dictionaries in the same order as input jobs.
+    """
+    from .batch_tracer import BatchTracerClient
+
+    if client is not None:
+        futures = [client.submit(job) for job in jobs]
+        return [f.result() for f in futures]
+    with BatchTracerClient(
+        java_home=java_home,
+        workers=workers,
+        max_jobs_per_worker=max_jobs_per_worker,
+    ) as c:
+        futures = [c.submit(job) for job in jobs]
+        return [f.result() for f in futures]
 
 
 def jdk_exists(maybe_java_home: str | PathLike[str]) -> bool:
@@ -709,6 +748,29 @@ def main() -> None:
         ),
     )
 
+    _ = parser.add_argument(
+        "--batch",
+        action="store_true",
+        help=(
+            "Run in batch mode, processing an NDJSON stream of trace requests "
+            "from input and writing NDJSON responses to output."
+        ),
+    )
+
+    _ = parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Number of concurrent guest worker JVMs in batch mode (default: 1).",
+    )
+
+    _ = parser.add_argument(
+        "--max-jobs-per-worker",
+        type=int,
+        default=100,
+        help="Maximum jobs before recycling a guest worker JVM in batch mode (default: 100).",
+    )
+
     stdin_group = parser.add_mutually_exclusive_group()
     _ = stdin_group.add_argument(
         "--stdin",
@@ -733,6 +795,56 @@ def main() -> None:
         java_home = ensure_jdk_installed()
 
     ensure_code_tracer_installed()
+
+    if args.batch:
+        from .batch_tracer import BatchTraceJob, BatchTracerClient
+        client = BatchTracerClient(
+            java_home=java_home,
+            workers=args.workers,
+            max_jobs_per_worker=args.max_jobs_per_worker,
+        )
+        with client:
+            out_file = open(args.output, "w", encoding="utf-8") if args.output else sys.stdout
+            try:
+                with fileinput.input(args.input) as f:
+                    for line in f:
+                        line_s = line.strip()
+                        if not line_s:
+                            continue
+                        data = json.loads(line_s)
+                        bps_val = data.get("breakpoints")
+                        bps_list = [int(x) for x in bps_val] if bps_val is not None else None
+                        job = BatchTraceJob(
+                            id=str(data.get("id", "")),
+                            source=data.get("source", ""),
+                            stdin=data.get("stdin", ""),
+                            breakpoints=bps_list,
+                            all_breakpoints=data.get(
+                                "allBreakpoints", data.get("all_breakpoints", False)
+                            ),
+                            accumulate_breakpoints=data.get(
+                                "accumulateBreakpoints",
+                                data.get("accumulate_breakpoints", False),
+                            ),
+                            remove_main_args=data.get(
+                                "removeMainArgs", data.get("remove_main_args", True)
+                            ),
+                            inline_strings=data.get(
+                                "inlineStrings", data.get("inline_strings", False)
+                            ),
+                            type_style=data.get("typeStyle", data.get("type_style", "simple")),
+                            timeout_ms=data.get("timeout_ms", 30000),
+                            include_enum_static_fields=data.get(
+                                "include_enum_static_fields", False
+                            ),
+                        )
+                        result = client.execute(job)
+                        out_file.write(json.dumps({"id": job.id, "result": result}) + "\n")
+                        out_file.flush()
+            finally:
+                if args.output:
+                    out_file.close()
+        return
 
     # get java file from stdin
     with fileinput.input(args.input) as f:
