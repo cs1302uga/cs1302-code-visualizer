@@ -143,4 +143,3 @@ CodeVisualizerError = CodeVisError
 TraceGeneratorError = CodeVisTraceGeneratorError
 RenderError = CodeVisRenderError
 JDKError = JDKInstallationError
-

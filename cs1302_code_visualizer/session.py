@@ -188,9 +188,7 @@ class RenderingSession:
                 breakpoints_arg: set[int] = values.get("breakpoints", set())
                 has_explicit = breakpoints_arg != trace_generator.DEFAULT_BREAKPOINTS_SET
                 all_bps = bool(
-                    values.get("all_breakpoints")
-                    or values.get("auto_detect")
-                    or (not has_explicit)
+                    values.get("all_breakpoints") or values.get("auto_detect") or (not has_explicit)
                 )
                 if extra_args and ("-a" in extra_args or "--all-breakpoints" in extra_args):
                     all_bps = True

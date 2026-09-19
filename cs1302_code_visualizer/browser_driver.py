@@ -218,12 +218,15 @@ def _fit_session_viewport(driver: webdriver.Chrome, element: WebElement, dpi: in
     minimum = _minimum_window_sizes[driver]
 
     def resize(width: int, height: int) -> None:
-        driver.execute_cdp_cmd("Emulation.setDeviceMetricsOverride", {
-            "width": max(1, max(minimum["width"], width) - offset["width"]),
-            "height": max(1, max(minimum["height"], height) - offset["height"]),
-            "deviceScaleFactor": dpi,
-            "mobile": False,
-        })
+        driver.execute_cdp_cmd(
+            "Emulation.setDeviceMetricsOverride",
+            {
+                "width": max(1, max(minimum["width"], width) - offset["width"]),
+                "height": max(1, max(minimum["height"], height) - offset["height"]),
+                "deviceScaleFactor": dpi,
+                "mobile": False,
+            },
+        )
 
     rect = element.rect
     resize(int(rect["x"] + rect["width"]), int(rect["y"] + rect["height"]))
@@ -264,7 +267,10 @@ def online_python_tutor_frontend(
     """Context manager for interacting with the OnlinePythonTutor frontend in Chrome."""
     prefixes = list(strip_type_prefixes) if strip_type_prefixes is not None else []
     frontend_path = (this_files_dir / "frontend" / "render-trace.html").as_uri()
-    with _browser_scope(dpi, session) as driver, NamedTemporaryFile(mode="w", encoding="utf-8") as trace_file:
+    with (
+        _browser_scope(dpi, session) as driver,
+        NamedTemporaryFile(mode="w", encoding="utf-8") as trace_file,
+    ):
         if session is not None:
             _prepare_session_viewport(driver)
         wait: WebDriverWait[webdriver.Chrome] = WebDriverWait(driver, 10)

@@ -53,16 +53,13 @@ def list_breakpoints(
     if output_json:
         args.append("--json")
 
-    cmd = (
-        [
-            str(java_home / "bin" / "java"),
-            "-Djava.awt.headless=true",
-            "--enable-native-access=ALL-UNNAMED",
-            "-jar",
-            str(cache_dir / "code-tracer.jar"),
-        ]
-        + args
-    )
+    cmd = [
+        str(java_home / "bin" / "java"),
+        "-Djava.awt.headless=true",
+        "--enable-native-access=ALL-UNNAMED",
+        "-jar",
+        str(cache_dir / "code-tracer.jar"),
+    ] + args
 
     proc = subprocess.run(
         cmd,

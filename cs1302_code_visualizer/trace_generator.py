@@ -594,7 +594,6 @@ def ensure_code_tracer_installed(update_existing: bool = False) -> None:
             timeout=DEFAULT_REQUEST_TIMEOUT,
             verify=certifi.where(),
         ) as resp:
-
             if resp.status_code == 304:
                 return
 
@@ -799,6 +798,7 @@ def main() -> None:
 
     if args.batch:
         from .batch_tracer import BatchTraceJob, BatchTracerClient
+
         client = BatchTracerClient(
             java_home=java_home,
             workers=args.workers,

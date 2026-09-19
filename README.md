@@ -32,33 +32,82 @@ record Person(String name, int age) { };
 ## Usage
 
 You should have the [uv package manager](https://docs.astral.sh/uv/) installed.
-This program gets source code input from standard input and outputs image data
-to standard output. You should use shell input/output redirection.
+
+### Unified CLI (`code-visualizer`)
+
+`code-visualizer` is the primary command-line interface for tracing and visualizing Java programs.
+
+#### Single Program Mode
+
+Render a memory state diagram for a Java program to a destination file:
+
+```console
+uv run code-visualizer In.java -o out.png
+```
+
+Or read source code from standard input:
+
+```console
+uv run code-visualizer < In.java > out.png
+```
+
+To render every execution step of a program:
+
+```console
+uv run code-visualizer In.java -a -o out.png
+```
+This generates numbered step images (`out.0.png`, `out.1.png`, ...) alongside `out.png`.
+
+#### High-Performance Batch Mode (`--batch`)
+
+Batch mode processes multiple Java sources in a high-throughput streaming pipeline using pooled background Java tracer JVMs and headless Chrome instances.
+
+Inputs can be supplied as positional files, directory scans, or an NDJSON batch manifest:
+
+```console
+# Render multiple source files to a destination directory
+uv run code-visualizer --batch examples/example0/Driver.java examples/example1/Driver.java --out-dir ./out
+
+# Recursively scan a directory tree for Java files
+uv run code-visualizer --batch --input-dir ./src --out-dir ./out
+
+# Process a newline-delimited JSON (NDJSON) batch manifest
+uv run code-visualizer --batch -i manifest.ndjson --out-dir ./out
+```
+
+#### Template-Driven Output Paths
+
+Use `--output-pattern` and `--trace-pattern` to define destination filenames. Supported template placeholders include:
+
+- `{id}`: Job identifier or stem
+- `{dirname}`: Relative directory path of the source file
+- `{filename}`: Full source filename (e.g., `Driver.java`)
+- `{basename}`: Filename without extension (e.g., `Driver`)
+- `{ext}`: Source file extension (e.g., `java`)
+- `{step}`: Step index (`0`, `1`, ..., or `final`)
+- `{line}`: Source line number prefixed with `L` (e.g., `L14`)
+- `{format}`: File format extension (`png`, `svg`, `json`)
+
+For example, to organize multi-step renderings into per-program directories:
+```console
+uv run code-visualizer --batch -a --output-pattern "{dirname}/{basename}.step{step}.png" examples/example0/Driver.java
+```
+
+**Key Safety and Execution Features:**
+- **Automatic Directory Creation**: Parent directories specified by `{dirname}` or destination paths are created automatically on demand (`mkdir -p`).
+- **Collision Protection**: Multi-step jobs (`-a` or breakpoints) fail fast with a validation error unless `{step}` or `{line}` is included in `--output-pattern`.
+- **Overwrite Protection**: Destination files will not be overwritten unless `--force` (`-f`) is passed.
+- **Atomic Streaming Writes**: Output files are staged into temporary files (`.<file>.tmp.<pid>_<uuid>`) and committed atomically on job success. If a job fails, partial temporary files are cleaned up immediately.
+- **Concurrency Tuning**: Configure background tracer worker JVMs with `-w` / `--workers <N>` (default: `1`) and pooled browser instances with `--browsers <M>` (default: `2`). Use `--keep-going` to continue processing remaining jobs if an individual job fails.
+
+### Low-Level Utilities
+
+Individual plumbing utilities remain available for specialized scripting:
 
 ```console
 uv run render_image < In.java > out.png
-```
-
-To view the execution trace for a program, use the `generate_trace` program (see
-`generate_trace --help` for available options):
-
-```console
 uv run generate_trace < In.java > trace.json
-```
-
-To render a visualization using an existing execution trace for a Java program,
-use the `generate_visualization` program (see `generate_visualization --help`
-for available options):
-
-```console
 uv run generate_visualization < trace.json > out.png
-```
-
-To see a list of available breakpoints (i.e., breakpoint line numbers) for Java
-program, use the `list_breakpoints` program (see `list_breakpoints --help` for
-available options):
-
-```console
 uv run list_breakpoints < In.java
 ```
 
@@ -141,6 +190,12 @@ python -m scripts.benchmark_rendering small-trace-examples/example0/Driver.java.
 
 The benchmark reports elapsed time and Chrome launches, and fails if image
 sizes or decoded pixels differ between fresh and reused browsers.
+
+To benchmark the streaming performance of the unified CLI across sequential and batched worker/browser configurations:
+
+```sh
+python -m scripts.benchmark_cli_batch --num-examples 6
+```
 
 Persistent traces are not removed automatically. Use
 `cs1302_code_visualizer.session.prune_trace_cache(cache_dir)` to remove entries

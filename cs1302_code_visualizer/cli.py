@@ -143,6 +143,7 @@ def _process_batch_job(
             source_code,
             breakpoints=breakpoints or {-1},
             accumulate_breakpoints=all_steps,
+            all_breakpoints=all_steps or not bool(breakpoints),
         )
 
         # Stage trace file if requested
@@ -352,42 +353,46 @@ def run_single_cli(args: argparse.Namespace) -> int:
         source_code,
         breakpoints=bps or {-1},
         accumulate_breakpoints=args.all_steps,
+        all_breakpoints=args.all_steps or not bool(bps),
     )
 
-    if args.all_steps:
-        images = generate_step_images(
-            trace_text,
-            dpi=args.dpi,
-            format=args.format,
-            include_types=args.include_types,
-            text_memory_labels=args.text_memory_labels,
-            strip_type_prefixes=args.strip_type_prefixes,
-        )
-        if not args.output:
-            print("Error: --output is required when rendering --all-steps.", file=sys.stderr)
-            return 1
-        out_base = Path(args.output)
-        out_base.parent.mkdir(parents=True, exist_ok=True)
-        for idx, img in enumerate(images):
-            step_file = out_base.with_name(f"{out_base.stem}.{idx}{out_base.suffix}")
-            step_file.write_bytes(img)
-        if images:
-            out_base.write_bytes(images[-1])
-    else:
-        img_bytes = browser_driver.generate_image(
-            trace_text,
-            dpi=args.dpi,
-            format=args.format,
-            include_types=args.include_types,
-            text_memory_labels=args.text_memory_labels,
-            strip_type_prefixes=args.strip_type_prefixes,
-        )
-        if args.output:
-            out_path = Path(args.output)
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_bytes(img_bytes)
+    with RenderingSession(max_browsers=1) as session:
+        if args.all_steps:
+            images = generate_step_images(
+                trace_text,
+                dpi=args.dpi,
+                format=args.format,
+                include_types=args.include_types,
+                text_memory_labels=args.text_memory_labels,
+                strip_type_prefixes=args.strip_type_prefixes,
+                session=session,
+            )
+            if not args.output:
+                print("Error: --output is required when rendering --all-steps.", file=sys.stderr)
+                return 1
+            out_base = Path(args.output)
+            out_base.parent.mkdir(parents=True, exist_ok=True)
+            for idx, img in enumerate(images):
+                step_file = out_base.with_name(f"{out_base.stem}.{idx}{out_base.suffix}")
+                step_file.write_bytes(img)
+            if images:
+                out_base.write_bytes(images[-1])
         else:
-            sys.stdout.buffer.write(img_bytes)
+            img_bytes = browser_driver.generate_image(
+                trace_text,
+                dpi=args.dpi,
+                format=args.format,
+                include_types=args.include_types,
+                text_memory_labels=args.text_memory_labels,
+                strip_type_prefixes=args.strip_type_prefixes,
+                session=session,
+            )
+            if args.output:
+                out_path = Path(args.output)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_bytes(img_bytes)
+            else:
+                sys.stdout.buffer.write(img_bytes)
 
     return 0
 
