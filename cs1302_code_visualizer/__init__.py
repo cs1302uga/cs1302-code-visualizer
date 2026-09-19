@@ -7,17 +7,21 @@ Normative References:
 """
 
 import argparse
+import concurrent.futures
 import fileinput
 import json
 import logging
 import os
 import sys
+import time
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from . import browser_driver, trace_generator
+from .batch_tracer import BatchTraceJob, BatchTracerClient
 from .breakpoint_lister import list_breakpoints, list_breakpoints_json
 from .browser_driver import (
     generate_image,
@@ -37,14 +41,13 @@ from .errors import (
     TraceGeneratorError,
     TracerDownloadError,
 )
-from dataclasses import dataclass
-import concurrent.futures
-import time
-from .batch_tracer import BatchTraceJob, BatchTracerClient
 from .session import RenderingSession
 from .trace_generator import generate_trace, generate_traces, get_sanitized_java_env
 
 __all__ = [
+    "BatchRenderJob",
+    "BatchTraceJob",
+    "BatchTracerClient",
     "BreakpointResolutionError",
     "CodeVisError",
     "CodeVisRenderError",
@@ -57,17 +60,14 @@ __all__ = [
     "TraceGeneratorError",
     "TracerDownloadError",
     "generate_image",
-    "BatchRenderJob",
-    "BatchTraceJob",
-    "BatchTracerClient",
     "generate_step_images",
     "generate_trace",
     "generate_traces",
-    "render_batch_images",
     "get_sanitized_java_env",
     "list_breakpoints",
     "list_breakpoints_json",
     "main",
+    "render_batch_images",
     "render_html",
     "render_html_cli",
     "render_image",

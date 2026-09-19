@@ -935,6 +935,7 @@ def test_trace_generator_main_stdin_file(tmp_path, monkeypatch):
 
 def test_generate_traces_with_custom_client():
     import concurrent.futures
+
     from cs1302_code_visualizer.batch_tracer import BatchTraceJob
     from cs1302_code_visualizer.trace_generator import generate_traces
 
@@ -956,6 +957,7 @@ def test_generate_traces_with_custom_client():
 
 def test_generate_traces_creates_client():
     import concurrent.futures
+
     from cs1302_code_visualizer.batch_tracer import BatchTraceJob
     from cs1302_code_visualizer.trace_generator import generate_traces
 

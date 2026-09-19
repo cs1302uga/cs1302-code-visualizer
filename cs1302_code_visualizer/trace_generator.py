@@ -30,6 +30,7 @@ import threading
 import tomllib
 import zipfile
 from collections.abc import Mapping, Sequence
+from contextlib import ExitStack
 from os import PathLike
 from pathlib import Path
 from subprocess import CalledProcessError
@@ -803,47 +804,38 @@ def main() -> None:
             workers=args.workers,
             max_jobs_per_worker=args.max_jobs_per_worker,
         )
-        with client:
-            out_file = open(args.output, "w", encoding="utf-8") if args.output else sys.stdout
-            try:
-                with fileinput.input(args.input) as f:
-                    for line in f:
-                        line_s = line.strip()
-                        if not line_s:
-                            continue
-                        data = json.loads(line_s)
-                        bps_val = data.get("breakpoints")
-                        bps_list = [int(x) for x in bps_val] if bps_val is not None else None
-                        job = BatchTraceJob(
-                            id=str(data.get("id", "")),
-                            source=data.get("source", ""),
-                            stdin=data.get("stdin", ""),
-                            breakpoints=bps_list,
-                            all_breakpoints=data.get(
-                                "allBreakpoints", data.get("all_breakpoints", False)
-                            ),
-                            accumulate_breakpoints=data.get(
-                                "accumulateBreakpoints",
-                                data.get("accumulate_breakpoints", False),
-                            ),
-                            remove_main_args=data.get(
-                                "removeMainArgs", data.get("remove_main_args", True)
-                            ),
-                            inline_strings=data.get(
-                                "inlineStrings", data.get("inline_strings", False)
-                            ),
-                            type_style=data.get("typeStyle", data.get("type_style", "simple")),
-                            timeout_ms=data.get("timeout_ms", 30000),
-                            include_enum_static_fields=data.get(
-                                "include_enum_static_fields", False
-                            ),
-                        )
-                        result = client.execute(job)
-                        out_file.write(json.dumps({"id": job.id, "result": result}) + "\n")
-                        out_file.flush()
-            finally:
-                if args.output:
-                    out_file.close()
+        with client, ExitStack() as stack, fileinput.input(args.input) as f:
+            out_file = (
+                stack.enter_context(open(args.output, "w", encoding="utf-8"))
+                if args.output
+                else sys.stdout
+            )
+            for line in f:
+                line_s = line.strip()
+                if not line_s:
+                    continue
+                data = json.loads(line_s)
+                bps_val = data.get("breakpoints")
+                bps_list = [int(x) for x in bps_val] if bps_val is not None else None
+                job = BatchTraceJob(
+                    id=str(data.get("id", "")),
+                    source=data.get("source", ""),
+                    stdin=data.get("stdin", ""),
+                    breakpoints=bps_list,
+                    all_breakpoints=data.get("allBreakpoints", data.get("all_breakpoints", False)),
+                    accumulate_breakpoints=data.get(
+                        "accumulateBreakpoints",
+                        data.get("accumulate_breakpoints", False),
+                    ),
+                    remove_main_args=data.get("removeMainArgs", data.get("remove_main_args", True)),
+                    inline_strings=data.get("inlineStrings", data.get("inline_strings", False)),
+                    type_style=data.get("typeStyle", data.get("type_style", "simple")),
+                    timeout_ms=data.get("timeout_ms", 30000),
+                    include_enum_static_fields=data.get("include_enum_static_fields", False),
+                )
+                result = client.execute(job)
+                out_file.write(json.dumps({"id": job.id, "result": result}) + "\n")
+                out_file.flush()
         return
 
     # get java file from stdin

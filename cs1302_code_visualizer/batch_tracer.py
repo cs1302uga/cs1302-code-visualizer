@@ -8,17 +8,16 @@ Normative References:
 from __future__ import annotations
 
 import concurrent.futures
-import uuid
+import dataclasses
 import json
 import logging
-import os
 import subprocess
 import threading
+import uuid
 from collections.abc import Sequence
-import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Self
 
 from .errors import CodeVisTraceGeneratorError
 from .trace_generator import (
@@ -124,7 +123,7 @@ class BatchTracerClient:
         )
         self._closed = False
 
-    def __enter__(self) -> BatchTracerClient:
+    def __enter__(self) -> Self:
         """Context manager entry."""
         return self
 
@@ -294,11 +293,14 @@ class BatchTracerClient:
             normalize_heap_primitives(trace_obj)
 
         # Cleanup enum globals if requested
-        if not job.include_enum_static_fields:
-            if "trace" in trace_obj and isinstance(trace_obj["trace"], list):
-                enum_types = get_enum_types(trace_obj)
-                enum_globals = get_enum_globals(trace_obj, enum_types)
-                delete_globals(trace_obj, enum_globals)
+        if (
+            not job.include_enum_static_fields
+            and "trace" in trace_obj
+            and isinstance(trace_obj["trace"], list)
+        ):
+            enum_types = get_enum_types(trace_obj)
+            enum_globals = get_enum_globals(trace_obj, enum_types)
+            delete_globals(trace_obj, enum_globals)
 
         future.set_result(trace_obj)
 
@@ -374,14 +376,16 @@ class BatchTracerClient:
             if proc.stdin is not None:
                 try:
                     proc.stdin.close()
-                except Exception:
-                    pass
+                except OSError:
+                    logger.debug("Failed to close batch tracer stdin", exc_info=True)
             try:
                 proc.terminate()
                 proc.wait(timeout=2)
-            except Exception:
+            except subprocess.TimeoutExpired:
                 try:
                     proc.kill()
                     proc.wait(timeout=1)
-                except Exception:
-                    pass
+                except (subprocess.TimeoutExpired, OSError):
+                    logger.debug("Failed to kill batch tracer process", exc_info=True)
+            except OSError:
+                logger.debug("Failed to terminate batch tracer process", exc_info=True)

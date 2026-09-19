@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any
+from typing import Any, Self
 
 from . import trace_generator
 from .batch_tracer import BatchTraceJob, BatchTracerClient
@@ -63,7 +63,7 @@ class RenderingSession:
         self._traces: dict[str, str] = {}
         self._batch_tracer: BatchTracerClient | None = None
 
-    def __enter__(self) -> RenderingSession:
+    def __enter__(self) -> Self:
         """Return this session for explicit ownership in a with statement."""
         return self
 
@@ -73,7 +73,7 @@ class RenderingSession:
 
     @property
     def batch_tracer(self) -> BatchTracerClient:
-        """Get or lazily create the shared BatchTracerClient for this session."""
+        """Shared BatchTracerClient, created lazily for this session."""
         with self._condition:
             if self._closed:
                 raise RuntimeError("Rendering session is closed")

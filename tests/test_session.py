@@ -1,10 +1,9 @@
-from unittest.mock import Mock, patch
 import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 

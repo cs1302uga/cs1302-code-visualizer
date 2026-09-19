@@ -325,6 +325,7 @@ def test_render_batch_images_empty():
 
 def test_render_batch_images_with_session():
     import concurrent.futures
+
     from cs1302_code_visualizer import BatchRenderJob, render_batch_images
 
     mock_session = Mock()
@@ -351,6 +352,7 @@ def test_render_batch_images_with_session():
 
 def test_render_batch_images_creates_session():
     import concurrent.futures
+
     from cs1302_code_visualizer import BatchRenderJob, render_batch_images
 
     mock_session = Mock()
