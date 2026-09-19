@@ -441,7 +441,9 @@ def test_batch_tracer_close_with_pending_and_exceptions(mock_tracer_env):
     # Test submit without job id hits line 314 auto-uuid
     job_no_id = BatchTraceJob(source="class NoId {}")
     # Popen mock for submit
-    with patch("subprocess.Popen", return_value=mock_proc):
+    with patch("subprocess.Popen", return_value=mock_proc), patch.object(
+        client, "_reader_loop", return_value=None
+    ), patch.object(client, "_drain_stderr", return_value=None):
         fut_no_id = client.submit(job_no_id)
 
     # Make terminate fail, kill succeed, wait fail
