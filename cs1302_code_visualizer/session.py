@@ -8,7 +8,7 @@ import json
 import logging
 import os
 import threading
-import time
+import uuid
 from collections.abc import Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -17,6 +17,7 @@ from typing import Any, Self
 
 from . import trace_generator
 from .batch_tracer import BatchTraceJob, BatchTracerClient
+from .errors import CodeVisTraceGeneratorError
 
 _TRACE_SIGNATURE = inspect.signature(trace_generator.generate_trace)
 
@@ -154,9 +155,7 @@ class RenderingSession:
             if self._closed:
                 raise RuntimeError("Rendering session is closed")
 
-        use_batch = self.use_batch_tracer and not hasattr(
-            trace_generator.generate_trace, "mock_calls"
-        )
+        use_batch = self.use_batch_tracer
         bound = _TRACE_SIGNATURE.bind(*args, **kwargs)
         bound.apply_defaults()
         values = dict(bound.arguments)
@@ -173,26 +172,33 @@ class RenderingSession:
                 stdin_val: str = values.get("stdin") or ""
                 stdin_file = values.get("stdin_file")
                 if stdin_file is not None:
-                    stdin_val = Path(stdin_file).read_text(encoding="utf-8")
+                    try:
+                        stdin_val = Path(stdin_file).read_text(encoding="utf-8")
+                    except OSError as err:
+                        raise CodeVisTraceGeneratorError(
+                            source_code=values.get("java_program", ""),
+                            cli_args=["batch-trace"],
+                            stdout="",
+                            stderr=f"Unable to read stdin file '{stdin_file}': {err}",
+                            exit_status=1,
+                        ).with_property_notes() from err
 
                 breakpoints_arg: set[int] = values.get("breakpoints", set())
                 has_explicit = breakpoints_arg != trace_generator.DEFAULT_BREAKPOINTS_SET
-                all_bps: bool = values.get("all_breakpoints", False) or values.get(
-                    "auto_detect", False
-                )
+                all_bps = values.get("all_breakpoints")
+                if all_bps is None:
+                    all_bps = not has_explicit
+                all_bps = bool(all_bps or values.get("auto_detect"))
                 if extra_args and ("-a" in extra_args or "--all-breakpoints" in extra_args):
                     all_bps = True
 
                 timeout_s: float | None = values.get("timeout_secs")
                 prog_src: str = values.get("java_program", "")
-                unique_seed = f"{prog_src}_{time.time_ns()}"
                 job = BatchTraceJob(
-                    id=hashlib.sha256(unique_seed.encode()).hexdigest(),
+                    id=uuid.uuid4().hex,
                     source=prog_src,
                     stdin=stdin_val,
-                    breakpoints=(
-                        sorted(breakpoints_arg) if (has_explicit or not all_bps) else None
-                    ),
+                    breakpoints=sorted(breakpoints_arg) if (has_explicit and not all_bps) else None,
                     all_breakpoints=all_bps,
                     accumulate_breakpoints=values.get("accumulate_breakpoints", False),
                     remove_main_args=values.get("remove_main_args_parameter", True),

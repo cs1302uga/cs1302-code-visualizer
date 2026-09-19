@@ -313,9 +313,9 @@ class BatchTracerClient:
         Returns:
             A Future resolving to the trace dictionary.
         """
-        if not job.id:
-            job = dataclasses.replace(job, id=uuid.uuid4().hex)
         with self._lock:
+            if not job.id:
+                job = dataclasses.replace(job, id=uuid.uuid4().hex)
             if self._closed:
                 raise RuntimeError("BatchTracerClient is closed")
             proc = self._ensure_process()
@@ -325,9 +325,10 @@ class BatchTracerClient:
         req_json = json.dumps(job.to_request_dict()) + "\n"
         with self._stdin_lock:
             try:
-                if proc.stdin is not None and not proc.stdin.closed:
-                    proc.stdin.write(req_json)
-                    proc.stdin.flush()
+                if proc.stdin is None or proc.stdin.closed:
+                    raise OSError("Batch tracer stdin is unavailable")
+                proc.stdin.write(req_json)
+                proc.stdin.flush()
             except OSError as err:
                 with self._lock:
                     self._pending.pop(job.id, None)

@@ -814,15 +814,24 @@ def main() -> None:
                 line_s = line.strip()
                 if not line_s:
                     continue
-                data = json.loads(line_s)
-                bps_val = data.get("breakpoints")
-                bps_list = [int(x) for x in bps_val] if bps_val is not None else None
+                try:
+                    data = json.loads(line_s)
+                    source = data.get("source")
+                    if not isinstance(source, str):
+                        raise TypeError("Batch request must include string field 'source'")
+                    bps_val = data.get("breakpoints")
+                    bps_list = [int(x) for x in bps_val] if bps_val is not None else None
+                except (json.JSONDecodeError, TypeError, ValueError) as err:
+                    raise ValueError(f"Invalid batch request line: {line_s}") from err
+                raw_id = data.get("id")
+                if raw_id is not None and not isinstance(raw_id, str):
+                    raise ValueError(f"Invalid batch request line: {line_s}")
                 job = BatchTraceJob(
-                    id=str(data.get("id", "")),
-                    source=data.get("source", ""),
+                    id=raw_id or "",
+                    source=source,
                     stdin=data.get("stdin", ""),
                     breakpoints=bps_list,
-                    all_breakpoints=data.get("allBreakpoints", data.get("all_breakpoints", False)),
+                    all_breakpoints=data.get("allBreakpoints", data.get("all_breakpoints", True)),
                     accumulate_breakpoints=data.get(
                         "accumulateBreakpoints",
                         data.get("accumulate_breakpoints", False),

@@ -13,7 +13,7 @@ import json
 import logging
 import os
 import sys
-import time
+import uuid
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -476,15 +476,14 @@ def _render_batch_with_session(
 ) -> list[dict[int, bytes] | dict[int, list[bytes]]]:
     trace_futures: list[tuple[BatchRenderJob, concurrent.futures.Future[dict[str, Any]]]] = []
     for i, job in enumerate(jobs):
-        job_id = job.job_id or f"render_job_{i}_{time.time_ns()}"
+        job_id = job.job_id or f"render_job_{i}_{uuid.uuid4().hex}"
+        all_breakpoints = job.all_breakpoints or not job.breakpoints
         trace_job = BatchTraceJob(
             id=job_id,
             source=job.java_source,
             stdin=job.stdin,
-            breakpoints=(
-                sorted(job.breakpoints) if (job.breakpoints and not job.all_breakpoints) else None
-            ),
-            all_breakpoints=job.all_breakpoints,
+            breakpoints=sorted(job.breakpoints) if not all_breakpoints else None,
+            all_breakpoints=all_breakpoints,
             accumulate_breakpoints=(
                 job.accumulate_breakpoints or job.render_all_breakpoint_occurrences
             ),
