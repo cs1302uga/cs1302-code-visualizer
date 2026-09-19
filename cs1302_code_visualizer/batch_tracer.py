@@ -184,10 +184,8 @@ class BatchTracerClient:
 
     def __del__(self) -> None:
         """Cleanup tracer process when garbage collected."""
-        try:
+        if hasattr(self, "_lock"):
             self.close()
-        except OSError:
-            logger.debug("Failed to close batch tracer on garbage collection", exc_info=True)
 
     def _ensure_process(self) -> subprocess.Popen[str]:
         """Ensure the batch-trace subprocess is started and running."""
