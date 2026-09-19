@@ -7,10 +7,13 @@ Normative References:
 
 from __future__ import annotations
 
+import atexit
 import concurrent.futures
 import dataclasses
 import json
 import logging
+import os
+import signal
 import subprocess
 import threading
 import uuid
@@ -32,6 +35,53 @@ from .trace_generator import (
 )
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+
+def _terminate_process_tree(proc: subprocess.Popen[str]) -> None:
+    """Safely terminate a subprocess and all processes in its process group."""
+    if proc.stdin is not None:
+        try:
+            proc.stdin.close()
+        except OSError:
+            logger.debug("Failed to close batch tracer stdin", exc_info=True)
+
+    pgid: int | None = None
+    if (
+        hasattr(os, "getpgid")
+        and hasattr(os, "killpg")
+        and isinstance(getattr(proc, "pid", None), int)
+    ):
+        try:
+            pgid = os.getpgid(proc.pid)
+        except OSError:
+            pgid = None
+
+    if pgid is not None:
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except OSError:
+            logger.debug("Failed to send SIGTERM to process group %d", pgid, exc_info=True)
+
+    try:
+        proc.terminate()
+    except OSError:
+        logger.debug("Failed to terminate batch tracer process", exc_info=True)
+
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        if pgid is not None:
+            try:
+                os.killpg(pgid, signal.SIGKILL)
+            except OSError:
+                logger.debug("Failed to send SIGKILL to process group %d", pgid, exc_info=True)
+        try:
+            proc.kill()
+            proc.wait(timeout=1)
+        except (subprocess.TimeoutExpired, OSError):
+            logger.debug("Failed to kill batch tracer process", exc_info=True)
+    except OSError:
+        logger.debug("Failed waiting for batch tracer process termination", exc_info=True)
 
 
 @dataclass(frozen=True)
@@ -118,10 +168,11 @@ class BatchTracerClient:
         self._reader_thread: threading.Thread | None = None
         self._stderr_drainer: threading.Thread | None = None
         self._stderr_lines: list[str] = []
-        self._pending: dict[str, tuple[concurrent.futures.Future[dict[str, Any]], BatchTraceJob]] = (
-            {}
-        )
+        self._pending: dict[
+            str, tuple[concurrent.futures.Future[dict[str, Any]], BatchTraceJob]
+        ] = {}
         self._closed = False
+        atexit.register(self.close)
 
     def __enter__(self) -> Self:
         """Context manager entry."""
@@ -131,13 +182,23 @@ class BatchTracerClient:
         """Context manager exit."""
         self.close()
 
+    def __del__(self) -> None:
+        """Cleanup tracer process when garbage collected."""
+        try:
+            self.close()
+        except OSError:
+            logger.debug("Failed to close batch tracer on garbage collection", exc_info=True)
+
     def _ensure_process(self) -> subprocess.Popen[str]:
         """Ensure the batch-trace subprocess is started and running."""
         with self._lock:
             if self._closed:
                 raise RuntimeError("BatchTracerClient is closed")
-            if self._process is not None and self._process.poll() is None:
-                return self._process
+            if self._process is not None:
+                if self._process.poll() is None:
+                    return self._process
+                _terminate_process_tree(self._process)
+                self._process = None
 
             # Reset state for new process
             self._stderr_lines.clear()
@@ -152,15 +213,13 @@ class BatchTracerClient:
                 "--enable-native-access=ALL-UNNAMED",
             ]
             cmd.extend(self.extra_jvm_args)
-            cmd.extend(
-                [
-                    "-jar",
-                    str(CACHE_DIR / "code-tracer.jar"),
-                    "batch-trace",
-                    f"-w={self.workers}",
-                    f"--max-jobs-per-worker={self.max_jobs_per_worker}",
-                ]
-            )
+            cmd.extend([
+                "-jar",
+                str(CACHE_DIR / "code-tracer.jar"),
+                "batch-trace",
+                f"-w={self.workers}",
+                f"--max-jobs-per-worker={self.max_jobs_per_worker}",
+            ])
 
             proc = subprocess.Popen(
                 cmd,
@@ -170,6 +229,7 @@ class BatchTracerClient:
                 text=True,
                 bufsize=1,
                 env=get_sanitized_java_env(),
+                start_new_session=True,
             )
             self._process = proc
 
@@ -233,16 +293,17 @@ class BatchTracerClient:
             future, job = entry
             self._handle_response(future, job, resp)
 
-        proc.stdout.close()
-
-        # Handle unexpected process termination
+        # EOF reached on stdout (worker died or closed)
         with self._lock:
-            exit_status = proc.poll()
-            if not self._closed:
+            orphans = list(self._pending.values())
+            self._pending.clear()
+            if self._process is proc:
+                self._process = None
+
+            if orphans and not self._closed:
                 stderr_text = "\n".join(self._stderr_lines)
-                orphan_jobs = list(self._pending.values())
-                self._pending.clear()
-                for future, job in orphan_jobs:
+                exit_status = proc.poll()
+                for future, job in orphans:
                     if not future.done():
                         err = CodeVisTraceGeneratorError(
                             source_code=job.source,
@@ -305,10 +366,10 @@ class BatchTracerClient:
         future.set_result(trace_obj)
 
     def submit(self, job: BatchTraceJob) -> concurrent.futures.Future[dict[str, Any]]:
-        """Submit a job asynchronously to the batch tracer.
+        """Submit a trace job asynchronously.
 
         Args:
-            job: The trace job to submit.
+            job: The BatchTraceJob to execute.
 
         Returns:
             A Future resolving to the trace dictionary.
@@ -340,24 +401,31 @@ class BatchTracerClient:
                     exit_status=1,
                 ).with_property_notes()
                 future.set_exception(gen_err)
+                return future
 
         return future
 
-    def execute(self, job: BatchTraceJob, timeout_secs: float | None = None) -> dict[str, Any]:
-        """Execute a trace job synchronously.
+    def execute(
+        self,
+        job: BatchTraceJob,
+        *,
+        timeout_secs: float | None = None,
+    ) -> dict[str, Any]:
+        """Submit a job and block until the result is available.
 
         Args:
-            job: The trace job to execute.
-            timeout_secs: Optional timeout in seconds.
+            job: The BatchTraceJob to execute.
+            timeout_secs: Max seconds to wait for result.
 
         Returns:
-            The execution trace dictionary.
+            The trace dictionary.
         """
         future = self.submit(job)
         return future.result(timeout=timeout_secs)
 
     def close(self) -> None:
         """Terminate the tracer worker process and cancel outstanding requests."""
+        atexit.unregister(self.close)
         with self._lock:
             if self._closed:
                 return
@@ -374,24 +442,4 @@ class BatchTracerClient:
                     future.cancel()
 
         if proc is not None:
-            if proc.stdin is not None:
-                try:
-                    proc.stdin.close()
-                except Exception:
-                    logger.debug("Failed to close batch tracer stdin", exc_info=True)
-
-            def _kill_process() -> None:
-                try:
-                    proc.kill()
-                    proc.wait(timeout=1)
-                except Exception:
-                    logger.debug("Failed to kill batch tracer process", exc_info=True)
-
-            try:
-                proc.terminate()
-                proc.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                _kill_process()
-            except Exception:
-                logger.debug("Failed to terminate batch tracer process", exc_info=True)
-                _kill_process()
+            _terminate_process_tree(proc)

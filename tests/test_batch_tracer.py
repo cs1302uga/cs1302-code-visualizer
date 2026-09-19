@@ -13,6 +13,7 @@ import pytest
 from cs1302_code_visualizer.batch_tracer import (
     BatchTraceJob,
     BatchTracerClient,
+    _terminate_process_tree,
 )
 from cs1302_code_visualizer.errors import CodeVisTraceGeneratorError
 
@@ -42,6 +43,7 @@ def test_batch_trace_job_defaults_and_conversion():
         timeout_ms=5000,
         max_snapshots=100,
         inspection="FIELDS",
+        include_enum_static_fields=True,
     )
     custom_req = custom_job.to_request_dict()
     assert custom_req["id"] == "job-123"
@@ -50,7 +52,10 @@ def test_batch_trace_job_defaults_and_conversion():
     assert custom_req["accumulateBreakpoints"] is True
     assert custom_req["removeMainArgs"] is False
     assert custom_req["inlineStrings"] is True
-    assert custom_req["removeMethodThis"] is True
+    assert (
+        custom_req["removeMethod_this" if "removeMethod_this" in custom_req else "removeMethodThis"]
+        is True
+    )
     assert custom_req["typeStyle"] == "fqn"
     assert custom_req["limits"]["timeoutMillis"] == 5000
     assert custom_req["limits"]["snapshots"] == 100
@@ -259,15 +264,13 @@ def test_batch_tracer_client_malformed_and_unknown_lines(mock_tracer_env, monkey
     )
     # Send valid response
     mock_proc.stdout.feed_line(
-        json.dumps(
-            {
-                "id": "valid-job",
-                "result": {
-                    "status": "completed",
-                    "trace": {"code": "class C {}", "trace": []},
-                },
-            }
-        )
+        json.dumps({
+            "id": "valid-job",
+            "result": {
+                "status": "completed",
+                "trace": {"code": "class C {}", "trace": []},
+            },
+        })
     )
 
     res = fut.result(timeout=2.0)
@@ -298,6 +301,13 @@ def test_batch_tracer_client_stdin_error(mock_tracer_env, monkeypatch):
     job = BatchTraceJob(id="broken-job", source="class E {}")
     with pytest.raises(CodeVisTraceGeneratorError, match="Failed to write"):
         client.execute(job)
+
+    # Line 392: stdin is None
+    mock_proc.stdin = None
+    job_none = BatchTraceJob(id="none-job", source="class E {}")
+    with pytest.raises(CodeVisTraceGeneratorError, match="Failed to write"):
+        client.execute(job_none)
+
     client.close()
 
 
@@ -413,15 +423,15 @@ def test_batch_tracer_close_with_pending_and_exceptions(mock_tracer_env):
     mock_proc = Mock()
     mock_proc.__enter__ = Mock(return_value=mock_proc)
     mock_proc.__exit__ = Mock(return_value=None)
-    mock_proc.poll.return_value = None
     mock_proc.stdin = Mock()
     mock_proc.stdin.closed = False
     mock_proc.stdout = Mock()
     mock_proc.stdout.readline.return_value = ""
-    mock_proc.stderr = None
-    mock_proc.stdin.close.side_effect = Exception("stdin close err")
-    mock_proc.terminate.side_effect = Exception("terminate err")
-    mock_proc.kill.side_effect = Exception("kill err")
+    mock_proc.stderr = Mock()
+    mock_proc.stderr.readline.return_value = ""
+    mock_proc.stdin.close.side_effect = OSError("stdin close err")
+    mock_proc.terminate.side_effect = OSError("terminate err")
+    mock_proc.kill.side_effect = OSError("kill err")
 
     client._process = mock_proc
     fut = concurrent.futures.Future()
@@ -435,9 +445,9 @@ def test_batch_tracer_close_with_pending_and_exceptions(mock_tracer_env):
         fut_no_id = client.submit(job_no_id)
 
     # Make terminate fail, kill succeed, wait fail
-    mock_proc.terminate.side_effect = Exception("terminate err")
+    mock_proc.terminate.side_effect = OSError("terminate err")
     mock_proc.kill.side_effect = None
-    mock_proc.wait.side_effect = Exception("wait err")
+    mock_proc.wait.side_effect = OSError("wait err")
 
     client.close()
     assert client._closed is True
@@ -449,11 +459,76 @@ def test_batch_tracer_close_with_pending_and_exceptions(mock_tracer_env):
         client.submit(job)
 
 
+def test_batch_tracer_terminate_process_tree_branches():
+    mock_proc = Mock()
+    mock_proc.pid = 99999
+    mock_proc.stdin = None
+    mock_proc.wait.side_effect = subprocess.TimeoutExpired(cmd="tracer", timeout=2)
+
+    with (
+        patch("os.getpgid", return_value=99999),
+        patch("os.killpg") as mock_killpg,
+    ):
+        _terminate_process_tree(mock_proc)
+        assert mock_killpg.call_count == 2
+        mock_proc.kill.assert_called_once()
+
+    # Test os.killpg raising OSError branches
+    mock_proc_err = Mock()
+    mock_proc_err.pid = 77777
+    mock_proc_err.stdin = None
+    mock_proc_err.wait.side_effect = subprocess.TimeoutExpired(cmd="tracer", timeout=2)
+    with (
+        patch("os.getpgid", return_value=77777),
+        patch("os.killpg", side_effect=OSError("Permission denied")),
+    ):
+        _terminate_process_tree(mock_proc_err)
+
+    # Test ProcessLookupError branch
+    mock_proc2 = Mock()
+    mock_proc2.pid = 88888
+    mock_proc2.stdin = None
+    mock_proc2.wait.return_value = 0
+    with (
+        patch("os.getpgid", side_effect=ProcessLookupError),
+        patch("os.killpg") as mock_killpg,
+    ):
+        _terminate_process_tree(mock_proc2)
+        mock_killpg.assert_not_called()
+        mock_proc2.terminate.assert_called_once()
+
+
+def test_batch_tracer_del():
+    client = BatchTracerClient()
+    mock_proc = Mock()
+    mock_proc.stdin = None
+    client._process = mock_proc
+    client.__del__()  # noqa: PLC2801
+    assert client._closed is True
+
+
+def test_batch_tracer_ensure_process_reaps_dead_process(mock_tracer_env, monkeypatch):
+    mock_proc1 = MockProcess()
+    mock_proc1.returncode = 0
+    mock_proc2 = MockProcess()
+
+    processes = [mock_proc1, mock_proc2]
+    monkeypatch.setattr(subprocess, "Popen", lambda *args, **kwargs: processes.pop(0))
+
+    client = BatchTracerClient()
+    p1 = client._ensure_process()
+    assert p1 is mock_proc1
+    p2 = client._ensure_process()
+    assert p2 is mock_proc2
+    client.close()
+
+
 def test_batch_tracer_custom_java_home(tmp_path):
     mock_proc = MockProcess()
     mock_proc.stdout.close()
-    with patch("subprocess.Popen", return_value=mock_proc), patch(
-        "cs1302_code_visualizer.batch_tracer.ensure_code_tracer_installed"
+    with (
+        patch("subprocess.Popen", return_value=mock_proc),
+        patch("cs1302_code_visualizer.batch_tracer.ensure_code_tracer_installed"),
     ):
         custom_java = tmp_path / "custom_java"
         client = BatchTracerClient(java_home=custom_java)
