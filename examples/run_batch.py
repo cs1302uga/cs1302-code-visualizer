@@ -67,6 +67,7 @@ def run_batch_examples(
     rm_image: bool,
     open_image: bool,
     max_browsers: int = 2,
+    tracer_workers: int = 1,
 ) -> int:
     """Run trace generation and batch-rendered visualizations for all examples."""
     configs: list[tuple[int, Path, str, list[str]]] = []
@@ -81,7 +82,10 @@ def run_batch_examples(
         except (ValueError, OSError) as exc:
             print(f"Warning: skipping example{i}: {exc}", file=sys.stderr)
 
-    print(f"Running {len(configs)} examples in batch mode...")
+    print(
+        f"Running {len(configs)} examples in batch mode "
+        f"(browsers: {max_browsers}, tracer workers: {tracer_workers})..."
+    )
     start_time = time.perf_counter()
 
     # Phase 1: Trace Generation
@@ -127,7 +131,11 @@ def run_batch_examples(
     # Phase 2: Batch Visualization Rendering
     print("--- Rendering visualizations with pooled RenderingSession ---")
     all_step_images: list[Path] = []
-    with RenderingSession(max_browsers=max_browsers) as session:
+    with RenderingSession(
+        max_browsers=max_browsers,
+        tracer_workers=tracer_workers,
+        use_batch_tracer=True,
+    ) as session:
         for i, example_dir, input_file, trace_text, _trace_file, image_file in traces:
             t0 = time.perf_counter()
             images = generate_step_images(trace_text, session=session)
@@ -204,6 +212,13 @@ def main() -> None:
         default=2,
         help="Number of pooled browser instances for rendering (default: 2)",
     )
+    _ = parser.add_argument(
+        "-w",
+        "--workers",
+        type=int,
+        default=1,
+        help="Number of persistent worker JVMs in batch mode (default: 1)",
+    )
     args = parser.parse_args()
 
     examples_dir = Path(__file__).parent.resolve()
@@ -214,6 +229,7 @@ def main() -> None:
             rm_image=args.rm_image,
             open_image=args.open,
             max_browsers=args.browsers,
+            tracer_workers=args.workers,
         )
     )
 

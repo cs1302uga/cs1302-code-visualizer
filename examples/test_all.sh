@@ -4,14 +4,34 @@ cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null
 
 BATCH=true
 FORWARD_ARGS=()
+EXTRA_BATCH_ARGS=()
 
-for arg in "$@"; do
+while [ "$#" -gt 0 ]; do
+    arg="$1"
     case "${arg}" in
         --batch)
             BATCH=true
+            shift
             ;;
         --no-batch)
             BATCH=false
+            shift
+            ;;
+        -w|--workers)
+            EXTRA_BATCH_ARGS+=("--workers" "$2")
+            shift 2
+            ;;
+        --workers=*)
+            EXTRA_BATCH_ARGS+=("--workers" "${arg#*=}")
+            shift
+            ;;
+        --browsers)
+            EXTRA_BATCH_ARGS+=("--browsers" "$2")
+            shift 2
+            ;;
+        --browsers=*)
+            EXTRA_BATCH_ARGS+=("--browsers" "${arg#*=}")
+            shift
             ;;
         -h|--help)
             echo "Usage: $0 [options]"
@@ -23,6 +43,8 @@ for arg in "$@"; do
             echo "Options:"
             echo "  --batch                  Run in batch mode using pooled browser rendering (default)"
             echo "  --no-batch               Run sequentially launching fresh processes for each example"
+            echo "  -w, --workers <N>        Number of tracer worker JVMs in batch mode (default: 1)"
+            echo "  --browsers <N>           Number of browser instances in rendering pool (default: 2)"
             echo "  -J, --rm-json            Automatically delete generated JSON trace files"
             echo "  -j, --no-rm-json         Do not delete generated JSON trace files"
             echo "  -I, --rm-image           Automatically delete generated PNG image files"
@@ -35,11 +57,12 @@ for arg in "$@"; do
             ;;
         *)
             FORWARD_ARGS+=("${arg}")
+            shift
             ;;
     esac
 done
 
-if [ "$#" -eq 0 ]; then
+if [ ${#FORWARD_ARGS[@]} -eq 0 ] && [ ${#EXTRA_BATCH_ARGS[@]} -eq 0 ]; then
     FORWARD_ARGS=("--open" "--rm-json" "--rm-image")
 fi
 
@@ -47,7 +70,7 @@ if [ "${BATCH}" = true ]; then
     echo "========================================"
     echo "Running all example tests in batch mode..."
     echo "========================================"
-    BATCH_PY_ARGS=()
+    BATCH_PY_ARGS=("${EXTRA_BATCH_ARGS[@]}")
     for arg in "${FORWARD_ARGS[@]}"; do
         case "${arg}" in
             -J|--rm-json)
