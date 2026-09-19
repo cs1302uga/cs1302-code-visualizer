@@ -997,3 +997,32 @@ def test_trace_generator_main_batch_ndjson(tmp_path, monkeypatch):
     resp_obj = json.loads(out)
     assert resp_obj["id"] == "j1"
     assert resp_obj["result"] == {"status": "completed", "trace": []}
+
+
+def test_generator_main_batch_invalid_inputs(tmp_path, monkeypatch):
+    from cs1302_code_visualizer.trace_generator import main as generator_main
+
+    mock_client = Mock()
+    mock_client.__enter__ = Mock(return_value=mock_client)
+    mock_client.__exit__ = Mock(return_value=None)
+
+    monkeypatch.setattr(trace_generator, "ensure_jdk_installed", lambda: Path("/jdk"))
+    monkeypatch.setattr(trace_generator, "ensure_code_tracer_installed", lambda: None)
+
+    # 1. Non-string source
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"source": 123}\n'))
+    monkeypatch.setattr("sys.argv", ["generate_trace", "--batch"])
+    with patch("cs1302_code_visualizer.batch_tracer.BatchTracerClient", return_value=mock_client), pytest.raises(ValueError, match="Invalid batch request line"):
+        generator_main()
+
+    # 2. Invalid JSON / invalid breakpoints
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"source": "code", "breakpoints": ["abc"]}\n'))
+    monkeypatch.setattr("sys.argv", ["generate_trace", "--batch"])
+    with patch("cs1302_code_visualizer.batch_tracer.BatchTracerClient", return_value=mock_client), pytest.raises(ValueError, match="Invalid batch request line"):
+        generator_main()
+
+    # 3. Non-string id
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"source": "code", "id": 123}\n'))
+    monkeypatch.setattr("sys.argv", ["generate_trace", "--batch"])
+    with patch("cs1302_code_visualizer.batch_tracer.BatchTracerClient", return_value=mock_client), pytest.raises(ValueError, match="Invalid batch request line"):
+        generator_main()

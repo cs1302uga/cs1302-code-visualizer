@@ -478,3 +478,35 @@ def test_session_generate_trace_uncached_batch(tmp_path):
     assert json.loads(res) == {"trace": []}
     assert mock_batch_client.execute.call_count == 1
     session.close()
+
+
+def test_session_generate_trace_batch_extra_args_all_breakpoints():
+    mock_batch_client = Mock()
+    mock_batch_client.execute.return_value = {"trace": []}
+
+    session = RenderingSession(use_batch_tracer=True, cache_traces=False)
+    session._batch_tracer = mock_batch_client
+
+    res = session.generate_trace(
+        Path("/jdk"),
+        "public class C {}",
+        extra_tracer_args=["-a"],
+    )
+    assert json.loads(res) == {"trace": []}
+    job_arg = mock_batch_client.execute.call_args[0][0]
+    assert job_arg.all_breakpoints is True
+    session.close()
+
+
+def test_session_generate_trace_batch_unreadable_stdin_file(tmp_path):
+    from cs1302_code_visualizer.errors import CodeVisTraceGeneratorError
+
+    session = RenderingSession(use_batch_tracer=True, cache_traces=False)
+    session._batch_tracer = Mock()
+    with pytest.raises(CodeVisTraceGeneratorError, match="Unable to read stdin file"):
+        session.generate_trace(
+            Path("/jdk"),
+            "public class D {}",
+            stdin_file=tmp_path / "non_existent.txt",
+        )
+    session.close()
