@@ -1,0 +1,26 @@
+[
+  {
+    "image": "before-dimensions-horizontal-step0.png",
+    "fixture": "dimensions",
+    "step": 0,
+    "options": {}
+  },
+  {
+    "image": "before-dimensions-horizontal-step1.png",
+    "fixture": "dimensions",
+    "step": 1,
+    "options": {}
+  },
+  {
+    "image": "before-edges-horizontal-step0.png",
+    "fixture": "edges",
+    "step": 0,
+    "options": {}
+  },
+  {
+    "image": "before-edges-horizontal-step1.png",
+    "fixture": "edges",
+    "step": 1,
+    "options": {}
+  }
+]

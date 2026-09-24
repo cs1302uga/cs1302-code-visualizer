@@ -1,0 +1,187 @@
+{
+  "code": "// Array layout demonstration\n// Update one array element",
+  "trace": [
+    {
+      "line": 1,
+      "event": "step_line",
+      "func_name": "main",
+      "stack_to_render": [
+        {
+          "func_name": "main",
+          "frame_id": 1,
+          "unique_hash": "main_1",
+          "is_parent": false,
+          "is_zombie": false,
+          "parent_frame_id_list": [],
+          "ordered_varnames": [
+            "cube",
+            "sharedRow"
+          ],
+          "encoded_locals": {
+            "cube": [
+              "REF",
+              1
+            ],
+            "sharedRow": [
+              "REF",
+              4
+            ]
+          }
+        }
+      ],
+      "globals": {},
+      "ordered_globals": [],
+      "heap": {
+        "1": [
+          "LIST",
+          [
+            "REF",
+            2
+          ],
+          [
+            "REF",
+            3
+          ]
+        ],
+        "2": [
+          "LIST",
+          [
+            "REF",
+            4
+          ],
+          [
+            "REF",
+            5
+          ]
+        ],
+        "3": [
+          "LIST",
+          [
+            "REF",
+            4
+          ]
+        ],
+        "4": [
+          "LIST",
+          10,
+          20,
+          30
+        ],
+        "5": [
+          "LIST",
+          40
+        ]
+      },
+      "heap_attrs": {
+        "1": {
+          "type": "int[][][]"
+        },
+        "2": {
+          "type": "int[][]"
+        },
+        "3": {
+          "type": "int[][]"
+        },
+        "4": {
+          "type": "int[]"
+        },
+        "5": {
+          "type": "int[]"
+        }
+      },
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "line": 2,
+      "event": "step_line",
+      "func_name": "main",
+      "stack_to_render": [
+        {
+          "func_name": "main",
+          "frame_id": 1,
+          "unique_hash": "main_1",
+          "is_parent": false,
+          "is_zombie": false,
+          "parent_frame_id_list": [],
+          "ordered_varnames": [
+            "cube",
+            "sharedRow"
+          ],
+          "encoded_locals": {
+            "cube": [
+              "REF",
+              1
+            ],
+            "sharedRow": [
+              "REF",
+              4
+            ]
+          }
+        }
+      ],
+      "globals": {},
+      "ordered_globals": [],
+      "heap": {
+        "1": [
+          "LIST",
+          [
+            "REF",
+            2
+          ],
+          [
+            "REF",
+            3
+          ]
+        ],
+        "2": [
+          "LIST",
+          [
+            "REF",
+            4
+          ],
+          [
+            "REF",
+            5
+          ]
+        ],
+        "3": [
+          "LIST",
+          [
+            "REF",
+            4
+          ]
+        ],
+        "4": [
+          "LIST",
+          10,
+          99,
+          30
+        ],
+        "5": [
+          "LIST",
+          40
+        ]
+      },
+      "heap_attrs": {
+        "1": {
+          "type": "int[][][]"
+        },
+        "2": {
+          "type": "int[][]"
+        },
+        "3": {
+          "type": "int[][]"
+        },
+        "4": {
+          "type": "int[]"
+        },
+        "5": {
+          "type": "int[]"
+        }
+      },
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

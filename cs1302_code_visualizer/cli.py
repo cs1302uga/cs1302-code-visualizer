@@ -8,8 +8,10 @@ import sys
 import uuid
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from . import browser_driver, trace_generator
+from .array_options import add_array_arguments, array_options_from_args
 from .browser_driver import generate_step_images
 from .errors import CodeVisError, CodeVisualizerError
 from .session import RenderingSession
@@ -187,6 +189,7 @@ def _process_batch_job(
     strip_type_prefixes: Sequence[str] | None,
     session: RenderingSession,
     java_home: Path | None,
+    array_options: dict[str, Any] | None = None,
 ) -> list[Path]:
     """Execute trace generation, rendering, and atomic file emission for a single batch job."""
     writer = AtomicJobWriter(force=force)
@@ -220,6 +223,7 @@ def _process_batch_job(
                 include_types=include_types,
                 text_memory_labels=text_memory_labels,
                 strip_type_prefixes=strip_type_prefixes,
+                **(array_options or {}),
                 session=session,
             )
             lines = _image_lines(trace_text, len(images)) if "{line}" in output_pattern else []
@@ -242,6 +246,7 @@ def _process_batch_job(
                 include_types=include_types,
                 text_memory_labels=text_memory_labels,
                 strip_type_prefixes=strip_type_prefixes,
+                **(array_options or {}),
                 session=session,
             )
             img_path = format_output_path(
@@ -304,7 +309,8 @@ def run_batch_cli(args: argparse.Namespace) -> int:
     out_dir = Path(args.out_dir) if args.out_dir else None
 
     # Collect jobs
-    jobs: list[tuple[str, str, Path | None, set[int]]] = []
+    jobs: list[tuple[str, str, Path | None, set[int], dict[str, Any]]] = []
+    array_defaults = array_options_from_args(args)
 
     # 1. Directory scan
     if args.input_dir:
@@ -316,7 +322,13 @@ def run_batch_cli(args: argparse.Namespace) -> int:
             try:
                 code = java_file.read_text(encoding="utf-8")
                 rel_path = java_file.relative_to(input_dir)
-                jobs.append((java_file.stem, code, rel_path, set(args.breakpoints or [])))
+                jobs.append((
+                    java_file.stem,
+                    code,
+                    rel_path,
+                    set(args.breakpoints or []),
+                    array_defaults,
+                ))
             except OSError as exc:
                 print(f"Error reading {java_file}: {exc}", file=sys.stderr)
                 return 1
@@ -330,7 +342,13 @@ def run_batch_cli(args: argparse.Namespace) -> int:
                 return 1
             try:
                 code = file_path.read_text(encoding="utf-8")
-                jobs.append((file_path.stem, code, file_path, set(args.breakpoints or [])))
+                jobs.append((
+                    file_path.stem,
+                    code,
+                    file_path,
+                    set(args.breakpoints or []),
+                    array_defaults,
+                ))
             except OSError as exc:
                 print(f"Error reading {file_path}: {exc}", file=sys.stderr)
                 return 1
@@ -348,11 +366,17 @@ def run_batch_cli(args: argparse.Namespace) -> int:
                     if not line:
                         continue
                     payload = json.loads(line)
+                    if not isinstance(payload, dict):
+                        raise TypeError(f"line {line_idx + 1}: job must be a JSON object")
+                    try:
+                        array_options = array_options_from_args(args, payload)
+                    except (TypeError, ValueError) as exc:
+                        raise ValueError(f"line {line_idx + 1}: {exc}") from exc
                     job_id = payload.get("id", f"job_{line_idx}")
                     src = payload.get("source", "")
                     bps = set(payload.get("breakpoints", [])) or set(args.breakpoints or [])
-                    jobs.append((job_id, src, None, bps))
-        except (OSError, json.JSONDecodeError) as exc:
+                    jobs.append((job_id, src, None, bps, array_options))
+        except (OSError, TypeError, ValueError) as exc:
             print(f"Error reading manifest {input_path}: {exc}", file=sys.stderr)
             return 1
 
@@ -369,7 +393,7 @@ def run_batch_cli(args: argparse.Namespace) -> int:
         tracer_workers=args.workers,
         use_batch_tracer=True,
     ) as session:
-        for job_id, source_code, source_path, bps in jobs:
+        for job_id, source_code, source_path, bps, array_options in jobs:
             try:
                 _process_batch_job(
                     job_id=job_id,
@@ -388,6 +412,7 @@ def run_batch_cli(args: argparse.Namespace) -> int:
                     strip_type_prefixes=args.strip_type_prefixes,
                     session=session,
                     java_home=java_home,
+                    array_options=array_options,
                 )
                 success_count += 1
             except (
@@ -408,6 +433,7 @@ def run_batch_cli(args: argparse.Namespace) -> int:
 def run_single_cli(args: argparse.Namespace) -> int:
     """Handle single-file visualization."""
     source_code = ""
+    array_options = array_options_from_args(args)
 
     if args.files and len(args.files) == 1:
         source_path = Path(args.files[0])
@@ -447,6 +473,7 @@ def run_single_cli(args: argparse.Namespace) -> int:
                 include_types=args.include_types,
                 text_memory_labels=args.text_memory_labels,
                 strip_type_prefixes=args.strip_type_prefixes,
+                **array_options,
                 session=session,
             )
             if not args.output:
@@ -467,6 +494,7 @@ def run_single_cli(args: argparse.Namespace) -> int:
                 include_types=args.include_types,
                 text_memory_labels=args.text_memory_labels,
                 strip_type_prefixes=args.strip_type_prefixes,
+                **array_options,
                 session=session,
             )
             if args.output:
@@ -597,6 +625,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Continue processing remaining jobs if a job fails in batch mode.",
     )
 
+    add_array_arguments(parser)
     args = parser.parse_args(argv)
 
     if args.batch:

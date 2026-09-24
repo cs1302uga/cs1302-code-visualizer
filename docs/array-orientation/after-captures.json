@@ -1,0 +1,196 @@
+[
+  {
+    "image": "after-dimensions-horizontal-step0.png",
+    "fixture": "dimensions",
+    "step": 0,
+    "options": {}
+  },
+  {
+    "image": "after-dimensions-horizontal-step1.png",
+    "fixture": "dimensions",
+    "step": 1,
+    "options": {}
+  },
+  {
+    "image": "after-dimensions-vertical-step0.png",
+    "fixture": "dimensions",
+    "step": 0,
+    "options": {
+      "arrayOrientation": "vertical"
+    }
+  },
+  {
+    "image": "after-dimensions-vertical-step1.png",
+    "fixture": "dimensions",
+    "step": 1,
+    "options": {
+      "arrayOrientation": "vertical"
+    }
+  },
+  {
+    "image": "after-dimensions-alternate-horizontal-step0.png",
+    "fixture": "dimensions",
+    "step": 0,
+    "options": {
+      "alternateArrayOrientations": true
+    }
+  },
+  {
+    "image": "after-dimensions-alternate-horizontal-step1.png",
+    "fixture": "dimensions",
+    "step": 1,
+    "options": {
+      "alternateArrayOrientations": true
+    }
+  },
+  {
+    "image": "after-dimensions-alternate-vertical-step0.png",
+    "fixture": "dimensions",
+    "step": 0,
+    "options": {
+      "arrayOrientation": "vertical",
+      "alternateArrayOrientations": true
+    }
+  },
+  {
+    "image": "after-dimensions-alternate-vertical-step1.png",
+    "fixture": "dimensions",
+    "step": 1,
+    "options": {
+      "arrayOrientation": "vertical",
+      "alternateArrayOrientations": true
+    }
+  },
+  {
+    "image": "after-dimensions-horizontal-override-step0.png",
+    "fixture": "dimensions",
+    "step": 0,
+    "options": {
+      "arrayOrientations": {
+        "4": "vertical"
+      }
+    }
+  },
+  {
+    "image": "after-dimensions-horizontal-override-step1.png",
+    "fixture": "dimensions",
+    "step": 1,
+    "options": {
+      "arrayOrientations": {
+        "4": "vertical"
+      }
+    }
+  },
+  {
+    "image": "after-dimensions-vertical-override-step0.png",
+    "fixture": "dimensions",
+    "step": 0,
+    "options": {
+      "arrayOrientation": "vertical",
+      "arrayOrientations": {
+        "4": "horizontal"
+      }
+    }
+  },
+  {
+    "image": "after-dimensions-vertical-override-step1.png",
+    "fixture": "dimensions",
+    "step": 1,
+    "options": {
+      "arrayOrientation": "vertical",
+      "arrayOrientations": {
+        "4": "horizontal"
+      }
+    }
+  },
+  {
+    "image": "after-dimensions-alternate-horizontal-override-step0.png",
+    "fixture": "dimensions",
+    "step": 0,
+    "options": {
+      "alternateArrayOrientations": true,
+      "arrayOrientations": {
+        "2": "horizontal"
+      }
+    }
+  },
+  {
+    "image": "after-dimensions-alternate-horizontal-override-step1.png",
+    "fixture": "dimensions",
+    "step": 1,
+    "options": {
+      "alternateArrayOrientations": true,
+      "arrayOrientations": {
+        "2": "horizontal"
+      }
+    }
+  },
+  {
+    "image": "after-dimensions-alternate-vertical-override-step0.png",
+    "fixture": "dimensions",
+    "step": 0,
+    "options": {
+      "arrayOrientation": "vertical",
+      "alternateArrayOrientations": true,
+      "arrayOrientations": {
+        "2": "vertical"
+      }
+    }
+  },
+  {
+    "image": "after-dimensions-alternate-vertical-override-step1.png",
+    "fixture": "dimensions",
+    "step": 1,
+    "options": {
+      "arrayOrientation": "vertical",
+      "alternateArrayOrientations": true,
+      "arrayOrientations": {
+        "2": "vertical"
+      }
+    }
+  },
+  {
+    "image": "after-edges-horizontal-step0.png",
+    "fixture": "edges",
+    "step": 0,
+    "options": {}
+  },
+  {
+    "image": "after-edges-horizontal-step1.png",
+    "fixture": "edges",
+    "step": 1,
+    "options": {}
+  },
+  {
+    "image": "after-edges-vertical-step0.png",
+    "fixture": "edges",
+    "step": 0,
+    "options": {
+      "arrayOrientation": "vertical"
+    }
+  },
+  {
+    "image": "after-edges-vertical-step1.png",
+    "fixture": "edges",
+    "step": 1,
+    "options": {
+      "arrayOrientation": "vertical"
+    }
+  },
+  {
+    "image": "after-edges-alternate-step0.png",
+    "fixture": "edges",
+    "step": 0,
+    "options": {
+      "alternateArrayOrientations": true
+    }
+  },
+  {
+    "image": "after-edges-alternate-step1.png",
+    "fixture": "edges",
+    "step": 1,
+    "options": {
+      "alternateArrayOrientations": true
+    }
+  }
+]

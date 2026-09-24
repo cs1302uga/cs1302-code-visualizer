@@ -1016,6 +1016,13 @@ div.ExecutionVisualizer .listHeader {
   border: transparent !important;
 }
 
+div.ExecutionVisualizer .listTbl.array-vertical > tr > .listHeader,
+div.ExecutionVisualizer .listTbl.array-vertical > tbody > tr > .listHeader {
+  text-align: right;
+  vertical-align: middle;
+  padding: 2px 6px;
+}
+
 div.ExecutionVisualizer .nullObj {
   font-size: x-small !important;
 }
