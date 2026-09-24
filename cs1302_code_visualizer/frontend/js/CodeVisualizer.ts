@@ -9,6 +9,8 @@
  */
 
 import { ExecutionVisualizer } from "./pytutor";
+import type { ArrayOrientationOptions } from "./arrayOrientation";
+export type { ArrayOrientation, ArrayOrientationOptions } from "./arrayOrientation";
 
 /**
  * Supported execution languages.
@@ -23,7 +25,7 @@ export type VisualizerType = "pytutor" | "json-pre";
 /**
  * Configuration options for visualizer instances.
  */
-export interface Options {
+export interface Options extends ArrayOrientationOptions {
   includeTypes?: boolean;
   textualMemoryLabels?: boolean;
   stripTypePrefixes?: string[];
@@ -172,6 +174,9 @@ export function create({
     stripTypePrefixes: options?.stripTypePrefixes ?? [],
     hideFields: options?.hideFields ?? [],
     hideVars: options?.hideVars ?? [],
+    arrayOrientation: options?.arrayOrientation ?? "horizontal",
+    alternateArrayOrientations: options?.alternateArrayOrientations ?? false,
+    arrayOrientations: options?.arrayOrientations ?? {},
   };
 
   const visualizer = new ExecutionVisualizer(

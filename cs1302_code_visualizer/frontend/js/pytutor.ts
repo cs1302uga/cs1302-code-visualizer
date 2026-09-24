@@ -39,6 +39,7 @@ require("jquery-ui-dist/jquery-ui.css");
 
 import "@fontsource/recursive";
 import { isModernTrace, convertModernTraceToOpt } from "./modernTraceAdapter";
+import { resolveArrayOrientation } from "./arrayOrientation";
 require("../css/pytutor");
 
 let unsupportedFeaturesStr = `see <a target="_blank" href="https://github.com/pgbovine/OnlinePythonTutor/blob/master/unsupported-features.md">UNSUPPORTED FEATURES</a>`;
@@ -1079,6 +1080,10 @@ export class ExecutionVisualizer {
           maybeListType.endsWith("[]") ||
           visibleLabel === "array");
       let countWord = isArray ? "length" : "size";
+      const orientation = isArray
+        ? resolveArrayOrientation(myViz.params, objID, myViz.curTrace[stepNum]?.heap_attrs?.[objID]?.type)
+        : "horizontal";
+      const orientationClass = isArray ? " array-" + orientation : "";
       let fullLabel = `${htmlsanitize(visibleLabel)} (${countWord} ${listLength})`;
 
       if (obj.length == 1) {
@@ -1088,7 +1093,7 @@ export class ExecutionVisualizer {
             fullLabel +
             "</div>",
         );
-        d3DomElement.append('<table class="' + label + 'Tbl emptyList"></table>');
+        d3DomElement.append('<table class="' + label + 'Tbl emptyList' + orientationClass + '"></table>');
         return [true]; //handled
       }
 
@@ -1098,30 +1103,29 @@ export class ExecutionVisualizer {
           fullLabel +
           "</div>",
       );
-      d3DomElement.append('<table class="' + label + 'Tbl"></table>');
+      d3DomElement.append('<table class="' + label + 'Tbl' + orientationClass + '"></table>');
       var tbl = d3DomElement.children("table");
 
       if (obj[0] == "LIST") {
-        tbl.append("<tr></tr><tr></tr>");
-        var headerTr = tbl.find("tr:first");
-        var contentTr = tbl.find("tr:last");
+        if (orientation === "horizontal") tbl.append("<tr></tr><tr></tr>");
+        const headerTr = tbl.find("tr:first");
+        const contentTr = tbl.find("tr:last");
 
         // i: actual index in json object; ind: apparent index
         for (var i = 1, ind = 0; i < obj.length; i++) {
           var val = obj[i];
           var elide = val instanceof Array && val[0] == "ELIDE";
 
-          // add a new column and then pass in that newly-added column
-          // as d3DomElement to the recursive call to child:
-          headerTr.append('<td class="' + label + 'Header"></td>');
-          headerTr.find("td:last").append(elide ? "&hellip;" : ind);
-
-          contentTr.append('<td class="' + label + 'Elt"></td>');
+          // Transpose cell placement while sharing index and value rendering.
+          const row = orientation === "vertical" ? $("<tr></tr>").appendTo(tbl) : null;
+          $("<td></td>").addClass(label + "Header")
+            .appendTo(row || headerTr).append(elide ? "&hellip;" : ind);
+          const cell = $("<td></td>").addClass(label + "Elt").appendTo(row || contentTr);
           if (!elide) {
-            myViz.renderNestedObject(val, stepNum, contentTr.find("td:last"));
+            myViz.renderNestedObject(val, stepNum, cell);
             ind++;
           } else {
-            contentTr.find("td:last").append("&hellip;");
+            cell.append("&hellip;");
             ind += val[1]; // val[1] is the number of cells to skip
           }
         }

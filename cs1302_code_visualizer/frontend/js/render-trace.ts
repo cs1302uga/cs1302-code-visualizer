@@ -5,6 +5,7 @@
 import $ from "jquery";
 import { ExecutionVisualizer } from "./pytutor";
 import { JsonPreVisualizer, VisualizerInstance } from "./CodeVisualizer";
+import { arrayOrientationOptionsFromParams } from "./arrayOrientation";
 
 document.addEventListener("DOMContentLoaded", () => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -49,6 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
           includeTypes: includeTypes,
           textualMemoryLabels: textMemoryLabels,
           stripTypePrefixes: stripTypePrefixes,
+          ...arrayOrientationOptionsFromParams(urlParams),
         };
 
         myViz = new ExecutionVisualizer(

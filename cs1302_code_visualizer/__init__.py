@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from . import browser_driver, trace_generator
+from .array_options import ArrayOrientation, validate_array_options
 from .batch_tracer import BatchTraceJob, BatchTracerClient
 from .breakpoint_lister import list_breakpoints, list_breakpoints_json
 from .browser_driver import (
@@ -108,6 +109,9 @@ def render_images(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    array_orientation: ArrayOrientation = "horizontal",
+    alternate_array_orientations: bool = False,
+    array_orientations: dict[str, ArrayOrientation] | None = None,
     render_all_breakpoint_occurrences: bool = False,
     include_enum_static_fields: bool = False,
     type_style: str = "simple",
@@ -137,6 +141,9 @@ def render_images(
         include_types: True if type tags should be included in this visualization, False otherwise.
         text_memory_labels: True if object connections should be rendered as text labels, False otherwise.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        array_orientation: Base array orientation, or the 1D orientation when alternating.
+        alternate_array_orientations: Flip orientation for each additional dimension.
+        array_orientations: Per-heap-object orientation overrides, taking precedence over the base.
         render_all_breakpoint_occurrences: If true, render each occurrence of a breakpoint as a separate image.
             This changes the return type of the function.
         session: Optional build-scoped browser and trace-cache owner.
@@ -156,6 +163,7 @@ def render_images(
 
     Note that exceptions may be raised if image generation fails.
     """
+    validate_array_options(array_orientation, alternate_array_orientations, array_orientations)
     if not (java_home and trace_generator.jdk_exists(java_home)):
         java_home = trace_generator.ensure_jdk_installed()
 
@@ -187,6 +195,9 @@ def render_images(
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
+        array_orientation=array_orientation,
+        alternate_array_orientations=alternate_array_orientations,
+        array_orientations=array_orientations,
         render_all_occurrences=render_all_breakpoint_occurrences,
         session=session,
     )
@@ -201,6 +212,9 @@ def _resolve_and_render_trace(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    array_orientation: ArrayOrientation = "horizontal",
+    alternate_array_orientations: bool = False,
+    array_orientations: dict[str, ArrayOrientation] | None = None,
     render_all_occurrences: bool = False,
     session: RenderingSession | None = None,
 ) -> dict[int, bytes] | dict[int, list[bytes]]:
@@ -231,6 +245,9 @@ def _resolve_and_render_trace(
                             include_types=include_types,
                             text_memory_labels=text_memory_labels,
                             strip_type_prefixes=strip_type_prefixes,
+                            array_orientation=array_orientation,
+                            alternate_array_orientations=alternate_array_orientations,
+                            array_orientations=array_orientations,
                             session=session,
                         )
                     )
@@ -253,6 +270,9 @@ def _resolve_and_render_trace(
                     include_types=include_types,
                     text_memory_labels=text_memory_labels,
                     strip_type_prefixes=strip_type_prefixes,
+                    array_orientation=array_orientation,
+                    alternate_array_orientations=alternate_array_orientations,
+                    array_orientations=array_orientations,
                     session=session,
                 )
             return out_single
@@ -269,6 +289,9 @@ def _resolve_and_render_trace(
                         include_types=include_types,
                         text_memory_labels=text_memory_labels,
                         strip_type_prefixes=strip_type_prefixes,
+                        array_orientation=array_orientation,
+                        alternate_array_orientations=alternate_array_orientations,
+                        array_orientations=array_orientations,
                         session=session,
                     )
                 )
@@ -284,6 +307,9 @@ def _resolve_and_render_trace(
                 include_types=include_types,
                 text_memory_labels=text_memory_labels,
                 strip_type_prefixes=strip_type_prefixes,
+                array_orientation=array_orientation,
+                alternate_array_orientations=alternate_array_orientations,
+                array_orientations=array_orientations,
                 session=session,
             )
         return out_single_dict
@@ -303,6 +329,9 @@ def render_image(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    array_orientation: ArrayOrientation = "horizontal",
+    alternate_array_orientations: bool = False,
+    array_orientations: dict[str, ArrayOrientation] | None = None,
     include_enum_static_fields: bool = False,
     type_style: str = "simple",
     stdin: str | None = None,
@@ -348,6 +377,9 @@ def render_image(
         text_memory_labels: True if object connections should be rendered as text labels, False otherwise.
 
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        array_orientation: Base array orientation, or the 1D orientation when alternating.
+        alternate_array_orientations: Flip orientation for each additional dimension.
+        array_orientations: Per-heap-object orientation overrides, taking precedence over the base.
 
         include_enum_static_fields: True if enum constants and $VALUES should be included in the
             global static fields list, False otherwise.
@@ -370,6 +402,7 @@ def render_image(
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
 
+    validate_array_options(array_orientation, alternate_array_orientations, array_orientations)
     if not (java_home and trace_generator.jdk_exists(java_home)):
         java_home = trace_generator.ensure_jdk_installed()
 
@@ -439,6 +472,9 @@ def render_image(
             include_types=include_types,
             text_memory_labels=text_memory_labels,
             strip_type_prefixes=strip_type_prefixes,
+            array_orientation=array_orientation,
+            alternate_array_orientations=alternate_array_orientations,
+            array_orientations=array_orientations,
             breakpoint=None,
         )
         return output
@@ -469,6 +505,17 @@ class BatchRenderJob:
     type_style: str = "simple"
     stdin: str = ""
     timeout_secs: int | None = None
+    array_orientation: ArrayOrientation = "horizontal"
+    alternate_array_orientations: bool = False
+    array_orientations: dict[str, ArrayOrientation] | None = None
+
+    def __post_init__(self) -> None:
+        """Reject invalid array settings before a batch job starts tracing."""
+        validate_array_options(
+            self.array_orientation,
+            self.alternate_array_orientations,
+            self.array_orientations,
+        )
 
 
 def _render_batch_with_session(
@@ -538,6 +585,9 @@ def _render_batch_with_session(
                 include_types=job_spec.include_types,
                 text_memory_labels=job_spec.text_memory_labels,
                 strip_type_prefixes=job_spec.strip_type_prefixes,
+                array_orientation=job_spec.array_orientation,
+                alternate_array_orientations=job_spec.alternate_array_orientations,
+                array_orientations=job_spec.array_orientations,
                 render_all_occurrences=job_spec.render_all_breakpoint_occurrences,
                 session=session,
             )

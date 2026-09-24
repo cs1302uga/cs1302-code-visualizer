@@ -1,0 +1,203 @@
+{
+  "code": "// Array layout demonstration\n// Update one array element",
+  "trace": [
+    {
+      "line": 1,
+      "event": "step_line",
+      "func_name": "main",
+      "stack_to_render": [
+        {
+          "func_name": "main",
+          "frame_id": 1,
+          "unique_hash": "main_1",
+          "is_parent": false,
+          "is_zombie": false,
+          "parent_frame_id_list": [],
+          "ordered_varnames": [
+            "empty",
+            "omitted",
+            "collection",
+            "references",
+            "untyped"
+          ],
+          "encoded_locals": {
+            "empty": [
+              "REF",
+              10
+            ],
+            "omitted": [
+              "REF",
+              11
+            ],
+            "collection": [
+              "REF",
+              12
+            ],
+            "references": [
+              "REF",
+              13
+            ],
+            "untyped": [
+              "REF",
+              14
+            ]
+          }
+        }
+      ],
+      "globals": {},
+      "ordered_globals": [],
+      "heap": {
+        "10": [
+          "LIST"
+        ],
+        "11": [
+          "LIST",
+          1,
+          [
+            "ELIDE",
+            5
+          ],
+          7
+        ],
+        "12": [
+          "LIST",
+          8,
+          9,
+          10
+        ],
+        "13": [
+          "LIST",
+          [
+            "REF",
+            10
+          ],
+          [
+            "REF",
+            11
+          ],
+          null
+        ],
+        "14": [
+          "LIST",
+          4,
+          5
+        ]
+      },
+      "heap_attrs": {
+        "10": {
+          "type": "int[]"
+        },
+        "11": {
+          "type": "int[]"
+        },
+        "12": {
+          "type": "ArrayList<Integer>"
+        },
+        "13": {
+          "type": "int[][]"
+        }
+      },
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "line": 2,
+      "event": "step_line",
+      "func_name": "main",
+      "stack_to_render": [
+        {
+          "func_name": "main",
+          "frame_id": 1,
+          "unique_hash": "main_1",
+          "is_parent": false,
+          "is_zombie": false,
+          "parent_frame_id_list": [],
+          "ordered_varnames": [
+            "empty",
+            "omitted",
+            "collection",
+            "references",
+            "untyped"
+          ],
+          "encoded_locals": {
+            "empty": [
+              "REF",
+              10
+            ],
+            "omitted": [
+              "REF",
+              11
+            ],
+            "collection": [
+              "REF",
+              12
+            ],
+            "references": [
+              "REF",
+              13
+            ],
+            "untyped": [
+              "REF",
+              14
+            ]
+          }
+        }
+      ],
+      "globals": {},
+      "ordered_globals": [],
+      "heap": {
+        "10": [
+          "LIST"
+        ],
+        "11": [
+          "LIST",
+          1,
+          [
+            "ELIDE",
+            5
+          ],
+          70
+        ],
+        "12": [
+          "LIST",
+          8,
+          9,
+          10
+        ],
+        "13": [
+          "LIST",
+          [
+            "REF",
+            10
+          ],
+          [
+            "REF",
+            11
+          ],
+          null
+        ],
+        "14": [
+          "LIST",
+          4,
+          5
+        ]
+      },
+      "heap_attrs": {
+        "10": {
+          "type": "int[]"
+        },
+        "11": {
+          "type": "int[]"
+        },
+        "12": {
+          "type": "ArrayList<Integer>"
+        },
+        "13": {
+          "type": "int[][]"
+        }
+      },
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

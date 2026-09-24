@@ -43,6 +43,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support.ui import WebDriverWait
 
+from .array_options import (
+    ArrayOrientation,
+    add_array_arguments,
+    array_options_from_args,
+    validate_array_options,
+)
 from .errors import CodeVisRenderError
 from .util.certificates import ensure_certifi_bundle
 
@@ -261,10 +267,14 @@ def online_python_tutor_frontend(
     include_types: bool = True,
     text_memory_labels: bool = True,
     strip_type_prefixes: Sequence[str] | None = None,
+    array_orientation: ArrayOrientation = "horizontal",
+    alternate_array_orientations: bool = False,
+    array_orientations: dict[str, ArrayOrientation] | None = None,
     visualizer: str = "pytutor",
     session: RenderingSession | None = None,
 ):
     """Context manager for interacting with the OnlinePythonTutor frontend in Chrome."""
+    validate_array_options(array_orientation, alternate_array_orientations, array_orientations)
     prefixes = list(strip_type_prefixes) if strip_type_prefixes is not None else []
     frontend_path = (this_files_dir / "frontend" / "render-trace.html").as_uri()
     with (
@@ -285,6 +295,9 @@ def online_python_tutor_frontend(
             "textMemoryLabels": str(text_memory_labels).lower(),
             "stripTypePrefixes": json.dumps(prefixes),
             "visualizer": visualizer,
+            "arrayOrientation": array_orientation,
+            "alternateArrayOrientations": str(alternate_array_orientations).lower(),
+            "arrayOrientations": json.dumps(array_orientations or {}),
         }
 
         frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
@@ -430,6 +443,9 @@ def render_html(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    array_orientation: ArrayOrientation = "horizontal",
+    alternate_array_orientations: bool = False,
+    array_orientations: dict[str, ArrayOrientation] | None = None,
     hide_fields: Sequence[str] | None = None,
     hide_vars: Sequence[str] | None = None,
     visualizer: str = "pytutor",
@@ -446,6 +462,9 @@ def render_html(
         include_types: Whether type labels should be included in the visualization.
         text_memory_labels: Whether memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: List of package prefixes to strip from displayed types.
+        array_orientation: Base array orientation, or the 1D orientation when alternating.
+        alternate_array_orientations: Flip orientation for each additional dimension.
+        array_orientations: Per-heap-object orientation overrides, taking precedence over the base.
         hide_fields: List of field names (e.g. ClassName:fieldName) to hide.
         hide_vars: List of variable names to hide.
         visualizer: Visualizer mode ('pytutor' or 'json-pre').
@@ -455,6 +474,7 @@ def render_html(
     Returns:
         HTML snippet containing the container <div>, optional bundle <script> tag, and inline initialization <script>.
     """
+    validate_array_options(array_orientation, alternate_array_orientations, array_orientations)
     trace_data = resolve_trace_payload(trace, breakpoint=breakpoint)
 
     if container_id is None:
@@ -473,8 +493,11 @@ def render_html(
         "visualizer": visualizer,
         "hideFields": list(hide_fields) if hide_fields is not None else [],
         "hideVars": list(hide_vars) if hide_vars is not None else [],
+        "arrayOrientation": array_orientation,
+        "alternateArrayOrientations": alternate_array_orientations,
+        "arrayOrientations": array_orientations or {},
     }
-    options_json = json.dumps(options_dict)
+    options_json = json.dumps(options_dict).replace("</", r"<\/")
 
     bundle_tag = f'<script src="{bundle_url}"></script>\n' if include_bundle_script else ""
 
@@ -512,6 +535,9 @@ def generate_image(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    array_orientation: ArrayOrientation = "horizontal",
+    alternate_array_orientations: bool = False,
+    array_orientations: dict[str, ArrayOrientation] | None = None,
     breakpoint: int | tuple[int, int] | None = -1,
     visualizer: str = "pytutor",
     session: RenderingSession | None = None,
@@ -527,6 +553,9 @@ def generate_image(
         include_types: Whether or not type tags should be included in this visualization.
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        array_orientation: Base array orientation, or the 1D orientation when alternating.
+        alternate_array_orientations: Flip orientation for each additional dimension.
+        array_orientations: Per-heap-object orientation overrides, taking precedence over the base.
         breakpoint: Breakpoint line to visualize.
         session: Optional build-scoped browser owner.
         visualizer: The visualizer implementation to use ('pytutor' or 'json-pre').
@@ -544,6 +573,9 @@ def generate_image(
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
+        array_orientation=array_orientation,
+        alternate_array_orientations=alternate_array_orientations,
+        array_orientations=array_orientations,
         visualizer=visualizer,
         **({"session": session} if session is not None else {}),
     ) as frontend:
@@ -639,6 +671,9 @@ def generate_step_images(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    array_orientation: ArrayOrientation = "horizontal",
+    alternate_array_orientations: bool = False,
+    array_orientations: dict[str, ArrayOrientation] | None = None,
     breakpoint: int | tuple[int, int] | None = None,
     visualizer: str = "pytutor",
     session: RenderingSession | None = None,
@@ -652,6 +687,9 @@ def generate_step_images(
         include_types: Whether or not type tags should be included in this visualization.
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        array_orientation: Base array orientation, or the 1D orientation when alternating.
+        alternate_array_orientations: Flip orientation for each additional dimension.
+        array_orientations: Per-heap-object orientation overrides, taking precedence over the base.
         breakpoint: Breakpoint line to visualize.
         visualizer: The visualizer implementation to use ('pytutor' or 'json-pre').
         session: Optional build-scoped browser owner.
@@ -677,6 +715,9 @@ def generate_step_images(
                 include_types=include_types,
                 text_memory_labels=text_memory_labels,
                 strip_type_prefixes=strip_type_prefixes,
+                array_orientation=array_orientation,
+                alternate_array_orientations=alternate_array_orientations,
+                array_orientations=array_orientations,
                 breakpoint=breakpoint,
                 visualizer=visualizer,
                 session=session,
@@ -692,6 +733,9 @@ def generate_step_images(
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
+        array_orientation=array_orientation,
+        alternate_array_orientations=alternate_array_orientations,
+        array_orientations=array_orientations,
         visualizer=visualizer,
         **({"session": session} if session is not None else {}),
     ) as frontend:
@@ -786,7 +830,9 @@ def main() -> None:
         help="Omit the external bundle script tag in the HTML snippet.",
     )
 
+    add_array_arguments(parser)
     args = parser.parse_args()
+    array_options = array_options_from_args(args)
 
     bp: int | tuple[int, int] | None = -1
     if args.breakpoint is not None:
@@ -809,6 +855,7 @@ def main() -> None:
             bundle_url=args.bundle_url,
             include_bundle_script=not args.no_bundle_script,
             visualizer=args.visualizer,
+            **array_options,
             breakpoint=bp,
         )
         sys.stdout.write(html_snippet + "\n")
@@ -819,6 +866,7 @@ def main() -> None:
             stdin_data,
             dpi=args.dpi,
             visualizer=args.visualizer,
+            **array_options,
             breakpoint=bp,
         )
         if args.output:
@@ -840,6 +888,7 @@ def main() -> None:
         stdin_data,
         dpi=args.dpi,
         visualizer=args.visualizer,
+        **array_options,
         breakpoint=bp,
     )
 
@@ -901,7 +950,9 @@ def render_html_cli() -> None:
         help="Omit type tags from the visualization.",
     )
 
+    add_array_arguments(parser)
     args = parser.parse_args()
+    array_options = array_options_from_args(args)
 
     bp: int | tuple[int, int] | None = -1
     if args.breakpoint is not None:
@@ -925,6 +976,7 @@ def render_html_cli() -> None:
         include_types=not args.no_include_types,
         text_memory_labels=args.text_memory_labels,
         visualizer=args.visualizer,
+        **array_options,
         breakpoint=bp,
     )
     sys.stdout.write(html_snippet + "\n")
