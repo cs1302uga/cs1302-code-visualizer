@@ -23,7 +23,6 @@ import platform
 import queue
 import re
 import shutil
-import socket
 import subprocess
 import sys
 import tarfile
@@ -525,101 +524,104 @@ def ensure_jdk_installed(install_dir: str | PathLike[str] = JDK_CACHE_DIR) -> Pa
 
 
 def read_tracer_url_and_sum_from_toml() -> tuple[str, str] | None:
-    """Load tracer URL and SHA256 sum from pyproject.toml if present."""
+    """Read the packaged pin, or pyproject.toml in a source checkout."""
     try:
-        with open(PACKAGE_DIR.parent / "pyproject.toml", "rb") as t:
+        pin_path = PACKAGE_DIR / "_tracer.toml"
+        if not pin_path.exists():
+            pin_path = PACKAGE_DIR.parent / "pyproject.toml"
+        with open(pin_path, "rb") as t:
             pyproject = tomllib.load(t)
-            package_constants = pyproject.get("tool", {}).get("cs1302-code-visualizer", {})
+            tool_config = pyproject.get("tool", {})
+            if not isinstance(tool_config, dict):
+                return None
+            package_constants = tool_config.get("cs1302-code-visualizer", {})
+            if not isinstance(package_constants, dict):
+                return None
             tracer_url = package_constants.get("tracer-url")
             if tracer_url is None or not isinstance(tracer_url, str):
                 return None
             tracer_sha256 = package_constants.get("tracer-sha256")
             if tracer_sha256 is None or not isinstance(tracer_sha256, str):
                 return None
-            return (
-                package_constants.get("tracer-url"),
-                package_constants.get("tracer-sha256"),
-            )
+            return tracer_url, tracer_sha256
     except (OSError, tomllib.TOMLDecodeError):
         return None
 
 
 def ensure_code_tracer_installed(update_existing: bool = False) -> None:
-    """Ensure the code-tracer JAR is downloaded and validated against its SHA256 checksum."""
+    """Install only a checksum-verified tracer; never fall back to unverified bytes."""
     with _TRACER_INSTALL_LOCK:
+        pin = read_tracer_url_and_sum_from_toml()
+        if (
+            not pin
+            or not isinstance(pin[0], str)
+            or not re.fullmatch(r"https?://[^\s]+", pin[0])
+            or not isinstance(pin[1], str)
+            or not re.fullmatch(r"[0-9a-fA-F]{64}", pin[1])
+        ):
+            raise TracerDownloadError(
+                "Tracer URL or SHA256 pin is missing or invalid. "
+                "Reinstall the package or repair its tracer configuration."
+            )
+        tracer_url, expected_hash = pin[0], pin[1].lower()
         target_jar = CACHE_DIR / "code-tracer.jar"
-        tracer_url_and_sum = read_tracer_url_and_sum_from_toml()
-        if target_jar.is_file():
-            if not update_existing:
-                if tracer_url_and_sum and tracer_url_and_sum[1]:
-                    try:
-                        with open(target_jar, "rb") as f:
-                            if hashlib.sha256(f.read()).hexdigest() == tracer_url_and_sum[1]:
-                                return
-                    except OSError:
-                        pass
-                else:
-                    return
-            # make sure we have an internet connection before proceeding
+
+        def cached_jar_matches() -> bool:
             try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(1)
-                sock.connect(("1.1.1.1", 53))
-                sock.close()
+                with open(target_jar, "rb") as jar:
+                    return hashlib.file_digest(jar, "sha256").hexdigest() == expected_hash
             except OSError:
-                logger.debug(
-                    "The code tracer jar already exists, but we can't update it because we're offline."
-                )
-                logger.debug("Continuing with existing tracer version.")
+                return False
+
+        if cached_jar_matches() and not update_existing:
+            return
+
+        # Always fetch the pinned artifact in full. Metadata from an older URL
+        # must not cause a 304 response to authorize an unverified cached JAR.
+        tmp_jar_path: Path | None = None
+        try:
+            ensure_certifi_bundle()
+            with requests.get(
+                tracer_url,
+                stream=True,
+                timeout=DEFAULT_REQUEST_TIMEOUT,
+                verify=certifi.where(),
+            ) as resp:
+                if resp.status_code == 304:
+                    if cached_jar_matches():
+                        return
+                    raise TracerDownloadError(
+                        "Server returned 304 without a checksum-verified cached tracer. "
+                        "Reconnect and retry downloading the pinned tracer."
+                    )
+                resp.raise_for_status()
+                with tempfile.NamedTemporaryFile(
+                    dir=CACHE_DIR, prefix="code-tracer.jar.tmp.", delete=False
+                ) as jar_file:
+                    tmp_jar_path = Path(jar_file.name)
+                    sha256_hash = hashlib.sha256()
+                    for chunk in resp.iter_content(DOWNLOAD_CHUNK_SIZE):
+                        jar_file.write(chunk)
+                        sha256_hash.update(chunk)
+                if expected_hash != sha256_hash.hexdigest():
+                    raise TracerDownloadError(
+                        "Downloaded tracer JAR doesn't have the correct SHA256 sum. "
+                        f"Expected: {expected_hash}, got {sha256_hash.hexdigest()}. "
+                        "The existing cache was preserved; retry downloading the pinned tracer."
+                    )
+                tmp_jar_path.replace(target_jar)
+        except (requests.RequestException, OSError) as exc:
+            if cached_jar_matches():
+                logger.debug("Refresh failed; using checksum-verified cached tracer.")
                 return
-
-        dl_info_path = Path(CACHE_DIR / "code_tracer_dl_headers.json")
-
-        headers: dict[str, str] = {}
-
-        if target_jar.is_file() and dl_info_path.is_file():
-            try:
-                with open(dl_info_path, "r") as dl_info_file:
-                    dl_info = json.load(dl_info_file)
-                if "Last-Modified" in dl_info:
-                    headers["If-Modified-Since"] = dl_info["Last-Modified"]
-            except (OSError, json.JSONDecodeError):
-                pass
-
-        tracer_url_and_sum = read_tracer_url_and_sum_from_toml()
-
-        ensure_certifi_bundle()
-        with requests.get(
-            (tracer_url_and_sum and tracer_url_and_sum[0])
-            or "https://github.com/cs1302uga/cs1302-tracer/releases/latest/download/code-tracer.jar",
-            headers=headers,
-            stream=True,
-            timeout=DEFAULT_REQUEST_TIMEOUT,
-            verify=certifi.where(),
-        ) as resp:
-            if resp.status_code == 304:
-                return
-
-            resp.raise_for_status()
-
-            tmp_jar_path = CACHE_DIR / f"code-tracer.jar.tmp.{os.getpid()}"
-            with open(tmp_jar_path, "wb") as jar_file:
-                sha256_hash = hashlib.sha256()
-                for chunk in resp.iter_content(DOWNLOAD_CHUNK_SIZE):
-                    _ = jar_file.write(chunk)
-                    sha256_hash.update(chunk)
-
-            if tracer_url_and_sum and tracer_url_and_sum[1] != sha256_hash.hexdigest():
-                if tmp_jar_path.exists():
-                    tmp_jar_path.unlink()
-                raise TracerDownloadError(
-                    f"Downloaded tracer JAR doesn't have the correct SHA256 sum. Expected: {tracer_url_and_sum[1]}, got {sha256_hash.hexdigest()}."
-                )
-
-            _ = tmp_jar_path.replace(target_jar)
-
-            with open(dl_info_path, "w") as dl_info_file:
-                json.dump(dict(resp.headers), dl_info_file)
+            raise TracerDownloadError(
+                f"Unable to install the pinned tracer from {tracer_url}. "
+                f"Cached JAR at {target_jar} is missing, unreadable, or has a checksum mismatch. "
+                "Reconnect and retry; an unverified tracer will not be executed."
+            ) from exc
+        finally:
+            if tmp_jar_path is not None:
+                tmp_jar_path.unlink(missing_ok=True)
 
 
 def get_enum_types(trace_json: dict[str, Any]) -> list[str]:

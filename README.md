@@ -122,9 +122,7 @@ browser driver.
 The trace generator is essentially a Python wrapper around a Java tracer
 program. It:
 
-- downloads and installs both the tracer (uses the URL given in `pyproject.toml`
-  if one is given, otherwise falls back to the latest release) and the latest
-  release of the JDK
+- downloads and installs the checksum-pinned tracer and the JDK
 - executes the tracer on the input code
 - returns the output of the tracer
 
@@ -138,7 +136,16 @@ visualization created by the frontend.
 
 When making a new release, make sure that the version of the tracer program that
 you want to use is specified in the `tool.cs1302-code-visualizer` object of
-`pyproject.toml`.
+`pyproject.toml`. The wheel includes this configuration inside the package so
+installed applications use the same tracer pin as the source checkout.
+
+The installer executes a cached tracer only when its SHA-256 matches the pin.
+A matching cache works offline, including when an explicit refresh fails. If the
+cache is missing, unreadable, or mismatched, the installer downloads and verifies
+a replacement before atomically installing it. Failed downloads preserve the old
+file but do not authorize its execution. Missing or invalid pin metadata is an
+error; reinstall the package or repair the configuration. For a download failure,
+reconnect and retry. There is no unverified fallback or checksum override.
 
 ## Reusing browsers and execution traces
 

@@ -62,14 +62,25 @@ def test_tracer_download_closes_response_on_failure(monkeypatch, tmp_path, downl
         response.iter_content.side_effect = error
     monkeypatch.setattr(trace_generator.requests, "get", lambda *args, **kwargs: response)
     monkeypatch.setattr(trace_generator, "CACHE_DIR", tmp_path)
-    monkeypatch.setattr(trace_generator, "read_tracer_url_and_sum_from_toml", lambda: None)
+    monkeypatch.setattr(
+        trace_generator,
+        "read_tracer_url_and_sum_from_toml",
+        lambda: ("https://example.test/tracer.jar", "0" * 64),
+    )
     download = (
         partial(update_tracer_hash.download_and_hash, "https://example.test/tracer.jar")
         if downloader == "updater"
         else trace_generator.ensure_code_tracer_installed
     )
-    with pytest.raises(trace_generator.requests.HTTPError, match="download failed"):
+    expected_error = (
+        trace_generator.requests.HTTPError
+        if downloader == "updater"
+        else trace_generator.TracerDownloadError
+    )
+    with pytest.raises(expected_error) as caught:
         download()
+    if downloader == "installer":
+        assert caught.value.__cause__ is error
     response.__exit__.assert_called_once()
     assert response.__exit__.call_args.args[1] is error
     assert not (tmp_path / "code-tracer.jar").exists()
@@ -80,7 +91,8 @@ def test_updater_reports_requests_errors(monkeypatch, tmp_path, capsys):
     content = 'tracer-url = "https://example.test/tracer.jar"\n'
     config.write_text(content)
     monkeypatch.setattr(
-        update_tracer_hash, "parse_args",
+        update_tracer_hash,
+        "parse_args",
         lambda: MagicMock(pyproject=config, url=None, version=None),
     )
     request = MagicMock(side_effect=trace_generator.requests.Timeout("download timed out"))
