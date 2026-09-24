@@ -30,8 +30,8 @@ dependencies = [
 ]
 
 [tool.cs1302-code-visualizer]
-tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v3.1.0/code-tracer.jar"
-tracer-sha256 = "b9acfe85478ecdaed06fc7bc575283dac04ea1af67ab3fffe3c2babedebf4734"
+tracer-url  = "https://github.com/cs1302uga/cs1302-tracer/releases/download/v3.1.2/code-tracer.jar"
+tracer-sha256 = "02fd7a05bba1448155865264dba7be6852f1caff9f44aeb6b4a2796e7e13a132"
 
 [tool.cs1302book.system-dependencies]
 system-dependencies = [
