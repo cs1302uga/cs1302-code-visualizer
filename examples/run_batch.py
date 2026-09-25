@@ -124,6 +124,10 @@ def run_batch_examples(
         trace_file = example_dir / f"{input_file}.json"
         image_file = example_dir / f"{input_file}.png"
         options = _trace_options(extra_args, example_dir)
+        # File input lets the tracer discover companion compilation units. The
+        # single-source batch protocol cannot resolve these from a source string.
+        if len(list(example_dir.rglob("*.java"))) > 1:
+            options["extra_tracer_args"] += ["--input", str(target_java.resolve())]
         trace_text = session.generate_trace(
             java_home,
             target_java.read_text(encoding="utf-8"),

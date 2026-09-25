@@ -26,3 +26,6 @@ scripts/installer/shims/bin/
 
 # agents and rules
 .agents/
+
+# Reproducible SVG gallery exports and milestone screenshots
+artifacts/svg-gallery/

@@ -6,6 +6,9 @@ import $ from "jquery";
 import { ExecutionVisualizer } from "./pytutor";
 import { JsonPreVisualizer, VisualizerInstance } from "./CodeVisualizer";
 import { arrayOrientationOptionsFromParams } from "./arrayOrientation";
+import { exportSvg } from "./svgExport";
+
+(window as any).exportVisualizationSvg = exportSvg;
 
 document.addEventListener("DOMContentLoaded", () => {
   const urlParams = new URLSearchParams(window.location.search);

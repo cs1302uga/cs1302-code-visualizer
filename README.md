@@ -11,7 +11,7 @@ Install [uv](https://docs.astral.sh/uv/) and Google Chrome. Python 3.13 or newer
 Download the `.whl` file from the project's [GitHub releases](https://github.com/cs1302uga/cs1302-code-visualizer/releases). In the directory containing that file, install it with uv (replace the filename with the version you downloaded):
 
 ```sh
-uv tool install ./cs1302_code_visualizer-0.15.0-py3-none-any.whl
+uv tool install ./cs1302_code_visualizer-0.16.0-py3-none-any.whl
 code-visualizer --help
 ```
 
@@ -37,6 +37,9 @@ Render the final captured state:
 ```sh
 code-visualizer Main.java -o main.png
 ```
+
+For editable vector artwork, use `code-visualizer Main.java --format SVG -o main.svg`.
+SVG also supports all steps and batch rendering; see [SVG exports](docs/cli.md#svg-exports).
 
 Open `main.png` and insert it into your teaching material. Use `--dpi 2` for a larger image. Single-file mode replaces existing output files; choose a new filename to retain an earlier image.
 

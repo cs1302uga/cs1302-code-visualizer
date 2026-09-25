@@ -69,6 +69,8 @@ uv run python -m scripts.benchmark_cli_batch --num-examples 6
 
 The rendering benchmark checks dimensions and decoded pixels and reports time and Chrome launches. The CLI benchmark compares sequential and batch configurations; `--skip-sequential` reports speedups as `N/A`.
 
+For SVG changes, generate milestone screenshots and inspect PNG/SVG pairs using the [comparison gallery](docs/svg-gallery.md). Keep generated evidence under the ignored `artifacts/svg-gallery/` directory. Use JDK 25 for the full Java example suite; example 33 uses `java.lang.IO`. Multi-file examples use the tracer's file-input mode so companion sources are available.
+
 ## Maintainer tasks
 
 ### Update the tracer

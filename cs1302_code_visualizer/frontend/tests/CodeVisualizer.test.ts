@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { create, JsonPreVisualizer } from "../js/CodeVisualizer";
+import { describeSvg } from "../js/svgDescription";
 
 describe("CodeVisualizer", () => {
   let container: HTMLElement;
@@ -237,6 +238,10 @@ describe("CodeVisualizer", () => {
       expect(emptyInstTable).not.toBeNull();
       expect(emptyInstTable?.classList.contains("emptyInst")).toBe(true);
       expect(heapObject?.querySelector(".typeLabel")?.textContent).toBe("Secret");
+      const description = JSON.stringify(describeSvg(container));
+      expect(description).not.toContain("hidden");
+      expect(description).not.toContain("42");
+      expect(description).toContain("Heap object 1: Secret");
 
       instance.destroy?.();
       expect(container.innerHTML).toBe("");

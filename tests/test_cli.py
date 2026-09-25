@@ -775,3 +775,32 @@ def test_cli_module_main_execution(monkeypatch):
     with pytest.raises(SystemExit) as exc_info:
         runpy.run_module("cs1302_code_visualizer.cli", run_name="__main__")
     assert exc_info.value.code == 1
+
+
+@pytest.mark.parametrize("all_steps", [False, True])
+@pytest.mark.parametrize("format_name", ["SVG", "svg", "PNG"])
+def test_default_batch_extension_follows_format(tmp_path, monkeypatch, all_steps, format_name):
+    monkeypatch.chdir(tmp_path)
+    Path("Main.java").write_text("class Main {}")
+    session = MagicMock()
+    session.__enter__.return_value = session
+    session.generate_trace.return_value = '{"trace": [{"line": 1}]}'
+    image = b'<svg xmlns="http://www.w3.org/2000/svg"/>'
+    with (
+        patch("cs1302_code_visualizer.cli.RenderingSession", return_value=session),
+        patch("cs1302_code_visualizer.cli.trace_generator.ensure_jdk_installed"),
+        patch("cs1302_code_visualizer.cli.trace_generator.ensure_code_tracer_installed"),
+        patch("cs1302_code_visualizer.cli.generate_step_images", return_value=[image, image]),
+        patch("cs1302_code_visualizer.cli.browser_driver.generate_image", return_value=image),
+    ):
+        main(
+            ["--batch", "Main.java", "--format", format_name, "--out-dir", "images"]
+            + (["--all-steps"] if all_steps else [])
+        )
+    expected = (
+        [f"Main.{i}.{format_name.lower()}" for i in range(2)]
+        if all_steps
+        else [f"Main.{format_name.lower()}"]
+    )
+    assert sorted(p.name for p in Path("images").iterdir()) == expected
+    assert all((Path("images") / name).read_bytes() == image for name in expected)

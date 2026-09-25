@@ -138,3 +138,13 @@ def test_examples_empty_images_preserve_existing_final(tmp_path, fake_runtime, m
     monkeypatch.setattr(run_batch, "generate_step_images", lambda *a, **k: [])
     assert run_examples(tmp_path) == 0
     assert final.read_bytes() == b"existing"
+
+
+def test_multifile_example_supplies_entry_path(tmp_path, fake_runtime):
+    session, _ = fake_runtime
+    source = make_example(tmp_path, 0, filename="pkg/Driver.java")
+    source.with_name("Person.java").write_text("package pkg; class Person {}")
+    assert run_examples(tmp_path) == 0
+    assert session.generate_trace.call_args.kwargs["extra_tracer_args"] == [
+        "--input", str(source.resolve())
+    ]

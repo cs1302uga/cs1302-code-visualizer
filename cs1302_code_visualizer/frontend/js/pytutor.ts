@@ -2640,6 +2640,7 @@ class DataVisualizer {
             // C structs and arrays can be inlined in frames
             myViz.renderCStructArray(val, curInstr, $(this));
           } else {
+            $(this).attr("data-reference-target", String(getRefID(val)));
             var heapObjID = myViz.generateHeapObjID(getRefID(val), curInstr);
 
             if (myViz.params.textualMemoryLabels) {
@@ -2965,6 +2966,7 @@ class DataVisualizer {
             // C structs and arrays can be inlined in frames
             myViz.renderCStructArray(val, curInstr, $(this));
           } else {
+            $(this).attr("data-reference-target", String(getRefID(val)));
             var heapObjID = myViz.generateHeapObjID(getRefID(val), curInstr);
             if (myViz.params.textualMemoryLabels) {
               var labelID = varDivID + "_text_label";
@@ -3461,6 +3463,7 @@ class DataVisualizer {
   // rendering functions, which all take a d3 dom element to anchor the
   // new element to render
   renderPrimitiveObject(obj, stepNum: number, d3DomElement) {
+    d3DomElement.removeAttr("data-reference-target");
     var myViz = this; // to prevent confusion of 'this' inside of nested functions
 
     if (
@@ -3662,6 +3665,7 @@ class DataVisualizer {
   }
 
   renderCompoundObject(objID, stepNum: number, d3DomElement, isTopLevel) {
+    if (!isTopLevel) d3DomElement.attr("data-reference-target", String(objID));
     var myViz = this; // to prevent confusion of 'this' inside of nested functions
 
     var heapObjID = myViz.generateHeapObjID(objID, stepNum);
@@ -3726,6 +3730,7 @@ class DataVisualizer {
       '<div class="heapObject" id="' + heapObjID + '"></div>',
     );
     d3DomElement = myViz.domRoot.find("#" + heapObjID); // TODO: maybe inefficient
+    d3DomElement.attr("data-object-id", String(objID));
 
     myViz.jsPlumbManager.renderedHeapObjectIDs.set(heapObjID, 1);
 

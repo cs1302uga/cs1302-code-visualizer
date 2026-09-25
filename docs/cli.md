@@ -21,8 +21,8 @@ Single-program mode creates parent directories and replaces existing files. Batc
 | --- | --- |
 | `-b N`, `--breakpoint N` | Select a source line; repeat to request multiple lines. |
 | `-a`, `--all-steps` | Trace and render all execution steps. |
-| `--format PNG` | Select output encoding; default is PNG. Match the filename extension to the encoding. |
-| `--dpi 2` | Scale image resolution; default is 1. |
+| `--format PNG` | Select a raster encoding or standalone `SVG`; default is PNG. Match explicit filename extensions to the encoding. |
+| `--dpi 2` | Scale raster resolution or SVG display dimensions; default is 1. |
 | `--no-types` | Hide type tags. |
 | `--text-memory-labels` | Replace reference arrows with text labels. |
 | `--strip-type-prefix PREFIX` | Strip a type-name prefix; repeat as needed. |
@@ -33,6 +33,22 @@ Single-program mode creates parent directories and replaces existing files. Batc
 Without `-a`, single-program mode emits one image, even when several breakpoints are supplied. Batch mode also emits one image per job without `-a`. Use the [Python API](../HACKING.md) for explicit line-to-image mappings. Source lines and execution step indices are distinct.
 
 See the [array guide](array-orientation/README.md) for override precedence and examples. `code-visualizer --help` is the installed version's complete option list.
+
+## SVG exports
+
+```sh
+code-visualizer Main.java --format SVG -o main.svg
+code-visualizer Main.java --format SVG -a -o steps.svg
+code-visualizer --batch --input-dir sources --format SVG --out-dir diagrams
+```
+
+SVG exports contain editable text, shapes, and reference paths, with no embedded HTML or raster screenshots. Format names are case-insensitive. Single images, all execution steps, batch jobs, and the Python image APIs support SVG with the same array and labeling options as PNG.
+
+The SVG uses the browser's diagram layout. `--dpi 2` doubles its declared width and height while leaving the `viewBox`, geometry, and proportions unchanged. SVG text remains selectable and editable when opened directly in a browser or embedded inline in HTML. An HTML `<img>` displays the SVG as an image and does not allow selecting its internal text. Fonts are not embedded: browsers and Inkscape may substitute fonts, and unsupported glyphs such as emoji can differ or be absent. Text is fitted to the measured label bounds to preserve layout; exact glyph appearance is not guaranteed.
+
+Each export includes an accessible summary and a full text description of the rendered state. The description lists stack frames and variables before heap objects, names reference targets, and lists each object once, including cycles and shared references. It follows the selected step and visible labels; hidden fields are omitted. The comparison gallery provides the same information in an expandable **Text description** panel with headings and lists. VoiceOver with Safari still requires manual acceptance testing.
+
+Use `.svg` for explicit SVG output paths. An explicit `-o` path or custom pattern is used exactly as supplied; its extension does not select or override the encoding. See the [SVG comparison gallery instructions](svg-gallery.md) for reproducible visual checks.
 
 ## Batch inputs
 
@@ -67,7 +83,7 @@ Supported job fields are `id`, `source`, `breakpoints` (an array of line numbers
 | `{line}` | Source line prefixed with `L`; requires frame metadata. |
 | `{format}` | Lowercase output format, or `json` for traces. |
 
-The default image pattern is `{dirname}/{basename}.png`, or `{dirname}/{basename}.{step}.png` for all steps or CLI breakpoints. Manifest jobs should use an explicit `{id}` pattern to distinguish programs.
+The default image pattern is `{dirname}/{basename}.{format}`, or `{dirname}/{basename}.{step}.{format}` for all steps or CLI breakpoints. Thus `--format SVG` produces `.svg` filenames and the default PNG format still produces `.png`. Manifest jobs should use an explicit `{id}` pattern to distinguish programs.
 
 ```sh
 code-visualizer --batch -a Main.java --out-dir diagrams \

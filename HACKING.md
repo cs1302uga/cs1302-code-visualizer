@@ -7,7 +7,7 @@ Use the renderer in course builds or other Python applications. For command-line
 Use Python 3.13 or newer and the browser prerequisites in the [installation guide](README.md#install). Download a release wheel, then add it to your uv project, substituting its actual path:
 
 ```sh
-uv add ./cs1302_code_visualizer-0.15.0-py3-none-any.whl
+uv add ./cs1302_code_visualizer-0.16.0-py3-none-any.whl
 ```
 
 The following recipes run in order in one Python script, using `Main.java` from the instructor quickstart. Run the script with `uv run python your_script.py`.
@@ -25,6 +25,15 @@ Path("python-final.png").write_bytes(image)
 ```
 
 `render_image` returns image bytes. It captures the state just before exit by default; use `breakpoint_line=4` to select a line, or `(4, 2)` to select an occurrence (occurrence numbers start at 1). It owns its browser and does not accept a session.
+
+Pass `format="SVG"` to obtain UTF-8 SVG bytes with editable text and vector shapes:
+
+```python
+svg = render_image(java_source, format="SVG", dpi=2, timeout_secs=30)
+Path("python-final.svg").write_bytes(svg)
+```
+
+The same format is supported by `render_images`, batch jobs, `generate_image`, and `generate_step_images`. For SVG, `dpi` scales display dimensions without changing the layout or `viewBox`. Fonts are not embedded; see the [SVG export contract](docs/cli.md#svg-exports) for font-substitution behavior.
 
 ## Select lines and repeated occurrences
 
