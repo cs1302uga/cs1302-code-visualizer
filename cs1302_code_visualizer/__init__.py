@@ -131,9 +131,9 @@ def render_images(
             automatically.
         timeout_secs: Maximum execution time for the Java source's trace generation, or no limit if
             None.
-        dpi: A positive, integer multiplicative factor for the output image's resolution.
-        format: The image output format. This gets passed directly into PIL's Image.save() method,
-            refer to that method's documentation for acceptable values.
+        dpi: Positive integer scale for raster resolution or SVG display dimensions.
+        format: SVG for standalone vector output with editable text, or a raster format
+            accepted by PIL's Image.save() method.
         inline_strings: True if strings should be inlined in the visualization, false if they should be
             rendered separately on the heap.
         remove_main_args: False if the visualization should include the main method's `args` parameter,
@@ -349,10 +349,10 @@ def render_image(
         timeout_secs: Maximum execution time for the Java source's trace generation, or no limit if
             None.
 
-        dpi: A positive, integer multiplicative factor for the output image's resolution.
+        dpi: Positive integer scale for raster resolution or SVG display dimensions.
 
-        format: The image output format. This gets passed directly into PIL's Image.save() method,
-            refer to that method's documentation for acceptable values.
+        format: SVG for standalone vector output with editable text, or a raster format
+            accepted by PIL's Image.save() method.
 
         inline_strings: True if strings should be inlined in the visualization, false if they should
             be rendered separately on the heap.

@@ -297,7 +297,11 @@ def run_batch_cli(args: argparse.Namespace) -> int:
     output_pattern: str = (
         args.output_pattern
         if args.output_pattern is not None
-        else ("{dirname}/{basename}.{step}.png" if multi_step else "{dirname}/{basename}.png")
+        else (
+            "{dirname}/{basename}.{step}.{format}"
+            if multi_step
+            else "{dirname}/{basename}.{format}"
+        )
     )
 
     try:
@@ -572,13 +576,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--format",
         default="PNG",
-        help="Image format (PNG, SVG, etc.). Default: PNG.",
+        help="Image format: standalone SVG or a Pillow raster format. Default: PNG.",
     )
     parser.add_argument(
         "--dpi",
         type=int,
         default=1,
-        help="DPI scaling factor for rendered images. Default: 1.",
+        help="Resolution scale for raster images; display-size scale for SVG. Default: 1.",
     )
     parser.add_argument(
         "--no-types",

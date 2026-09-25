@@ -38,6 +38,9 @@ Render the final captured state:
 code-visualizer Main.java -o main.png
 ```
 
+For editable vector artwork, use `code-visualizer Main.java --format SVG -o main.svg`.
+SVG also supports all steps and batch rendering; see [SVG exports](docs/cli.md#svg-exports).
+
 Open `main.png` and insert it into your teaching material. Use `--dpi 2` for a larger image. Single-file mode replaces existing output files; choose a new filename to retain an earlier image.
 
 ## Choose execution steps

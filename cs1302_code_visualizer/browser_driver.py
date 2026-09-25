@@ -549,7 +549,7 @@ def generate_image(
     Args:
         trace: The execution trace file.
         dpi: Dots Per Inch (DPI), a positive integer used to scale the driver's display resolution.
-        format: The image output format. This gets passed directly into PIL's ``Image.save()``.
+        format: SVG for standalone vector output; raster formats use PIL's ``Image.save()``.
         include_types: Whether or not type tags should be included in this visualization.
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
@@ -569,7 +569,7 @@ def generate_image(
 
     with online_python_tutor_frontend(
         trace=trace,
-        dpi=dpi,
+        dpi=1 if format.upper() == "SVG" else dpi,
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
@@ -604,7 +604,7 @@ def _capture_viz(
     if session is None:
         tidy_set_window_size_for_element(driver, viz)
     else:
-        _fit_session_viewport(driver, viz, dpi)
+        _fit_session_viewport(driver, viz, 1 if format.upper() == "SVG" else dpi)
 
     loc = viz.location
     size = viz.size
@@ -620,6 +620,18 @@ def _capture_viz(
             "if (window.optFrontend && window.optFrontend.redrawConnectors) "
             "{ window.optFrontend.redrawConnectors(); }"
         )
+
+    if format.upper() == "SVG":
+        result = driver.execute_async_script(
+            "const [root, scale, done] = arguments;"
+            "window.exportVisualizationSvg(root, scale).then("
+            "svg => done({svg}), error => done({error: String(error)}));",
+            viz,
+            dpi,
+        )
+        if "error" in result:
+            raise ValueError(f"SVG export failed: {result['error']}")
+        return result["svg"].encode("utf-8")
 
     if session is not None:
         result = driver.execute_cdp_cmd(
@@ -683,7 +695,7 @@ def generate_step_images(
     Args:
         trace: The execution trace file.
         dpi: Dots Per Inch (DPI), a positive integer used to scale the driver's display resolution.
-        format: The image output format. This gets passed directly into PIL's ``Image.save()``.
+        format: SVG for standalone vector output; raster formats use PIL's ``Image.save()``.
         include_types: Whether or not type tags should be included in this visualization.
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
@@ -729,7 +741,7 @@ def generate_step_images(
 
     with online_python_tutor_frontend(
         trace=trace_str,
-        dpi=dpi,
+        dpi=1 if format.upper() == "SVG" else dpi,
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
