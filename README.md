@@ -1,219 +1,83 @@
 # Code Visualizer (`cs1302-code-visualizer`)
 
-This project automates the creation of images that visualize a Java program's
-state. It also provides a Python interface for doing this.
+Create memory diagrams from Java programs for lectures, assignments, and other teaching materials.
 
-<table>
-<tr>
-<td> Code </td> <td> Output </td>
-</tr>
-<tr>
-<td>
+![Java memory diagram showing a Person record](demo.png)
+
+## Install
+
+Install [uv](https://docs.astral.sh/uv/) and Google Chrome. Python 3.13 or newer is required; uv can provision Python when installing the tool. The renderer uses headless Chrome through Selenium. Its first run may download browser driver components, a JDK, and the checksum-verified Java tracer, so allow network access and extra startup time.
+
+Download the `.whl` file from the project's [GitHub releases](https://github.com/cs1302uga/cs1302-code-visualizer/releases). In the directory containing that file, install it with uv (replace the filename with the version you downloaded):
+
+```sh
+uv tool install ./cs1302_code_visualizer-0.15.0-py3-none-any.whl
+code-visualizer --help
+```
+
+If the command is not found, run `uv tool update-shell`, then restart your shell.
+
+## Create your first diagram
+
+Save this as `Main.java`:
 
 ```java
 public class Main {
   public static void main(String[] args) {
     Person alice = new Person("Alice", 42);
+    System.out.println(alice.name());
   }
 }
 
-record Person(String name, int age) { };
+record Person(String name, int age) { }
 ```
 
-</td>
-<td>
-
-![Visualization](demo.png)
-
-</td>
-</tr>
-</table>
-
-## Usage
-
-You should have the [uv package manager](https://docs.astral.sh/uv/) installed.
-
-### Unified CLI (`code-visualizer`)
-
-`code-visualizer` is the primary command-line interface for tracing and visualizing Java programs.
-
-#### Single Program Mode
-
-Render a memory state diagram for a Java program to a destination file:
-
-```console
-uv run code-visualizer In.java -o out.png
-```
-
-Or read source code from standard input:
-
-```console
-uv run code-visualizer < In.java > out.png
-```
-
-To render every execution step of a program:
-
-```console
-uv run code-visualizer In.java -a -o out.png
-```
-This generates numbered step images (`out.0.png`, `out.1.png`, ...) alongside `out.png`.
-
-#### High-Performance Batch Mode (`--batch`)
-
-Batch mode processes multiple Java sources in a high-throughput streaming pipeline using pooled background Java tracer JVMs and headless Chrome instances.
-
-Inputs can be supplied as positional files, directory scans, or an NDJSON batch manifest:
-
-```console
-# Render multiple source files to a destination directory
-uv run code-visualizer --batch examples/example0/Driver.java examples/example1/Driver.java --out-dir ./out
-
-# Recursively scan a directory tree for Java files
-uv run code-visualizer --batch --input-dir ./src --out-dir ./out
-
-# Process a newline-delimited JSON (NDJSON) batch manifest
-uv run code-visualizer --batch -i manifest.ndjson --out-dir ./out
-```
-
-#### Template-Driven Output Paths
-
-Use `--output-pattern` and `--trace-pattern` to define destination filenames. Supported template placeholders include:
-
-- `{id}`: Job identifier or stem
-- `{dirname}`: Relative directory path of the source file
-- `{filename}`: Full source filename (e.g., `Driver.java`)
-- `{basename}`: Filename without extension (e.g., `Driver`)
-- `{ext}`: Source file extension (e.g., `java`)
-- `{step}`: Step index (`0`, `1`, ..., or `final`)
-- `{line}`: Source line number prefixed with `L` (e.g., `L14`)
-- `{format}`: File format extension (`png`, `svg`, `json`)
-
-For example, to organize multi-step renderings into per-program directories:
-```console
-uv run code-visualizer --batch -a --output-pattern "{dirname}/{basename}.step{step}.png" examples/example0/Driver.java
-```
-
-**Key Safety and Execution Features:**
-- **Automatic Directory Creation**: Parent directories specified by `{dirname}` or destination paths are created automatically on demand (`mkdir -p`).
-- **Collision Protection**: Multi-step jobs (`-a` or breakpoints) fail fast with a validation error unless `{step}` or `{line}` is included in `--output-pattern`. `{line}` uses each rendered frame's source line (the final frame for a single image) and requires line metadata. Repeated destinations are rejected even with `--force`; combine `{line}` with `{step}` for loops.
-- **Overwrite Protection**: Destination files will not be overwritten unless `--force` (`-f`) is passed.
-- **Rollback-Protected Writes**: Output files are staged into temporary files (`.<file>.tmp.<pid>_<uuid>`) and published using per-file atomic replacements. If publication fails, earlier outputs are removed and overwritten originals are restored from backups. This is not a crash-atomic multi-file transaction; rollback failures are reported with recovery backup paths.
-- **Concurrency Tuning**: Configure background tracer worker JVMs with `-w` / `--workers <N>` (default: `1`) and pooled browser instances with `--browsers <M>` (default: `2`). Use `--keep-going` to continue processing remaining jobs if an individual job fails.
-
-### Low-Level Utilities
-
-Individual plumbing utilities remain available for specialized scripting:
-
-```console
-uv run render_image < In.java > out.png
-uv run generate_trace < In.java > trace.json
-uv run generate_visualization < trace.json > out.png
-uv run list_breakpoints < In.java
-```
-
-Usage information for the Python interface is provided as docstrings throughout
-the package.
-
-## Project overview
-
-This project has three major components: the trace generator, the frontend, the
-browser driver.
-
-The trace generator is essentially a Python wrapper around a Java tracer
-program. It:
-
-- downloads and installs the checksum-pinned tracer and the JDK
-- executes the tracer on the input code
-- returns the output of the tracer
-
-The frontend is a lightly modified version of OnlinePythonTutor. It is a web
-page that takes the trace generated by the Java tracer and turns it into a
-visualization.
-
-Array layouts can be configured through frontend options, Python APIs, or the
-`--array-orientation`, `--alternate-array-orientations`, and repeatable
-`--array-orientation-for HEAP_ID=ORIENTATION` CLI flags. See the
-[array orientation guide and before/after gallery](docs/array-orientation/README.md)
-for vertical arrays, per-object overrides, and alternating multidimensional layouts.
-
-The browser driver creates a headless Chrome browser process using Selenium,
-loads the frontend with the trace, and then takes a screenshot of the
-visualization created by the frontend.
-
-When making a new release, make sure that the version of the tracer program that
-you want to use is specified in the `tool.cs1302-code-visualizer` object of
-`pyproject.toml`. The wheel includes this configuration inside the package so
-installed applications use the same tracer pin as the source checkout.
-
-The installer executes a cached tracer only when its SHA-256 matches the pin.
-A matching cache works offline, including when an explicit refresh fails. If the
-cache is missing, unreadable, or mismatched, the installer downloads and verifies
-a replacement before atomically installing it. Failed downloads preserve the old
-file but do not authorize its execution. Missing or invalid pin metadata is an
-error; reinstall the package or repair the configuration. For a download failure,
-reconnect and retry. There is no unverified fallback or checksum override.
-
-## Reusing browsers and execution traces
-
-For repeated image requests, own a `RenderingSession` for the duration of a build:
-
-```python
-from cs1302_code_visualizer import RenderingSession, render_images
-
-with RenderingSession(max_browsers=2) as session:
-    images = render_images(java_source, {3, 4, 5}, session=session)
-    larger_images = render_images(java_source, {3, 4, 5}, dpi=2, session=session)
-```
-
-By default, sessions reuse only Chrome: each request still executes Java. To opt
-into trace caching separately, set `cache_traces=True` for memory-only caching or
-provide `cache_dir=Path(".cache/traces")` for persistent caching (import `Path`
-from `pathlib`). Trace keys include all execution arguments, the JDK release identity, and the tracer URL and checksum. Different
-breakpoint selections, accumulated occurrences, and full traces remain distinct.
-With `cache_traces=True` and no `cache_dir`, trace reuse lasts only for that
-session. Failed execution requests are not cached, and damaged cache entries are regenerated.
-
-The session leases browsers exclusively, keeps at most `max_browsers` alive across
-all DPI settings, and discards a browser after a failed render or viewport reset,
-without retrying the request. Reuse requires matching DPI, headless, and debug
-settings. The next request replaces a discarded browser. Each request loads
-a fresh frontend document. Exiting the context closes browsers, including after an
-exception. A virtual viewport reproduces the existing two-pass window fitting,
-including the browser's measured minimum dimensions and chrome offsets. This
-preserves wrapping and connector placement while avoiding native resize stalls
-during direct diagram capture. Tests require identical image dimensions and
-decoded pixels against fresh-browser capture in the same Chrome environment. Existing calls without a session continue
-to own and close a browser per image.
-
-Rendering tests opt in by requesting the `rendering_session` fixture and passing
-it as `session=rendering_session` to `generate_image` or `generate_step_images`.
-The fixture owns one browser per pytest worker and closes it at worker teardown;
-it does not cache traces. Use only rendering APIs with this fixture. Tests that
-access raw WebDriver, change browser configuration, or verify lifecycle behavior
-must own fresh browsers. Each render reloads the frontend and resets viewport
-emulation; this contract covers the local renderer, not arbitrary browser state
-from applications or raw WebDriver operations. Sessions do not span processes or
-separate runs.
-
-To measure browser reuse independently of Java execution and trace caching:
+Render the final captured state:
 
 ```sh
-python -m scripts.benchmark_rendering small-trace-examples/example0/Driver.java.json --requests 6
+code-visualizer Main.java -o main.png
 ```
 
-The benchmark reports elapsed time and Chrome launches, and fails if image
-sizes or decoded pixels differ between fresh and reused browsers.
+Open `main.png` and insert it into your teaching material. Use `--dpi 2` for a larger image. Single-file mode replaces existing output files; choose a new filename to retain an earlier image.
 
-To benchmark the streaming performance of the unified CLI across sequential and batched worker/browser configurations:
+## Choose execution steps
+
+Capture a source line using `-b` (line numbers start at 1):
 
 ```sh
-python -m scripts.benchmark_cli_batch --num-examples 6
+code-visualizer Main.java -b 4 -o line4.png
 ```
 
-With `--skip-sequential`, speedups are reported as `N/A` rather than comparing
-batch configurations against an absent sequential baseline.
+Choose an executable line. To inspect the sequence of captured states:
 
-Persistent traces are not removed automatically. Use
-`cs1302_code_visualizer.session.prune_trace_cache(cache_dir)` to remove entries
-unused for 30 days, or delete the cache directory to force retracing. The pruning
-function accepts `max_age_days` and `dry_run` and returns file and byte counts.
+```sh
+code-visualizer Main.java -a -o steps.png
+```
+
+This creates `steps.0.png`, `steps.1.png`, and so on, plus `steps.png` containing the last image. Execution steps can revisit the same source line, particularly in loops.
+
+## Arrange arrays
+
+```sh
+code-visualizer Main.java -o vertical.png --array-orientation vertical
+code-visualizer Main.java -o alternating.png --alternate-array-orientations
+```
+
+Use these options with a program containing arrays. See the [array layout guide and visual comparisons](docs/array-orientation/README.md) for multidimensional arrays and per-object overrides.
+
+## Generate a collection of diagrams
+
+Place Java sources in a `sources/` directory, then run:
+
+```sh
+code-visualizer --batch --input-dir sources --out-dir diagrams
+```
+
+Each file is traced as a separate program. Batch mode preserves relative directories and refuses to overwrite existing outputs unless `--force` is supplied. See the [CLI guide](docs/cli.md) for manifests, output templates, and failure handling.
+
+## More documentation
+
+- [Example gallery](examples/README.md): Java concepts and rendered diagrams.
+- [CLI guide](docs/cli.md): detailed command usage and troubleshooting.
+- [Python integration](HACKING.md): embed rendering in scripts and course builds.
+- [Contributing](CONTRIBUTING.md): develop, test, and release the project.

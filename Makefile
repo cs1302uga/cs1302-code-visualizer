@@ -3,7 +3,7 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install install-py install-frontend install-sys-deps \
+.PHONY: lint-docs help install install-py install-frontend install-sys-deps \
         build build-frontend build-py watch-frontend \
         test test-py test-frontend test-frontend-watch test-examples test-all \
         lint lint-py deptry format format-py typecheck check \
@@ -59,13 +59,16 @@ test-frontend: ## Run Frontend Vitest unit tests in JSDOM
 test-frontend-watch: ## Run Frontend Vitest in interactive watch mode
 	$(NPM) --prefix $(FRONTEND_DIR) run test:watch
 
-test-examples: ## Run full end-to-end integration tests across all 22 example suites
+test-examples: ## Run full end-to-end integration tests across all example suites
 	./examples/test_all.sh --no-rm-json --no-rm-image --no-open
 
 test-all: test test-examples ## Run all unit tests and integration test suites
 
 ##@ 🔍 Quality & Linting
-lint: lint-py ## Run all code linters
+lint: lint-py lint-docs ## Run code and documentation checks
+
+lint-docs: ## Lint all repository Markdown and check local links
+	node scripts/check_docs.cjs
 
 lint-py: ## Run Ruff linter on Python codebase
 	$(UV) run ruff check

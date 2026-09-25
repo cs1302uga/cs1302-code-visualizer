@@ -1,4 +1,4 @@
-# Example 24: Generic Integer Lists & Autoboxing (List<Integer> & ArrayList<Integer>)
+# Example 24: Generic Integer Lists & Autoboxing (`List<Integer>` & `ArrayList<Integer>`)
 
 This example demonstrates standard library generic lists (`List<Integer>` and `ArrayList<Integer>`), primitive autoboxing, in-place element mutation, and polymorphic method parameter passing.
 
