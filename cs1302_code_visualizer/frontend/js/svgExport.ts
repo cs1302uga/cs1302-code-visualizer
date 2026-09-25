@@ -3,6 +3,8 @@
  * This is a renderer for the visualizer's vocabulary, not a general HTML converter.
  */
 
+import { describeSvg } from "./svgDescription";
+
 const NS = "http://www.w3.org/2000/svg";
 
 function primitive(tag: string, attributes: Record<string, string | number> = {}): SVGElement {
@@ -35,11 +37,19 @@ export async function exportSvg(root: HTMLElement, scale = 1): Promise<string> {
   const top = Math.floor(origin.top + scrollY) - scrollY;
   const svg = primitive("svg", {
     width: width * scale, height: height * scale, viewBox: `0 0 ${width} ${height}`,
-    role: "img", "aria-label": "Java program memory state",
+    role: "img", "aria-labelledby": "state-title", "aria-describedby": "state-description",
+    style: "user-select:text;-webkit-user-select:text",
   });
-  const title = primitive("title");
-  title.textContent = "Java program memory state";
-  svg.append(title, primitive("rect", { width, height, fill: "white" }));
+  const description = describeSvg(root);
+  const title = primitive("title", { id: "state-title" });
+  title.textContent = description.summary;
+  const desc = primitive("desc", { id: "state-description" });
+  desc.textContent = description.sections.map(section =>
+    `${section.heading}\n${section.items.length ? section.items.join("\n") : "No visible entries."}`
+  ).join("\n\n");
+  const metadata = primitive("metadata", { "data-description": "1" });
+  metadata.textContent = JSON.stringify(description);
+  svg.append(title, desc, metadata, primitive("rect", { width, height, fill: "white" }));
   const defs = primitive("defs");
   svg.append(defs);
   let nextClip = 0;
@@ -213,6 +223,9 @@ export async function exportSvg(root: HTMLElement, scale = 1): Promise<string> {
   // SVG 1.1 consumers (including Inkscape's importer) need alpha separate
   // from RGB paint; CSS rgba() presentation attributes can render as black.
   for (const element of Array.from(svg.querySelectorAll("*"))) {
+    if (["rect", "path", "line", "polygon", "polyline", "circle", "ellipse"].includes(element.localName)) {
+      element.setAttribute("pointer-events", "none");
+    }
     for (const paint of ["fill", "stroke"]) {
       const color = element.getAttribute(paint) ?? "";
       const rgba = /^rgba\(([^)]+)\)$/.exec(color);

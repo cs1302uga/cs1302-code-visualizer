@@ -61,3 +61,43 @@ def test_gallery_validates_editable_svg_without_claiming_inkscape_check(tmp_path
     # The options recorded for each focused case are reproducible JSON values.
     for _, _, _, options, _ in cases():
         assert json.loads(json.dumps(options)) == options
+
+
+def test_inline_svg_scopes_references_and_exposes_one_structured_description(tmp_path):
+    from scripts.svg_gallery import inline_svg
+
+    path = tmp_path / "test.svg"
+    description = {
+        "summary": "One object",
+        "sections": [{"heading": "Heap <1>", "items": ["a & b"]}],
+    }
+    from html import escape
+
+    path.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title" aria-describedby="desc">'
+        '<title id="title">One object</title><desc id="desc">Full description</desc>'
+        f'<metadata data-description="1">{escape(json.dumps(description))}</metadata>'
+        '<defs><clipPath id="clip"><rect width="10" height="10"/></clipPath></defs>'
+        '<g clip-path="url(#clip)"><text>value</text></g></svg>'
+    )
+    first, transcript = inline_svg(path, "first")
+    second, _ = inline_svg(path, "second")
+    assert 'aria-label="One object"' in first
+    assert "<title" not in first
+    assert 'clip-path="url(#first-clip)"' in first
+    assert 'id="second-clip"' in second
+    assert "aria-describedby" not in first
+    assert "<desc" not in first
+    assert "metadata" not in first
+    assert "<h3>Heap &lt;1&gt;</h3><ul><li>a &amp; b</li>" in transcript
+    assert "<summary>Text description</summary>" in transcript
+
+    page = gallery_html(
+        [{"name": "test", "command": "run", "status": "ready", "png": True, "svg": True}],
+        "test",
+        tmp_path,
+    )
+    assert "<svg " in page
+    assert 'src="test.svg"' not in page
+    assert "<summary>Text description</summary>" in page
+    assert 'href="test.svg" download' in page

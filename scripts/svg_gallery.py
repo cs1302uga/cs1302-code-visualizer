@@ -56,14 +56,59 @@ def cases():
         yield f"edges-step{step}", source, [], {}, step
 
 
-def gallery_html(records: list[dict], stage: str) -> str:
+def inline_svg(path: Path, prefix: str) -> tuple[str, str]:
+    """Scope IDs for embedding and render the export's description as semantic HTML."""
+    root = ET.fromstring(path.read_bytes())
+    namespace = "{http://www.w3.org/2000/svg}"
+    metadata = root.find(f"{namespace}metadata[@data-description='1']")
+    description = json.loads(metadata.text) if metadata is not None else None
+    if description is None:
+        raise ValueError("SVG has no structured text description")
+    identifiers = {
+        e.attrib["id"]: f"{prefix}-{e.attrib['id']}" for e in root.iter() if "id" in e.attrib
+    }
+    for element in root.iter():
+        for key, value in list(element.attrib.items()):
+            if key == "id":
+                value = identifiers[value]
+            elif key in {"aria-labelledby", "aria-describedby"}:
+                value = " ".join(identifiers.get(token, token) for token in value.split())
+            else:
+                for original, replacement in identifiers.items():
+                    value = value.replace(f"url(#{original})", f"url(#{replacement})")
+            element.set(key, value)
+    # The adjacent disclosure is the single full narration in the gallery.
+    root.attrib.pop("aria-describedby", None)
+    root.attrib.pop("aria-labelledby", None)
+    root.set("aria-label", description["summary"])
+    root.remove(root.find(namespace + "title"))
+    root.remove(root.find(namespace + "desc"))
+    root.remove(metadata)
+    ET.register_namespace("", namespace[1:-1])
+    transcript = f'<details class="description"><summary>Text description</summary><p>{html.escape(description["summary"])}</p>'
+    for section in description["sections"]:
+        transcript += f"<h3>{html.escape(section['heading'])}</h3><ul>"
+        transcript += "".join(
+            f"<li>{html.escape(item)}</li>" for item in section["items"] or ["No visible entries."]
+        )
+        transcript += "</ul>"
+    return ET.tostring(root, encoding="unicode"), transcript + "</details>"
+
+
+def gallery_html(records: list[dict], stage: str, output: Path | None = None) -> str:
     """Build a local, accessible gallery that displays the original exports."""
     cards = []
     for row in records:
         name = html.escape(row["name"])
         panels = []
+        transcript = ""
         for format in ["png", "svg"]:
             filename = f"{name}.{format}"
+            display = f'<img src="{filename}" alt="{name} {format.upper()} export">'
+            if format == "svg" and row.get("svg"):
+                if output is None:
+                    raise ValueError("SVG gallery panels require an export directory")
+                display, transcript = inline_svg(output / f"{row['name']}.svg", row["name"])
             panels.append(
                 f"<figure><figcaption>{format.upper()} · "
                 + (
@@ -72,17 +117,13 @@ def gallery_html(records: list[dict], stage: str) -> str:
                     else "Unavailable"
                 )
                 + "</figcaption>"
-                + (
-                    f'<img src="{filename}" alt="{name} {format.upper()} export">'
-                    if row.get(format)
-                    else '<p class="missing">Export unavailable</p>'
-                )
+                + (display if row.get(format) else '<p class="missing">Export unavailable</p>')
                 + "</figure>"
             )
         cards.append(
             f'<article id="{name}"><h2>{name}</h2>'
             f'<p class="status">{html.escape(row["status"])}</p>'
-            f'<div class="pair">{"".join(panels)}</div>'
+            f'<div class="pair">{"".join(panels)}</div>{transcript}'
             f"<details><summary>Reproduce this comparison</summary>"
             f"<pre>{html.escape(row['command'])}</pre>"
             f"<pre>{html.escape(json.dumps(row.get('options', {}), indent=2))}</pre>"
@@ -108,11 +149,12 @@ article{background:white;border:1px solid var(--rule);border-radius:8px;padding:
 .pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
 figure{margin:0;min-width:0;border:1px solid var(--rule);overflow:auto;background:white}
 figcaption{padding:8px 12px;background:var(--paper);font:13px/1.5 monospace;border-bottom:1px solid var(--rule)}
-img{display:block;max-width:100%;height:auto}.status{color:var(--muted)}.missing{padding:24px;color:#9b2d27}
+img,figure svg{display:block;max-width:100%;height:auto}.status{color:var(--muted)}.missing{padding:24px;color:#9b2d27}
 details{margin-top:16px}summary{cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
 @media(max-width:700px){.pair{grid-template-columns:1fr}header,main{padding:12px}article{padding:12px}}
 </style><header><p>CODE VISUALIZER / EXPORT LAB</p><h1>One state. Two formats.</h1>
 <p>Original PNG and SVG exports from identical traces and presentation options.</p>
+<p>Select and copy text in the SVG panels. Expand Text description to read the stack and heap as headings and lists.</p>
 """
         + f"<p>Milestone: {html.escape(stage)} · {len(records)} comparisons</p></header><main>"
         + "".join(cards)
@@ -315,7 +357,7 @@ def main() -> None:
     if not records:
         parser.error("no matching cases")
     (output / "results.json").write_text(json.dumps(records, indent=2))
-    (output / "index.html").write_text(gallery_html(records, args.stage))
+    (output / "index.html").write_text(gallery_html(records, args.stage, output))
     capture_gallery(output)
     print(output / "index.html")
     if any(row["status"].startswith("FAILED") for row in records):

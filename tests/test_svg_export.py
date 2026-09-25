@@ -83,3 +83,20 @@ def test_svg_frontend_error_propagates_without_raster_fallback():
 def test_svg_invalid_scale_fails(rendering_session):
     with pytest.raises(ValueError, match="SVG scale must be positive"):
         generate_image(TRACE, format="SVG", dpi=0, session=rendering_session)
+
+
+def test_svg_exposes_summary_and_complete_nonrecursive_description(rendering_session):
+    svg = ET.fromstring(generate_image(TRACE, format="SVG", session=rendering_session))
+    title = svg.find("s:title", NS)
+    desc = svg.find("s:desc", NS)
+    metadata = svg.find("s:metadata", NS)
+    assert svg.attrib["aria-labelledby"] == title.attrib["id"]
+    assert svg.attrib["aria-describedby"] == desc.attrib["id"]
+    structured = json.loads(metadata.text)
+    assert title.text == structured["summary"]
+    assert structured["sections"][0]["heading"].startswith("Stack frame:")
+    assert "reference to object" in desc.text
+    assert '"Alice"' in desc.text
+    for section in structured["sections"]:
+        assert section["heading"] in desc.text
+        assert all(item in desc.text for item in section["items"])
