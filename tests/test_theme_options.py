@@ -46,6 +46,9 @@ def test_exported_svg_follows_host_and_system_theme(rendering_session):
         for theme, expected in [("light", "rgb(30, 30, 30)"), ("dark", "rgb(207, 208, 208)")]:
             driver.execute_script("document.body.dataset.theme = arguments[0]", theme)
             assert text_color() == expected
+            assert driver.execute_script(
+                "return getComputedStyle(document.querySelector('[data-codevis-fill=canvas]')).fill"
+            ) == "rgba(0, 0, 0, 0)"
         driver.execute_script("document.body.dataset.theme = 'auto'")
         try:
             for scheme, expected in [("dark", "rgb(207, 208, 208)"), ("light", "rgb(30, 30, 30)")]:

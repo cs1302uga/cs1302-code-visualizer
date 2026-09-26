@@ -519,10 +519,10 @@ class BatchRenderJob:
     type_style: str = "simple"
     stdin: str = ""
     timeout_secs: int | None = None
-    theme: Theme | None = None
     array_orientation: ArrayOrientation = "horizontal"
     alternate_array_orientations: bool = False
     array_orientations: dict[str, ArrayOrientation] | None = None
+    theme: Theme | None = None
 
     def __post_init__(self) -> None:
         """Reject invalid array settings before a batch job starts tracing."""

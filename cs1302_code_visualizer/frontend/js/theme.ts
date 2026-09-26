@@ -41,7 +41,7 @@ ${roots}[data-codevis-theme="dark"] { ${defaults("dark")} }
 /* An explicit instance choice wins over both the host and the OS preference. */
 ${roots}[data-codevis-theme="light"] { ${defaults("light")} }
 ${roots}[data-codevis-theme="dark"] { ${defaults("dark")} }
-svg.codevis-diagram:not(:root) { --_codevis-canvas: transparent; }
+svg.codevis-diagram:not(:root) { --_codevis-canvas: transparent !important; }
 ${Object.keys(palettes.light).map(role => `
 svg.codevis-diagram [data-codevis-fill="${role}"] { fill: ${paint(role as PaintRole)}; }
 svg.codevis-diagram [data-codevis-stroke="${role}"] { stroke: ${paint(role as PaintRole)}; }
