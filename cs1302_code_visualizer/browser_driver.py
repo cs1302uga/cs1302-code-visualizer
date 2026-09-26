@@ -19,8 +19,8 @@ import os
 import shutil
 import sys
 import uuid
-from collections.abc import Sequence
-from contextlib import contextmanager
+from collections.abc import Generator, Sequence
+from contextlib import contextmanager, nullcontext
 from importlib import metadata
 from io import BytesIO
 from pathlib import Path
@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
     from .session import RenderingSession
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from weakref import WeakKeyDictionary
 
 from PIL import Image
@@ -151,42 +151,6 @@ def get_webdriver(dpi: int = 1) -> webdriver.Chrome:
     return new_webdriver(dpi)
 
 
-def tidy_set_window_size_for_element(driver: webdriver.Remote, element: WebElement) -> None:
-    """Set the driver's window size for the target element."""
-    driver.set_window_size(
-        int(element.location["x"] + element.size["width"]),
-        int(element.location["y"] + element.size["height"]),
-    )
-
-    window_size: dict[str, int] = driver.get_window_size()
-
-    client_size: dict[str, int] = {
-        "width": driver.execute_script("return document.documentElement.clientWidth;"),
-        "height": driver.execute_script("return document.documentElement.clientHeight;"),
-    }
-
-    offset_size: dict[str, int] = {
-        "width": window_size["width"] - client_size["width"],
-        "height": window_size["height"] - client_size["height"],
-    }
-
-    new_width = int(
-        max(
-            element.location["x"] + element.size["width"],
-            element.location["x"] + element.size["width"] + offset_size["width"],
-        )
-    )
-
-    new_height = int(
-        max(
-            element.location["y"] + element.size["height"],
-            element.location["y"] + element.size["height"] + offset_size["height"],
-        )
-    )
-
-    driver.set_window_size(new_width, new_height)
-
-
 class OnlinePythonTutor(TypedDict):
     """Dictionary container holding frontend web driver and element handles."""
 
@@ -260,6 +224,44 @@ def _browser_scope(dpi: int, session: RenderingSession | None):
             driver.quit()
 
 
+def _wait_for_screenshot_ready(driver: webdriver.Chrome) -> WebElement:
+    """Wait for the frontend's existing readiness signal without polling.
+
+    Args:
+        driver: Browser currently displaying the frontend document.
+
+    Returns:
+        The readiness indicator inserted by the frontend.
+
+    Raises:
+        NoSuchElementException: If the indicator is absent after four seconds.
+    """
+    result: object = driver.execute_async_script(
+        """
+        const done = arguments[arguments.length - 1];
+        const existing = document.getElementById('screenshotReadyIndicator');
+        if (existing) { done(existing); return; }
+        let finished = false;
+        const observer = new MutationObserver(() => {
+            const element = document.getElementById('screenshotReadyIndicator');
+            if (element) finish(element);
+        });
+        const timer = setTimeout(() => finish(null), 4000);
+        function finish(element) {
+            if (finished) return;
+            finished = true;
+            observer.disconnect();
+            clearTimeout(timer);
+            done(element);
+        }
+        observer.observe(document, {childList: true, subtree: true});
+        """
+    )
+    if not isinstance(result, WebElement):
+        raise NoSuchElementException("screenshotReadyIndicator was not found within four seconds")
+    return result
+
+
 @contextmanager
 def online_python_tutor_frontend(
     trace: str,
@@ -310,7 +312,7 @@ def online_python_tutor_frontend(
 
         driver.get(frontend_uri)
 
-        _ = driver.find_element(By.ID, "screenshotReadyIndicator")
+        _ = _wait_for_screenshot_ready(driver)
         vizDiv = driver.find_element(By.ID, "visualizerDiv")
         if visualizer == "json-pre":
             try:
@@ -559,7 +561,7 @@ def generate_image(
 
     Args:
         trace: The execution trace file.
-        dpi: Dots Per Inch (DPI), a positive integer used to scale the driver's display resolution.
+        dpi: Positive integer output scale; diagram layout stays in CSS pixels.
         format: SVG for standalone vector output; raster formats use PIL's ``Image.save()``.
         include_types: Whether or not type tags should be included in this visualization.
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
@@ -579,9 +581,11 @@ def generate_image(
     trace_json = resolve_trace_payload(trace, breakpoint=breakpoint)
     trace = json.dumps(trace_json)
 
+    # Lay out every format at 1x; scale raster capture instead of changing font
+    # metrics through the browser's device scale factor.
     with online_python_tutor_frontend(
         trace=trace,
-        dpi=1 if format.upper() == "SVG" else dpi,
+        dpi=1,
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
@@ -604,6 +608,33 @@ def generate_image(
         )
 
 
+def _fit_capture_viewport(
+    driver: webdriver.Chrome, viz: WebElement, session: RenderingSession | None
+) -> None:
+    """Fit once before export; sequences retain this viewport for every step."""
+    driver.execute_async_script(
+        "const done = arguments[arguments.length - 1]; document.fonts.ready.then(() => done());"
+    )
+    if session is None:
+        _prepare_session_viewport(driver)
+    # Use virtual fitting in both ownership modes: native resizing can stall
+    # Chrome's direct screenshot capture. Output scale is applied at capture time.
+    _fit_session_viewport(driver, viz, 1)
+
+
+def _export_bounds(driver: webdriver.Chrome, viz: WebElement) -> dict[str, int]:
+    """Wait for layout and connectors, then measure padded document coordinates."""
+    result = driver.execute_async_script(
+        "const [root, done] = arguments;"
+        "window.prepareVisualizationExport(root).then("
+        "bounds => done({bounds}), error => done({error: String(error)}));",
+        viz,
+    )
+    if "error" in result:
+        raise ValueError(f"Export bounds failed: {result['error']}")
+    return result["bounds"]
+
+
 def _capture_viz(
     driver: webdriver.Chrome,
     viz: WebElement,
@@ -612,79 +643,63 @@ def _capture_viz(
     format: str,
     visualizer: str,
     session: RenderingSession | None,
+    bounds: dict[str, int] | None = None,
 ) -> bytes:
-    if session is None:
-        tidy_set_window_size_for_element(driver, viz)
+    if bounds is None:
+        _fit_capture_viewport(driver, viz, session)
+        bounds = _export_bounds(driver, viz)
     else:
-        _fit_session_viewport(driver, viz, 1 if format.upper() == "SVG" else dpi)
-
-    loc = viz.location
-    size = viz.size
-    (left, top, right, bottom) = (
-        int(loc["x"]),
-        int(loc["y"]),
-        int(loc["x"] + size["width"]),
-        int(loc["y"] + size["height"]),
-    )
-
-    if visualizer != "json-pre":
-        _ = driver.execute_script(
-            "if (window.optFrontend && window.optFrontend.redrawConnectors) "
-            "{ window.optFrontend.redrawConnectors(); }"
-        )
+        current = _export_bounds(driver, viz)
+        if any(current[edge] < bounds[edge] for edge in ("left", "top")) or any(
+            current[edge] > bounds[edge] for edge in ("right", "bottom")
+        ):
+            raise ValueError("Visualization layout changed after measuring sequence bounds")
 
     if format.upper() == "SVG":
         result = driver.execute_async_script(
-            "const [root, scale, done] = arguments;"
-            "window.exportVisualizationSvg(root, scale).then("
+            "const [root, scale, bounds, done] = arguments;"
+            "window.exportVisualizationSvg(root, scale, bounds).then("
             "svg => done({svg}), error => done({error: String(error)}));",
             viz,
             dpi,
+            bounds,
         )
         if "error" in result:
             raise ValueError(f"SVG export failed: {result['error']}")
         return result["svg"].encode("utf-8")
 
-    if session is not None:
-        result = driver.execute_cdp_cmd(
-            "Page.captureScreenshot",
-            {
-                "format": "png",
-                "captureBeyondViewport": True,
-                "clip": {
-                    "x": left,
-                    "y": top,
-                    "width": right - left,
-                    "height": bottom - top,
-                    "scale": 1,
-                },
+    # Both browser ownership modes capture beyond the viewport. Native screenshots
+    # truncate overflowing steps and cannot guarantee a shared sequence canvas.
+    left, top = max(0, bounds["left"]), max(0, bounds["top"])
+    result = driver.execute_cdp_cmd(
+        "Page.captureScreenshot",
+        {
+            "format": "png",
+            "captureBeyondViewport": True,
+            "clip": {
+                "x": left,
+                "y": top,
+                "width": bounds["right"] - left,
+                "height": bounds["bottom"] - top,
+                "scale": dpi,
             },
+        },
+    )
+    captured = Image.open(BytesIO(base64.b64decode(result["data"])))
+    if left != bounds["left"] or top != bounds["top"]:
+        # Padding may extend beyond the document origin; fill it with the canvas
+        # color rather than asking Chrome for negative screenshot coordinates.
+        background = driver.execute_script("return getComputedStyle(document.body).backgroundColor")
+        padded = Image.new(
+            "RGB",
+            ((bounds["right"] - bounds["left"]) * dpi, (bounds["bottom"] - bounds["top"]) * dpi),
+            background,
         )
-        captured = Image.open(BytesIO(base64.b64decode(result["data"])))
-        output = BytesIO()
-        captured.save(output, format=format)
-        return output.getvalue()
-
-    screenshot = driver.get_screenshot_as_png()
-
-    # crop the screenshot down to the element borders
-    screenshot_bytes = BytesIO()
-    pil_img = Image.open(BytesIO(screenshot))
-
-    crop_box: tuple[float, float, float, float] = (
-        float(dpi * left),
-        float(dpi * top),
-        float(dpi * right),
-        float(dpi * bottom),
-    )
-    pil_img = pil_img.crop(crop_box)
-
-    pil_img.save(
-        screenshot_bytes,
-        format=format,
-    )
-
-    return screenshot_bytes.getvalue()
+        padded.paste(captured, ((left - bounds["left"]) * dpi, (top - bounds["top"]) * dpi))
+        captured = padded
+    output = BytesIO()
+    captured.save(output, format=format)
+    return output.getvalue()
 
 
 def generate_step_images(
@@ -707,7 +722,7 @@ def generate_step_images(
 
     Args:
         trace: The execution trace file.
-        dpi: Dots Per Inch (DPI), a positive integer used to scale the driver's display resolution.
+        dpi: Positive integer output scale; diagram layout stays in CSS pixels.
         format: SVG for standalone vector output; raster formats use PIL's ``Image.save()``.
         include_types: Whether or not type tags should be included in this visualization.
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
@@ -756,7 +771,7 @@ def generate_step_images(
 
     with online_python_tutor_frontend(
         trace=trace_str,
-        dpi=1 if format.upper() == "SVG" else dpi,
+        dpi=1,
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
@@ -769,8 +784,17 @@ def generate_step_images(
         driver = frontend["driver"]
         viz = frontend["dataViz"]
 
+        _fit_capture_viewport(driver, viz, session)
+        step_bounds = []
         for step in range(num_steps):
-            _ = driver.execute_script(f"window.optFrontend.renderStep({step});")
+            driver.execute_script("window.optFrontend.renderStep(arguments[0]);", step)
+            step_bounds.append(_export_bounds(driver, viz))
+        bounds = {
+            edge: combine(rect[edge] for rect in step_bounds)
+            for edge, combine in (("left", min), ("top", min), ("right", max), ("bottom", max))
+        }
+        for step in range(num_steps):
+            driver.execute_script("window.optFrontend.renderStep(arguments[0]);", step)
             img_bytes = _capture_viz(
                 driver,
                 viz,
@@ -778,9 +802,147 @@ def generate_step_images(
                 format=format,
                 visualizer=visualizer,
                 session=session,
+                bounds=bounds,
             )
             images.append(img_bytes)
 
+    return images
+
+
+@contextmanager
+def _snapshot_frame(
+    driver: webdriver.Chrome, payload: str, frontend_uri: str
+) -> Generator[WebElement]:
+    """Load one independent document while retaining the surrounding browser host.
+
+    A new document retains the original font-loading and heap-layout behavior.
+    Replacing only the diagram would reuse loaded fonts during construction and
+    change its heap spacing. The borderless frame occupies the full viewport, so
+    element coordinates match a top-level document during virtual viewport fitting.
+    """
+    with NamedTemporaryFile(mode="w", encoding="utf-8") as trace_file:
+        trace_file.write(payload)
+        trace_file.flush()
+        address = urlsplit(frontend_uri)
+        parameters = dict(parse_qsl(address.query))
+        parameters["tracePath"] = trace_file.name
+        uri = urlunsplit(address._replace(query=urlencode(parameters)))
+        frame = driver.execute_script(
+            "document.getElementById('visualizerDiv').style.display = 'none';"
+            "const frame = document.createElement('iframe');"
+            "frame.style.cssText = 'position:fixed;left:0;top:0;width:100vw;height:100vh;border:0';"
+            "frame.src = arguments[0]; document.body.appendChild(frame); return frame;",
+            uri,
+        )
+        try:
+            driver.switch_to.frame(frame)
+            _ = _wait_for_screenshot_ready(driver)
+            yield driver.find_element(By.ID, "dataViz")
+        finally:
+            driver.switch_to.default_content()
+            driver.execute_script("arguments[0].remove();", frame)
+
+
+def generate_snapshot_images(
+    traces: Sequence[str],
+    *,
+    dpi: int = 1,
+    format: str = "PNG",
+    include_types: bool = True,
+    text_memory_labels: bool = False,
+    strip_type_prefixes: Sequence[str] | None = None,
+    theme: Theme | None = None,
+    array_orientation: ArrayOrientation = "horizontal",
+    alternate_array_orientations: bool = False,
+    array_orientations: dict[str, ArrayOrientation] | None = None,
+    breakpoint: int | tuple[int, int] | None = -1,
+    visualizer: str = "pytutor",
+    session: RenderingSession | None = None,
+) -> list[bytes]:
+    """Render independent payloads in order while retaining one browser host.
+
+    Each payload has its own source and trace history. Subsequent payloads load
+    the unchanged frontend in a fresh full-viewport frame, preserving original
+    font timing, heap spacing, and connector state. No partial list is returned
+    on failure. The JSON text visualizer uses the existing individual-image path.
+
+    Args:
+        traces: Independent JSON payload strings, in requested output order.
+        dpi: Positive output scale; diagram layout stays in CSS pixels.
+        format: SVG or a raster format supported by Pillow.
+        include_types: Whether to display type tags.
+        text_memory_labels: Whether to replace reference arrows with labels.
+        strip_type_prefixes: Prefixes removed from displayed type names.
+        theme: Light, dark, auto, or None for the default adaptive theme.
+        array_orientation: Base orientation of array objects.
+        alternate_array_orientations: Whether successive dimensions alternate.
+        array_orientations: Per-object orientation overrides.
+        breakpoint: Breakpoint selection applied independently to each payload.
+        visualizer: Visualizer implementation, either pytutor or json-pre.
+        session: Optional build-scoped browser owner.
+
+    Returns:
+        One image per payload, or an empty list without opening a browser.
+
+    """
+    if not traces:
+        return []
+    payloads = [resolve_trace_payload(trace, breakpoint=breakpoint) for trace in traces]
+    if len(traces) == 1 or visualizer == "json-pre":
+        return [
+            generate_image(
+                trace,
+                dpi=dpi,
+                format=format,
+                include_types=include_types,
+                text_memory_labels=text_memory_labels,
+                strip_type_prefixes=strip_type_prefixes,
+                array_orientation=array_orientation,
+                alternate_array_orientations=alternate_array_orientations,
+                array_orientations=array_orientations,
+                breakpoint=breakpoint,
+                visualizer=visualizer,
+                **theme_options(theme),
+                session=session,
+            )
+            for trace in traces
+        ]
+    images: list[bytes] = []
+    with online_python_tutor_frontend(
+        trace=json.dumps(payloads[0]),
+        dpi=1,
+        include_types=include_types,
+        text_memory_labels=text_memory_labels,
+        strip_type_prefixes=strip_type_prefixes,
+        array_orientation=array_orientation,
+        alternate_array_orientations=alternate_array_orientations,
+        array_orientations=array_orientations,
+        visualizer=visualizer,
+        **{**theme_options(theme), **({"session": session} if session is not None else {})},
+    ) as frontend:
+        driver = frontend["driver"]
+        frontend_uri = driver.current_url
+        for index, payload in enumerate(payloads):
+            if index:
+                # Each document starts with the same un-fitted viewport as an
+                # individual request, including when no session was supplied.
+                _prepare_session_viewport(driver)
+            context = (
+                _snapshot_frame(driver, json.dumps(payload), frontend_uri)
+                if index
+                else nullcontext(frontend["dataViz"])
+            )
+            with context as viz:
+                images.append(
+                    _capture_viz(
+                        driver,
+                        viz,
+                        dpi=dpi,
+                        format=format,
+                        visualizer=visualizer,
+                        session=session,
+                    )
+                )
     return images
 
 

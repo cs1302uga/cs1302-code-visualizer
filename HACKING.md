@@ -7,7 +7,7 @@ Use the renderer in course builds or other Python applications. For command-line
 Use Python 3.13 or newer and the browser prerequisites in the [installation guide](README.md#install). Download a release wheel, then add it to your uv project, substituting its actual path:
 
 ```sh
-uv add ./cs1302_code_visualizer-0.16.1-py3-none-any.whl
+uv add ./cs1302_code_visualizer-0.16.2-py3-none-any.whl
 ```
 
 The following recipes run in order in one Python script, using `Main.java` from the instructor quickstart. Run the script with `uv run python your_script.py`.
@@ -94,6 +94,41 @@ print(preview)
 
 Set `dry_run=False` to remove entries unused for the selected period, or delete the cache directory to force retracing.
 
+## Render independent snapshots together
+
+For existing JSON payloads that share rendering options, use
+`generate_snapshot_images`:
+
+```python
+from pathlib import Path
+
+from cs1302_code_visualizer import RenderingSession, generate_snapshot_images
+
+payloads = [Path(name).read_text(encoding="utf-8") for name in ("first.json", "second.json")]
+with RenderingSession(max_browsers=2) as session:
+    images = generate_snapshot_images(payloads, format="SVG", theme="auto", session=session)
+for index, image in enumerate(images):
+    Path(f"snapshot-{index}.svg").write_bytes(image)
+```
+
+Each string is an independent payload and may contain a different program.
+The result preserves input order, including repeated payloads. Empty input returns
+an empty list without launching a browser. An error raises without returning a
+partial list; callers may retry the individual payloads to isolate a failure.
+All payloads in a call use the same options, including breakpoint selection and
+`theme` (`light`, `dark`, `auto`, or omitted for adaptive output). Each image gets
+its own tight crop; changing the batch order, membership, or cache-miss subset
+does not change its framing.
+
+The API keeps one browser lease and host document for the call. Subsequent payloads
+load the unchanged renderer in fresh full-viewport frames, then discard those
+frames. This preserves the font-loading timing and heap spacing of individual
+images. It does not share a diagram's layout history between programs.
+`generate_step_images` remains the API for chronological steps of one trace.
+Singleton inputs and the `json-pre` visualizer use the individual-image path.
+For parallel builds, submit bounded groups through the same `RenderingSession`;
+one group occupies one browser until its images are complete.
+
 ## Handle failures and program input
 
 ```python
@@ -113,7 +148,7 @@ Use `stdin` or `stdin_file` to supply input to the Java program. Set a trace tim
 
 - `BatchRenderJob` and `render_batch_images`: render multiple jobs and yield image mappings in input order, optionally using a shared session.
 - `generate_trace`: produce a trace for a selected JDK and source.
-- `generate_image` and `generate_step_images`: render existing trace JSON, optionally with a session.
+- `generate_image`, `generate_step_images`, and `generate_snapshot_images`: render existing trace JSON, optionally with a session.
 - `render_html`: produce an HTML embed from a trace.
 
 See the exported APIs and docstrings in [the package](cs1302_code_visualizer/__init__.py), [browser driver](cs1302_code_visualizer/browser_driver.py), and [session module](cs1302_code_visualizer/session.py) for signatures and return types. For example, `help(render_images)` shows the installed version's parameter documentation.

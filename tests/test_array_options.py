@@ -269,6 +269,17 @@ def test_image_apis_forward_options_to_browser(steps, monkeypatch):
     factory = MagicMock(return_value=frontend)
     monkeypatch.setattr(browser_driver, "online_python_tutor_frontend", factory)
     monkeypatch.setattr(browser_driver, "_capture_viz", lambda *a, **kw: b"image")
+    monkeypatch.setattr(browser_driver, "_fit_capture_viewport", lambda *a: None)
+    monkeypatch.setattr(
+        browser_driver,
+        "_export_bounds",
+        lambda *a: {
+            "left": 0,
+            "top": 0,
+            "right": 100,
+            "bottom": 100,
+        },
+    )
     assert browser_driver.generate_step_images(json.dumps(trace), **OPTIONS) == [b"image"] * steps
     assert {key: factory.call_args.kwargs[key] for key in OPTIONS} == OPTIONS
 

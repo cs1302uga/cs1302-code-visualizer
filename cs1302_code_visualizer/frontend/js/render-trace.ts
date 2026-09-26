@@ -7,9 +7,14 @@ import { ExecutionVisualizer } from "./pytutor";
 import { JsonPreVisualizer, VisualizerInstance } from "./CodeVisualizer";
 import { arrayOrientationOptionsFromParams } from "./arrayOrientation";
 import { exportSvg } from "./svgExport";
+import { measureExportBounds, settleExport } from "./exportBounds";
 import { applyTheme, Theme } from "./theme";
 
 (window as any).exportVisualizationSvg = exportSvg;
+(window as any).prepareVisualizationExport = async (root: HTMLElement) => {
+  await settleExport(() => (window as any).optFrontend?.redrawConnectors?.());
+  return measureExportBounds(root);
+};
 
 document.addEventListener("DOMContentLoaded", () => {
   const urlParams = new URLSearchParams(window.location.search);

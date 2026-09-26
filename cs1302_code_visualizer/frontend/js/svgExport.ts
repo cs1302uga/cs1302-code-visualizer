@@ -5,6 +5,7 @@
 
 import { describeSvg } from "./svgDescription";
 import { PaintRole, palettes, paintRole, themeCss } from "./theme";
+import { ExportBounds, measureExportBounds } from "./exportBounds";
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -35,18 +36,17 @@ function themedPrimitive(
  * Serialize a diagram after fonts and layout have settled. Coordinates stay in
  * CSS pixels; scale changes only the declared outer dimensions.
  */
-export async function exportSvg(root: HTMLElement, scale = 1): Promise<string> {
+export async function exportSvg(root: HTMLElement, scale = 1, bounds?: ExportBounds): Promise<string> {
   if (!Number.isFinite(scale) || scale <= 0) {
     throw new Error("SVG scale must be positive and finite");
   }
   await document.fonts.ready;
-  const origin = root.getBoundingClientRect();
-  // Match the integer screenshot crop used by the Python capture pipeline.
-  const width = Math.round(origin.width);
-  const height = Math.round(origin.height);
+  const crop = bounds ?? measureExportBounds(root);
+  const width = crop.right - crop.left;
+  const height = crop.bottom - crop.top;
   if (width <= 0 || height <= 0) throw new Error("Cannot export an empty diagram");
-  const left = Math.floor(origin.left + scrollX) - scrollX;
-  const top = Math.floor(origin.top + scrollY) - scrollY;
+  const left = crop.left - scrollX;
+  const top = crop.top - scrollY;
   const svg = primitive("svg", {
     width: width * scale, height: height * scale, viewBox: `0 0 ${width} ${height}`,
     role: "img", "aria-labelledby": "state-title", "aria-describedby": "state-description",

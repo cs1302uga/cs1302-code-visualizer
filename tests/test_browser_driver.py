@@ -199,6 +199,7 @@ def test_online_python_tutor_frontend_json_pre(sample_trace_json):
 def test_online_python_tutor_frontend_json_pre_fallback(monkeypatch, sample_trace_json):
     mock_driver = MagicMock()
     mock_elem = MagicMock()
+    mock_driver.execute_async_script.return_value = MagicMock(spec=browser_driver.WebElement)
     mock_viz_div = MagicMock()
     mock_viz_div.find_element.side_effect = NoSuchElementException("No pre tag")
 
@@ -218,10 +219,7 @@ def test_generate_image_breakpoint_resolution_branches(sample_trace_json):
     data = json.loads(sample_trace_json)
 
     mock_driver = MagicMock()
-    mock_driver.get_screenshot_as_png.return_value = b"\x89PNG\r\n\x1a\n"
     mock_viz = MagicMock()
-    mock_viz.location = {"x": 0, "y": 0}
-    mock_viz.size = {"width": 100, "height": 100}
 
     mock_ctx = MagicMock()
     mock_ctx.__enter__.return_value = {
@@ -230,16 +228,12 @@ def test_generate_image_breakpoint_resolution_branches(sample_trace_json):
         "wait": MagicMock(),
     }
     with (
-        patch("cs1302_code_visualizer.browser_driver.tidy_set_window_size_for_element"),
+        patch("cs1302_code_visualizer.browser_driver._capture_viz", return_value=b"image"),
         patch(
             "cs1302_code_visualizer.browser_driver.online_python_tutor_frontend",
             return_value=mock_ctx,
         ),
-        patch("PIL.Image.open") as mock_img_open,
     ):
-        mock_im = MagicMock()
-        mock_img_open.return_value = mock_im
-
         # 1. Breakpoints dict with tuple (found list, in range & out of range)
         t1 = json.dumps({"breakpoints": {"6": [data, data]}})
         _ = generate_image(t1, breakpoint=(6, 1))
