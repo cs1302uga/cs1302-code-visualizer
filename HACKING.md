@@ -117,3 +117,28 @@ Use `stdin` or `stdin_file` to supply input to the Java program. Set a trace tim
 - `render_html`: produce an HTML embed from a trace.
 
 See the exported APIs and docstrings in [the package](cs1302_code_visualizer/__init__.py), [browser driver](cs1302_code_visualizer/browser_driver.py), and [session module](cs1302_code_visualizer/session.py) for signatures and return types. For example, `help(render_images)` shows the installed version's parameter documentation.
+
+## Visualization themes
+
+Image APIs (`render_image`, `render_images`, `BatchRenderJob`, `generate_image`,
+`generate_step_images`) and `render_html` accept `theme="light"`, `"dark"`, or
+`"auto"`. Omit it for a light standalone export that adapts when its SVG markup
+is embedded inline. An explicit choice stays on that instance. Auto follows the
+operating system's color preference, including changes after loading.
+
+Inline SVGs and interactive visualizers follow an ancestor's
+`data-theme="light|dark|auto"` attribute, as used by the textbook. An SVG loaded
+through `<img>` cannot inherit its host document's theme; embed its markup to
+allow switching. Inline diagram canvases are transparent. Printing uses the
+light palette. Literal Java `Color` swatches and their alpha checkerboards keep
+their program values.
+
+The shared palette uses neutral surfaces, blue references, and muted references
+originating from inactive stack frames. Heap-to-heap references retain their blue
+color. Dots, paths, and arrowheads share the connector's role.
+
+Host styles can override semantic variables such as `--codevis-text`,
+`--codevis-muted`, `--codevis-object`, `--codevis-value`, `--codevis-arrow`, and
+`--codevis-inactiveArrow`. Default text colors meet 7:1 contrast and meaningful
+borders/connectors meet 3:1 against the default surfaces. These checks cover the
+palette, not complete WCAG conformance; custom host colors need their own checks.

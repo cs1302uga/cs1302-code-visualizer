@@ -50,6 +50,7 @@ from .array_options import (
     validate_array_options,
 )
 from .errors import CodeVisRenderError
+from .theme_options import Theme, add_theme_argument, theme_options
 from .util.certificates import ensure_certifi_bundle
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -267,6 +268,7 @@ def online_python_tutor_frontend(
     include_types: bool = True,
     text_memory_labels: bool = True,
     strip_type_prefixes: Sequence[str] | None = None,
+    theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
     array_orientations: dict[str, ArrayOrientation] | None = None,
@@ -274,6 +276,7 @@ def online_python_tutor_frontend(
     session: RenderingSession | None = None,
 ):
     """Context manager for interacting with the OnlinePythonTutor frontend in Chrome."""
+    theme_options(theme)
     validate_array_options(array_orientation, alternate_array_orientations, array_orientations)
     prefixes = list(strip_type_prefixes) if strip_type_prefixes is not None else []
     frontend_path = (this_files_dir / "frontend" / "render-trace.html").as_uri()
@@ -299,6 +302,9 @@ def online_python_tutor_frontend(
             "alternateArrayOrientations": str(alternate_array_orientations).lower(),
             "arrayOrientations": json.dumps(array_orientations or {}),
         }
+
+        if theme is not None:
+            frontend_query["theme"] = theme
 
         frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
 
@@ -443,6 +449,7 @@ def render_html(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
     array_orientations: dict[str, ArrayOrientation] | None = None,
@@ -462,6 +469,7 @@ def render_html(
         include_types: Whether type labels should be included in the visualization.
         text_memory_labels: Whether memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: List of package prefixes to strip from displayed types.
+        theme: Light, dark, auto, or None for the default host-inherited theme.
         array_orientation: Base array orientation, or the 1D orientation when alternating.
         alternate_array_orientations: Flip orientation for each additional dimension.
         array_orientations: Per-heap-object orientation overrides, taking precedence over the base.
@@ -474,6 +482,7 @@ def render_html(
     Returns:
         HTML snippet containing the container <div>, optional bundle <script> tag, and inline initialization <script>.
     """
+    theme_options(theme)
     validate_array_options(array_orientation, alternate_array_orientations, array_orientations)
     trace_data = resolve_trace_payload(trace, breakpoint=breakpoint)
 
@@ -487,6 +496,7 @@ def render_html(
     safe_json_trace = json.dumps(trace_data).replace("</", r"<\/")
 
     options_dict: dict[str, Any] = {
+        **theme_options(theme),
         "includeTypes": include_types,
         "textualMemoryLabels": text_memory_labels,
         "stripTypePrefixes": list(strip_type_prefixes) if strip_type_prefixes is not None else [],
@@ -535,6 +545,7 @@ def generate_image(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
     array_orientations: dict[str, ArrayOrientation] | None = None,
@@ -553,6 +564,7 @@ def generate_image(
         include_types: Whether or not type tags should be included in this visualization.
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        theme: Light, dark, auto, or None for the default host-inherited theme.
         array_orientation: Base array orientation, or the 1D orientation when alternating.
         alternate_array_orientations: Flip orientation for each additional dimension.
         array_orientations: Per-heap-object orientation overrides, taking precedence over the base.
@@ -577,7 +589,7 @@ def generate_image(
         alternate_array_orientations=alternate_array_orientations,
         array_orientations=array_orientations,
         visualizer=visualizer,
-        **({"session": session} if session is not None else {}),
+        **{**theme_options(theme), **({"session": session} if session is not None else {})},
     ) as frontend:
         driver: webdriver.Chrome = frontend["driver"]
         viz: WebElement = frontend["dataViz"]
@@ -683,6 +695,7 @@ def generate_step_images(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
     array_orientations: dict[str, ArrayOrientation] | None = None,
@@ -699,6 +712,7 @@ def generate_step_images(
         include_types: Whether or not type tags should be included in this visualization.
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        theme: Light, dark, auto, or None for the default host-inherited theme.
         array_orientation: Base array orientation, or the 1D orientation when alternating.
         alternate_array_orientations: Flip orientation for each additional dimension.
         array_orientations: Per-heap-object orientation overrides, taking precedence over the base.
@@ -727,6 +741,7 @@ def generate_step_images(
                 include_types=include_types,
                 text_memory_labels=text_memory_labels,
                 strip_type_prefixes=strip_type_prefixes,
+                **theme_options(theme),
                 array_orientation=array_orientation,
                 alternate_array_orientations=alternate_array_orientations,
                 array_orientations=array_orientations,
@@ -749,7 +764,7 @@ def generate_step_images(
         alternate_array_orientations=alternate_array_orientations,
         array_orientations=array_orientations,
         visualizer=visualizer,
-        **({"session": session} if session is not None else {}),
+        **{**theme_options(theme), **({"session": session} if session is not None else {})},
     ) as frontend:
         driver = frontend["driver"]
         viz = frontend["dataViz"]
@@ -842,9 +857,10 @@ def main() -> None:
         help="Omit the external bundle script tag in the HTML snippet.",
     )
 
+    add_theme_argument(parser)
     add_array_arguments(parser)
     args = parser.parse_args()
-    array_options = array_options_from_args(args)
+    array_options = {**array_options_from_args(args), **theme_options(args.theme)}
 
     bp: int | tuple[int, int] | None = -1
     if args.breakpoint is not None:
@@ -962,9 +978,10 @@ def render_html_cli() -> None:
         help="Omit type tags from the visualization.",
     )
 
+    add_theme_argument(parser)
     add_array_arguments(parser)
     args = parser.parse_args()
-    array_options = array_options_from_args(args)
+    array_options = {**array_options_from_args(args), **theme_options(args.theme)}
 
     bp: int | tuple[int, int] | None = -1
     if args.breakpoint is not None:

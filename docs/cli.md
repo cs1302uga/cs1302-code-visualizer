@@ -122,3 +122,18 @@ render_html < trace.json > embed.html
 ```
 
 These utilities have their own options and defaults; use each command's `--help`. For example, program input (`--stdin` or `--stdin-file`) is available through the lower-level tracing/rendering tools and Python APIs, not the unified CLI. HTML embedding and bundle options are described in the [array guide](array-orientation/README.md).
+
+## Color themes
+
+Use `--theme light`, `--theme dark`, or `--theme auto` with `code-visualizer`,
+`generate_visualization`, `render_image`, or `render_html`. Batch manifests may
+set `"theme": "dark"` per job, overriding the command's theme.
+
+```sh
+uv run code-visualizer examples/example0/Driver.java --theme dark --format SVG -o driver-dark.svg
+```
+
+With no theme option, standalone exports use light colors and inline SVG markup
+follows the host's `data-theme` attribute. Auto follows the system preference.
+See [Visualization themes](../HACKING.md#visualization-themes) for embedding and
+CSS overrides.

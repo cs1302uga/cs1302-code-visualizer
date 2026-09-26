@@ -15,6 +15,7 @@ from .array_options import add_array_arguments, array_options_from_args
 from .browser_driver import generate_step_images
 from .errors import CodeVisError, CodeVisualizerError
 from .session import RenderingSession
+from .theme_options import add_theme_argument, theme_options
 
 
 def format_output_path(
@@ -314,7 +315,10 @@ def run_batch_cli(args: argparse.Namespace) -> int:
 
     # Collect jobs
     jobs: list[tuple[str, str, Path | None, set[int], dict[str, Any]]] = []
-    array_defaults = array_options_from_args(args)
+    array_defaults = {
+        **array_options_from_args(args),
+        **theme_options(getattr(args, "theme", None)),
+    }
 
     # 1. Directory scan
     if args.input_dir:
@@ -373,7 +377,10 @@ def run_batch_cli(args: argparse.Namespace) -> int:
                     if not isinstance(payload, dict):
                         raise TypeError(f"line {line_idx + 1}: job must be a JSON object")
                     try:
-                        array_options = array_options_from_args(args, payload)
+                        array_options = {
+                            **array_options_from_args(args, payload),
+                            **theme_options(payload.get("theme", getattr(args, "theme", None))),
+                        }
                     except (TypeError, ValueError) as exc:
                         raise ValueError(f"line {line_idx + 1}: {exc}") from exc
                     job_id = payload.get("id", f"job_{line_idx}")
@@ -437,7 +444,7 @@ def run_batch_cli(args: argparse.Namespace) -> int:
 def run_single_cli(args: argparse.Namespace) -> int:
     """Handle single-file visualization."""
     source_code = ""
-    array_options = array_options_from_args(args)
+    array_options = {**array_options_from_args(args), **theme_options(getattr(args, "theme", None))}
 
     if args.files and len(args.files) == 1:
         source_path = Path(args.files[0])
@@ -629,6 +636,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Continue processing remaining jobs if a job fails in batch mode.",
     )
 
+    add_theme_argument(parser)
     add_array_arguments(parser)
     args = parser.parse_args(argv)
 

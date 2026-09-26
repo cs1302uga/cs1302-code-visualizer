@@ -7,6 +7,7 @@ import { ExecutionVisualizer } from "./pytutor";
 import { JsonPreVisualizer, VisualizerInstance } from "./CodeVisualizer";
 import { arrayOrientationOptionsFromParams } from "./arrayOrientation";
 import { exportSvg } from "./svgExport";
+import { applyTheme, Theme } from "./theme";
 
 (window as any).exportVisualizationSvg = exportSvg;
 
@@ -14,6 +15,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const urlParams = new URLSearchParams(window.location.search);
   const tracePath = urlParams.get("tracePath");
   const visualizer = urlParams.get("visualizer") || "pytutor";
+  const theme = (urlParams.get("theme") || undefined) as Theme | undefined;
+  document.body.classList.add("codevis-render-page");
+  applyTheme(document.body, theme);
   const includeTypes = urlParams.get("includeTypes")?.toLowerCase() !== "false";
   const textMemoryLabels =
     urlParams.get("textMemoryLabels")?.toLowerCase() !== "false";
@@ -46,6 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
         document.body.appendChild(screenshotReadyIndicator);
       } else {
         const frontendOptions = {
+          theme,
           jumpToEnd: true,
           hideCode: true,
           disableHeapNesting: true,

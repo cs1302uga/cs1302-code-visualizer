@@ -40,6 +40,7 @@ require("jquery-ui-dist/jquery-ui.css");
 import "@fontsource/recursive";
 import { isModernTrace, convertModernTraceToOpt } from "./modernTraceAdapter";
 import { resolveArrayOrientation } from "./arrayOrientation";
+import { applyTheme, paint } from "./theme";
 require("../css/pytutor");
 
 let unsupportedFeaturesStr = `see <a target="_blank" href="https://github.com/pgbovine/OnlinePythonTutor/blob/master/unsupported-features.md">UNSUPPORTED FEATURES</a>`;
@@ -68,9 +69,9 @@ function doTimeout(name: string, delay: number, callback: () => void): void {
 }
 
 export var brightRed = "#e93f34";
-var connectorBaseColor = "#005583";
-var connectorHighlightColor = brightRed;
-var connectorInactiveColor = "#cccccc";
+var connectorBaseColor = paint("arrow");
+var connectorHighlightColor = paint("special");
+var connectorInactiveColor = paint("inactiveArrow");
 var errorColor = brightRed;
 var breakpointColor = brightRed;
 
@@ -397,6 +398,7 @@ export class ExecutionVisualizer {
     // the root elements for jQuery and D3 selections, respectively.
     // ALWAYS use these and never use raw $(__) or d3.select(__)
     this.domRoot = tmpRoot.find("div.ExecutionVisualizer");
+    applyTheme(this.domRoot[0], params.theme);
     this.domRootD3 = tmpRootD3.select("div.ExecutionVisualizer");
 
     if (this.params.lang === "java") {

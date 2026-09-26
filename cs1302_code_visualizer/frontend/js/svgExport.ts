@@ -4,6 +4,7 @@
  */
 
 import { describeSvg } from "./svgDescription";
+import { PaintRole, palettes, paintRole, themeCss } from "./theme";
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -17,6 +18,17 @@ function primitive(tag: string, attributes: Record<string, string | number> = {}
 
 function visibleColor(color: string): boolean {
   return color !== "transparent" && color !== "rgba(0, 0, 0, 0)" && color !== "";
+}
+
+function themedPrimitive(
+  tag: string, attributes: Record<string, string | number>,
+  roles: { fill?: PaintRole; stroke?: PaintRole } = {},
+): SVGElement {
+  const element = primitive(tag, attributes);
+  for (const [property, role] of Object.entries(roles)) {
+    if (role) element.setAttribute(`data-codevis-${property}`, role);
+  }
+  return element;
 }
 
 /**
@@ -39,7 +51,14 @@ export async function exportSvg(root: HTMLElement, scale = 1): Promise<string> {
     width: width * scale, height: height * scale, viewBox: `0 0 ${width} ${height}`,
     role: "img", "aria-labelledby": "state-title", "aria-describedby": "state-description",
     style: "user-select:text;-webkit-user-select:text",
+    class: "codevis-diagram",
   });
+  const theme = root.closest("[data-codevis-theme]")?.getAttribute("data-codevis-theme");
+  // Light is the standalone fallback; an inline SVG may follow its host theme.
+  if (theme === "light" || theme === "dark" || theme === "auto") svg.setAttribute("data-codevis-theme", theme);
+  const stylesheet = primitive("style");
+  stylesheet.textContent = themeCss;
+  svg.append(stylesheet);
   const description = describeSvg(root);
   const title = primitive("title", { id: "state-title" });
   title.textContent = description.summary;
@@ -49,7 +68,9 @@ export async function exportSvg(root: HTMLElement, scale = 1): Promise<string> {
   ).join("\n\n");
   const metadata = primitive("metadata", { "data-description": "1" });
   metadata.textContent = JSON.stringify(description);
-  svg.append(title, desc, metadata, primitive("rect", { width, height, fill: "white" }));
+  svg.append(title, desc, metadata, themedPrimitive("rect", {
+    width, height, fill: theme === "dark" ? palettes.dark.canvas : palettes.light.canvas,
+  }, { fill: "canvas" }));
   const defs = primitive("defs");
   svg.append(defs);
   let nextClip = 0;
@@ -90,7 +111,7 @@ export async function exportSvg(root: HTMLElement, scale = 1): Promise<string> {
       const y = rect.bottom - top - descent;
       if (y !== currentY) {
         flush();
-        current = primitive("text", {
+        current = themedPrimitive("text", {
           y, fill: style.color,
           "font-family": style.fontFamily.includes("Recursive")
             ? 'Recursive, "DejaVu Sans", Arial, sans-serif' : style.fontFamily,
@@ -98,7 +119,7 @@ export async function exportSvg(root: HTMLElement, scale = 1): Promise<string> {
           "font-style": style.fontStyle, "xml:space": "preserve",
           "text-decoration": style.textDecorationLine,
           style: `white-space:pre;font-variation-settings:${style.fontVariationSettings}`,
-        });
+        }, { fill: paintRole(node.parentElement!, "text") });
         currentY = y;
       }
       if (!value) start = rect.left - left;
@@ -115,9 +136,9 @@ export async function exportSvg(root: HTMLElement, scale = 1): Promise<string> {
     const y = rect.top - top;
     const radius = parseFloat(style.borderTopLeftRadius) || 0;
     if (visibleColor(style.backgroundColor)) {
-      parent.append(primitive("rect", {
+      parent.append(themedPrimitive("rect", {
         x, y, width: rect.width, height: rect.height, rx: radius, fill: style.backgroundColor,
-      }));
+      }, { fill: paintRole(element, "background") }));
     }
     // The only CSS background image in memory diagrams is the alpha checkerboard.
     if (element.classList.contains("colorSwatchContainer")) {
@@ -133,11 +154,11 @@ export async function exportSvg(root: HTMLElement, scale = 1): Promise<string> {
     const styles = sides.map(side => style.getPropertyValue(`border-${side}-style`));
     if (widths.every(w => w === widths[0]) && colors.every(c => c === colors[0]) && styles.every(s => s === "solid")) {
       const w = widths[0];
-      if (w && visibleColor(colors[0])) parent.append(primitive("rect", {
+      if (w && visibleColor(colors[0])) parent.append(themedPrimitive("rect", {
         x: x + w / 2, y: y + w / 2, width: Math.max(0, rect.width - w),
         height: Math.max(0, rect.height - w), rx: Math.max(0, radius - w / 2),
         fill: "none", stroke: colors[0], "stroke-width": w,
-      }));
+      }, { stroke: paintRole(element, "border") }));
     } else {
       const [t, r, b, l] = widths;
       const lines = [
@@ -149,7 +170,8 @@ export async function exportSvg(root: HTMLElement, scale = 1): Promise<string> {
       sides.forEach((_, i) => {
         if (!widths[i] || !visibleColor(colors[i]) || ["none", "hidden"].includes(styles[i])) return;
         const [x1, y1, x2, y2] = lines[i];
-        const line = primitive("line", { x1, y1, x2, y2, stroke: colors[i], "stroke-width": widths[i] });
+        const line = themedPrimitive("line", { x1, y1, x2, y2, stroke: colors[i], "stroke-width": widths[i] },
+          { stroke: paintRole(element, "border") });
         if (styles[i] === "dashed" || styles[i] === "dotted") {
           const dash = widths[i] * (styles[i] === "dashed" ? 3 : 1);
           line.setAttribute("stroke-dasharray", `${dash} ${dash}`);
@@ -209,6 +231,10 @@ export async function exportSvg(root: HTMLElement, scale = 1): Promise<string> {
       }
       for (const attr of ["fill", "fill-opacity", "fill-rule", "stroke", "stroke-opacity", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-dasharray"]) {
         copy.setAttribute(attr, style.getPropertyValue(attr));
+        if (attr === "fill" || attr === "stroke") {
+          const role = /^var\(--codevis-(\w+),/.exec(element.getAttribute(attr) ?? "")?.[1];
+          if (role && role in palettes.light) copy.setAttribute(`data-codevis-${attr}`, role);
+        }
       }
       let opacity = 1;
       for (let ancestor: Element | null = element; ancestor && ancestor !== root; ancestor = ancestor.parentElement) {

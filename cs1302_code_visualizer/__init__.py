@@ -43,6 +43,7 @@ from .errors import (
     TracerDownloadError,
 )
 from .session import RenderingSession
+from .theme_options import Theme, add_theme_argument, theme_options
 from .trace_generator import generate_trace, generate_traces, get_sanitized_java_env
 
 __all__ = [
@@ -109,6 +110,7 @@ def render_images(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
     array_orientations: dict[str, ArrayOrientation] | None = None,
@@ -141,6 +143,7 @@ def render_images(
         include_types: True if type tags should be included in this visualization, False otherwise.
         text_memory_labels: True if object connections should be rendered as text labels, False otherwise.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        theme: Light, dark, auto, or None for the default host-inherited theme.
         array_orientation: Base array orientation, or the 1D orientation when alternating.
         alternate_array_orientations: Flip orientation for each additional dimension.
         array_orientations: Per-heap-object orientation overrides, taking precedence over the base.
@@ -163,6 +166,7 @@ def render_images(
 
     Note that exceptions may be raised if image generation fails.
     """
+    theme_options(theme)
     validate_array_options(array_orientation, alternate_array_orientations, array_orientations)
     if not (java_home and trace_generator.jdk_exists(java_home)):
         java_home = trace_generator.ensure_jdk_installed()
@@ -195,6 +199,7 @@ def render_images(
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
+        **theme_options(theme),
         array_orientation=array_orientation,
         alternate_array_orientations=alternate_array_orientations,
         array_orientations=array_orientations,
@@ -212,6 +217,7 @@ def _resolve_and_render_trace(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
     array_orientations: dict[str, ArrayOrientation] | None = None,
@@ -245,6 +251,7 @@ def _resolve_and_render_trace(
                             include_types=include_types,
                             text_memory_labels=text_memory_labels,
                             strip_type_prefixes=strip_type_prefixes,
+                            **theme_options(theme),
                             array_orientation=array_orientation,
                             alternate_array_orientations=alternate_array_orientations,
                             array_orientations=array_orientations,
@@ -270,6 +277,7 @@ def _resolve_and_render_trace(
                     include_types=include_types,
                     text_memory_labels=text_memory_labels,
                     strip_type_prefixes=strip_type_prefixes,
+                    **theme_options(theme),
                     array_orientation=array_orientation,
                     alternate_array_orientations=alternate_array_orientations,
                     array_orientations=array_orientations,
@@ -289,6 +297,7 @@ def _resolve_and_render_trace(
                         include_types=include_types,
                         text_memory_labels=text_memory_labels,
                         strip_type_prefixes=strip_type_prefixes,
+                        **theme_options(theme),
                         array_orientation=array_orientation,
                         alternate_array_orientations=alternate_array_orientations,
                         array_orientations=array_orientations,
@@ -307,6 +316,7 @@ def _resolve_and_render_trace(
                 include_types=include_types,
                 text_memory_labels=text_memory_labels,
                 strip_type_prefixes=strip_type_prefixes,
+                **theme_options(theme),
                 array_orientation=array_orientation,
                 alternate_array_orientations=alternate_array_orientations,
                 array_orientations=array_orientations,
@@ -329,6 +339,7 @@ def render_image(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
     array_orientations: dict[str, ArrayOrientation] | None = None,
@@ -377,6 +388,7 @@ def render_image(
         text_memory_labels: True if object connections should be rendered as text labels, False otherwise.
 
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        theme: Light, dark, auto, or None for the default host-inherited theme.
         array_orientation: Base array orientation, or the 1D orientation when alternating.
         alternate_array_orientations: Flip orientation for each additional dimension.
         array_orientations: Per-heap-object orientation overrides, taking precedence over the base.
@@ -402,6 +414,7 @@ def render_image(
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
 
+    theme_options(theme)
     validate_array_options(array_orientation, alternate_array_orientations, array_orientations)
     if not (java_home and trace_generator.jdk_exists(java_home)):
         java_home = trace_generator.ensure_jdk_installed()
@@ -472,6 +485,7 @@ def render_image(
             include_types=include_types,
             text_memory_labels=text_memory_labels,
             strip_type_prefixes=strip_type_prefixes,
+            **theme_options(theme),
             array_orientation=array_orientation,
             alternate_array_orientations=alternate_array_orientations,
             array_orientations=array_orientations,
@@ -505,12 +519,14 @@ class BatchRenderJob:
     type_style: str = "simple"
     stdin: str = ""
     timeout_secs: int | None = None
+    theme: Theme | None = None
     array_orientation: ArrayOrientation = "horizontal"
     alternate_array_orientations: bool = False
     array_orientations: dict[str, ArrayOrientation] | None = None
 
     def __post_init__(self) -> None:
         """Reject invalid array settings before a batch job starts tracing."""
+        theme_options(self.theme)
         validate_array_options(
             self.array_orientation,
             self.alternate_array_orientations,
@@ -585,6 +601,7 @@ def _render_batch_with_session(
                 include_types=job_spec.include_types,
                 text_memory_labels=job_spec.text_memory_labels,
                 strip_type_prefixes=job_spec.strip_type_prefixes,
+                **theme_options(job_spec.theme),
                 array_orientation=job_spec.array_orientation,
                 alternate_array_orientations=job_spec.alternate_array_orientations,
                 array_orientations=job_spec.array_orientations,
@@ -679,12 +696,14 @@ def main() -> None:
         help="Path to file whose content is provided to the traced program via standard input.",
         default=None,
     )
+    add_theme_argument(parser)
     args = parser.parse_args()
 
     with fileinput.input(args.input) as f:
         java_source: str = "".join(f)
     rendered_image: bytes = render_image(
         java_source,
+        **theme_options(args.theme),
         dpi=2,
         strip_type_prefixes=["java.lang."],
         inline_strings=False,

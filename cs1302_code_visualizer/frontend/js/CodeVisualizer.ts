@@ -10,6 +10,8 @@
 
 import { ExecutionVisualizer } from "./pytutor";
 import type { ArrayOrientationOptions } from "./arrayOrientation";
+import { applyTheme, Theme } from "./theme";
+export type { Theme } from "./theme";
 export type { ArrayOrientation, ArrayOrientationOptions } from "./arrayOrientation";
 
 /**
@@ -26,6 +28,7 @@ export type VisualizerType = "pytutor" | "json-pre";
  * Configuration options for visualizer instances.
  */
 export interface Options extends ArrayOrientationOptions {
+  theme?: Theme;
   includeTypes?: boolean;
   textualMemoryLabels?: boolean;
   stripTypePrefixes?: string[];
@@ -154,6 +157,8 @@ export function create({
   const decodedTrace = decodeTrace(trace);
 
   if (visualizerType === "json-pre") {
+    element.classList.add("codevis-json");
+    applyTheme(element, options?.theme);
     return new JsonPreVisualizer(element, decodedTrace);
   }
 
@@ -165,6 +170,7 @@ export function create({
   }
 
   const frontendOptions = {
+    theme: options?.theme,
     jumpToEnd: true,
     hideCode: true,
     disableHeapNesting: true,
