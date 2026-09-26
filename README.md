@@ -43,6 +43,14 @@ SVG also supports all steps and batch rendering; see [SVG exports](docs/cli.md#s
 
 Open `main.png` and insert it into your teaching material. Use `--dpi 2` for a larger image. Single-file mode replaces existing output files; choose a new filename to retain an earlier image.
 
+## Choose colors
+
+```sh
+code-visualizer Main.java --theme dark -o main-dark.png
+```
+
+Use `--theme light` or `--theme dark` for a fixed palette. To follow a website's theme selector, export SVG without `--theme` and embed its markup inline. Auto follows the system preference; PNG colors are fixed when rendered. See the [theme guide and light/dark examples](docs/themes.md).
+
 ## Choose execution steps
 
 Capture a source line using `-b` (line numbers start at 1):
@@ -82,5 +90,6 @@ Each file is traced as a separate program. Batch mode preserves relative directo
 
 - [Example gallery](examples/README.md): Java concepts and rendered diagrams.
 - [CLI guide](docs/cli.md): detailed command usage and troubleshooting.
+- [Visualization themes](docs/themes.md): colors, Auto mode, embedding, and contrast.
 - [Python integration](HACKING.md): embed rendering in scripts and course builds.
 - [Contributing](CONTRIBUTING.md): develop, test, and release the project.

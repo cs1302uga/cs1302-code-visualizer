@@ -120,25 +120,25 @@ See the exported APIs and docstrings in [the package](cs1302_code_visualizer/__i
 
 ## Visualization themes
 
-Image APIs (`render_image`, `render_images`, `BatchRenderJob`, `generate_image`,
-`generate_step_images`) and `render_html` accept `theme="light"`, `"dark"`, or
-`"auto"`. Omit it for a light standalone export that adapts when its SVG markup
-is embedded inline. An explicit choice stays on that instance. Auto follows the
-operating system's color preference, including changes after loading.
+Image APIs (`render_image`, `render_images`, `BatchRenderJob`, `generate_image`, and `generate_step_images`) accept `theme="light"`, `"dark"`, or `"auto"`. For a fixed dark SVG:
 
-Inline SVGs and interactive visualizers follow an ancestor's
-`data-theme="light|dark|auto"` attribute, as used by the textbook. An SVG loaded
-through `<img>` cannot inherit its host document's theme; embed its markup to
-allow switching. Inline diagram canvases are transparent. Printing uses the
-light palette. Literal Java `Color` swatches and their alpha checkerboards keep
-their program values.
+```python
+svg = render_image(java_source, format="SVG", theme="dark", timeout_secs=30)
+Path("python-dark.svg").write_bytes(svg)
+```
 
-The shared palette uses neutral surfaces, blue references, and muted references
-originating from inactive stack frames. Heap-to-heap references retain their blue
-color. Dots, paths, and arrowheads share the connector's role.
+Omit `theme` (or pass `None`) for a light standalone SVG that follows an ancestor's `data-theme` when embedded inline. Explicit Auto follows the viewing system's preference independently of the host's manual choice. Raster output captures the rendering browser's theme at export time and cannot switch afterward. Themes affect presentation, not trace-cache keys.
 
-Host styles can override semantic variables such as `--codevis-text`,
-`--codevis-muted`, `--codevis-object`, `--codevis-value`, `--codevis-arrow`, and
-`--codevis-inactiveArrow`. Default text colors meet 7:1 contrast and meaningful
-borders/connectors meet 3:1 against the default surfaces. These checks cover the
-palette, not complete WCAG conformance; custom host colors need their own checks.
+For an interactive embed, first create `trace.json` with `generate_trace < Main.java > trace.json` and load a matching frontend bundle. Assuming your site serves this checkout's built `vis-module.bundle.js` at `/assets/vis-module.bundle.js`:
+
+```python
+from cs1302_code_visualizer import render_html
+
+trace = Path("trace.json").read_text(encoding="utf-8")
+html = render_html(trace, bundle_url="/assets/vis-module.bundle.js")
+Path("memory-embed.html").write_text(html, encoding="utf-8")
+```
+
+Insert this snippet into your page and set an ancestor, such as the page's `body`, to `data-theme="light"`, `"dark"`, or `"auto"`. Omit `theme` in `render_html` to follow that attribute. Pass `theme="dark"` or `theme="auto"` to override it for that instance. Without `bundle_url`, the helper uses the installed package version's GitHub release bundle URL; that release asset must be available.
+
+See the [theme guide](docs/themes.md) for a complete static HTML recipe, a three-frame visual comparison, CSS color overrides, print behavior, and the scope of the contrast checks.

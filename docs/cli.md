@@ -22,6 +22,7 @@ Single-program mode creates parent directories and replaces existing files. Batc
 | `-b N`, `--breakpoint N` | Select a source line; repeat to request multiple lines. |
 | `-a`, `--all-steps` | Trace and render all execution steps. |
 | `--format PNG` | Select a raster encoding or standalone `SVG`; default is PNG. Match explicit filename extensions to the encoding. |
+| `--theme light\|dark\|auto` | Select a palette; omit for host-adaptive inline SVG. Auto follows the system. |
 | `--dpi 2` | Scale raster resolution or SVG display dimensions; default is 1. |
 | `--no-types` | Hide type tags. |
 | `--text-memory-labels` | Replace reference arrows with text labels. |
@@ -66,7 +67,7 @@ A manifest has one JSON object per nonblank line:
 {"id":"lesson-one","source":"class Main { public static void main(String[] args) { int n = 1; System.out.println(n); } }"}
 ```
 
-Supported job fields are `id`, `source`, `breakpoints` (an array of line numbers), `array_orientation`, `alternate_array_orientations`, and `array_orientations`. Omitted IDs use `job_` plus the zero-based manifest line index. Empty or omitted breakpoints inherit CLI breakpoints. Array settings inherit CLI defaults; per-object maps merge with job entries taking precedence. Invalid array settings reject the manifest before any job executes. Supply a manifest file: batch mode currently does not read a manifest from `-i -`.
+Supported job fields are `id`, `source`, `breakpoints` (an array of line numbers), `array_orientation`, `alternate_array_orientations`, `array_orientations`, and `theme`. Omitted IDs use `job_` plus the zero-based manifest line index. Empty or omitted breakpoints inherit CLI breakpoints. Array settings inherit CLI defaults; per-object maps merge with job entries taking precedence. A job’s `theme` overrides the CLI theme; an omitted field inherits it, while `null` restores the default host-adaptive behavior. Invalid theme or array settings reject the manifest before any job executes. Supply a manifest file: batch mode currently does not read a manifest from `-i -`.
 
 ## Output paths
 
@@ -125,15 +126,16 @@ These utilities have their own options and defaults; use each command's `--help`
 
 ## Color themes
 
-Use `--theme light`, `--theme dark`, or `--theme auto` with `code-visualizer`,
-`generate_visualization`, `render_image`, or `render_html`. Batch manifests may
-set `"theme": "dark"` per job, overriding the command's theme.
+Use `--theme light`, `--theme dark`, or `--theme auto` with `code-visualizer`, `generate_visualization`, `render_image`, or `render_html`.
 
 ```sh
-uv run code-visualizer examples/example0/Driver.java --theme dark --format SVG -o driver-dark.svg
+code-visualizer Main.java --theme dark --format SVG -o main-dark.svg
+code-visualizer Main.java --theme light -o main-light.png
+code-visualizer Main.java --format SVG -o main-adaptive.svg
 ```
 
-With no theme option, standalone exports use light colors and inline SVG markup
-follows the host's `data-theme` attribute. Auto follows the system preference.
-See [Visualization themes](../HACKING.md#visualization-themes) for embedding and
-CSS overrides.
+With no theme option, standalone exports use light colors and inline SVG markup follows an ancestor's `data-theme` attribute. Explicit light/dark choices override that attribute. Explicit Auto follows the system preference rather than the page's manual selection. Raster images retain the palette used at render time; use explicit light/dark choices for reproducible build output.
+
+Batch mode accepts the same flag. A manifest job can override it with `"theme": "light"`, `"dark"`, or `"auto"`. Omit the field to inherit the CLI choice; set it to `null` to restore the default host-adaptive choice. Invalid values reject the manifest before any job runs.
+
+See the [theme guide](themes.md) for light/dark examples, an inline HTML recipe, inactive-frame arrows, and Auto troubleshooting. See [Python integration](../HACKING.md#visualization-themes) for the corresponding API options.

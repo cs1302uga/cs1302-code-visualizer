@@ -55,3 +55,11 @@ uv run python -m scripts.check_svg_accessibility artifacts/svg-gallery/final --b
 These checks require `example0` and `edges` in the gallery. They save browser-version results, highlighted-selection screenshots, and an expanded-description screenshot. They cover mouse selection, copying Unicode text in both the gallery and a standalone SVG, Space to expand the description, and Tab to reach the next disclosure. Chrome normalizes layout nonbreaking spaces to ordinary spaces when copying.
 
 For manual VoiceOver/Safari acceptance, open both the gallery and a standalone export. Confirm the diagram has a concise name, its description is available, and graphical labels are not narrated a second time. Navigate the gallery disclosure by keyboard and read its headings and lists. Check that stack frames precede heap objects, references name their targets, shared objects appear once, cycles terminate, and hidden fields stay absent. Test an intermediate step and a no-types case. Record the macOS/Safari versions and actual observations; browser automation and screenshots alone do not establish screen-reader acceptance.
+
+## Review themes and inactive references
+
+Use the [theme guide's three-frame example and reproduction recipe](themes.md#reproduce-the-screenshots) to compare the same execution state in light and dark modes. Check that inactive-frame dots, paths, and arrowheads are muted together, while active-frame and heap-to-heap references remain blue. Confirm that literal Java `Color` swatches retain their values.
+
+For an adaptive inline SVG, switch the host's `data-theme` between light, dark, and Auto. With Auto selected, test both system color preferences. Also test explicit instance choices, a transparent canvas against the actual host background, and light print output. A standalone SVG or `<img>` cannot establish that the host's manual toggle works; test inline embedding on the target page.
+
+The [palette tests](../cs1302_code_visualizer/frontend/tests/theme.test.ts) check color-role contrast, and the [browser theme tests](../tests/test_theme_options.py) exercise host/system switching, print, canvas transparency, and inactive connectors. Those checks supplement visual review and the existing selection/accessibility checks above.
