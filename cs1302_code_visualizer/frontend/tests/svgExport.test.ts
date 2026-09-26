@@ -16,8 +16,8 @@ describe("standalone SVG export", () => {
     root.style.backgroundColor = "rgb(250, 235, 191)";
     root.style.border = "1px solid black";
     const result = new DOMParser().parseFromString(await exportSvg(root, 2), "image/svg+xml");
-    expect(result.documentElement.getAttribute("viewBox")).toBe("0 0 100 50");
-    expect(result.documentElement.getAttribute("width")).toBe("200");
+    expect(result.documentElement.getAttribute("viewBox")).toBe("0 0 110 60");
+    expect(result.documentElement.getAttribute("width")).toBe("220");
     expect(result.querySelector("rect[stroke]")?.getAttribute("width")).toBe("99");
     expect(result.querySelector("foreignObject,image,script")).toBeNull();
   });
@@ -43,7 +43,7 @@ describe("standalone SVG export", () => {
     const result = new DOMParser().parseFromString(await exportSvg(root), "image/svg+xml");
     const line = result.querySelector("line");
     expect(line?.getAttribute("stroke-dasharray")).toBe("6 6");
-    expect(line?.getAttribute("x1")).toBe("1");
+    expect(line?.getAttribute("x1")).toBe("6");
   });
 
   it("separates alpha from paint for Inkscape compatibility", async () => {
@@ -75,6 +75,6 @@ describe("standalone SVG export", () => {
     const result = new DOMParser().parseFromString(await exportSvg(root), "image/svg+xml");
     expect(result.querySelectorAll("path")).toHaveLength(1);
     expect(result.querySelector("path")?.getAttribute("d")).toBe("M10 20 L30 40");
-    expect(result.querySelector("path")?.getAttribute("transform")).toBe("matrix(1 0 0 1 0 0)");
+    expect(result.querySelector("path")?.getAttribute("transform")).toBe("matrix(1 0 0 1 4 4)");
   });
 });

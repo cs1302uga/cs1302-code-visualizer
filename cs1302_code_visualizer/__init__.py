@@ -26,6 +26,7 @@ from .batch_tracer import BatchTraceJob, BatchTracerClient
 from .breakpoint_lister import list_breakpoints, list_breakpoints_json
 from .browser_driver import (
     generate_image,
+    generate_snapshot_images,
     generate_step_images,
     render_html,
     render_html_cli,
@@ -62,6 +63,7 @@ __all__ = [
     "TraceGeneratorError",
     "TracerDownloadError",
     "generate_image",
+    "generate_snapshot_images",
     "generate_step_images",
     "generate_trace",
     "generate_traces",

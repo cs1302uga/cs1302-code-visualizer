@@ -3,7 +3,7 @@
 import io
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -14,6 +14,27 @@ from cs1302_code_visualizer.browser_driver import generate_image, generate_step_
 
 NS = {"s": "http://www.w3.org/2000/svg"}
 TRACE = Path("small-trace-examples/example0/Driver.java.json").read_text()
+
+
+def test_svg_capture_does_not_fetch_unused_raster_crop_geometry():
+    driver = MagicMock()
+    driver.execute_async_script.side_effect = [
+        {"bounds": {"left": 10, "top": 20, "right": 110, "bottom": 70}},
+        {"svg": "<svg/>"},
+    ]
+    viz = MagicMock()
+    type(viz).location = PropertyMock(side_effect=AssertionError("unused location RPC"))
+    type(viz).size = PropertyMock(side_effect=AssertionError("unused size RPC"))
+    with patch.object(browser_driver, "_fit_capture_viewport") as fit:
+        result = browser_driver._capture_viz(
+            driver, viz, dpi=2, format="SVG", visualizer="pytutor", session=None
+        )
+    assert result == b"<svg/>"
+    fit.assert_called_once_with(driver, viz, None)
+    driver.execute_cdp_cmd.assert_not_called()
+    driver.get_screenshot_as_png.assert_not_called()
+    # The content bounds used by SVG are measured inside the browser, in one RPC.
+    assert driver.execute_async_script.call_count == 2
 
 
 def test_svg_is_standalone_editable_and_scales_without_relayout(rendering_session):
@@ -42,7 +63,13 @@ def test_svg_steps_do_not_accumulate_previous_frames(rendering_session):
     frames = generate_step_images(trace, format="SVG", session=rendering_session)
     assert len(frames) == len(payload["trace"])
     final = generate_image(trace, format="SVG", session=rendering_session)
-    assert ET.tostring(ET.fromstring(frames[-1])) == ET.tostring(ET.fromstring(final))
+    sequence_final = ET.fromstring(frames[-1])
+    standalone = ET.fromstring(final)
+    # Shared sequence framing can differ from the tight standalone canvas.
+    assert [node.text for node in sequence_final.findall(".//s:text", NS)] == [
+        node.text for node in standalone.findall(".//s:text", NS)
+    ]
+    assert len(sequence_final.findall(".//s:path", NS)) == len(standalone.findall(".//s:path", NS))
 
 
 def test_svg_json_text_is_escaped_and_remains_text(rendering_session):
@@ -71,7 +98,12 @@ def test_svg_frontend_error_propagates_without_raster_fallback():
     viz.location = {"x": 0, "y": 0}
     viz.size = {"width": 20, "height": 10}
     with (
-        patch.object(browser_driver, "_fit_session_viewport"),
+        patch.object(browser_driver, "_fit_capture_viewport"),
+        patch.object(
+            browser_driver,
+            "_export_bounds",
+            return_value={"left": 0, "top": 0, "right": 20, "bottom": 10},
+        ),
         pytest.raises(ValueError, match="SVG export failed: Cannot export an empty diagram"),
     ):
         browser_driver._capture_viz(

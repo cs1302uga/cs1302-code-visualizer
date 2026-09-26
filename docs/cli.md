@@ -35,6 +35,21 @@ Without `-a`, single-program mode emits one image, even when several breakpoints
 
 See the [array guide](array-orientation/README.md) for override precedence and examples. `code-visualizer --help` is the installed version's complete option list.
 
+## Image cropping
+
+Exports crop unused outer space by default, retaining text, borders, and reference
+arrows with 4 CSS pixels of padding. Bounds round outward to protect fractional
+edges. Spacing inside the diagram is unchanged.
+
+A single image fits its selected state. With `--all-steps`, every image uses the
+same crop enclosing all exported states, so dimensions and framing stay fixed.
+A small state can therefore have more whitespace in a sequence than when exported
+alone. Sequences require an additional pass to measure their shared bounds.
+
+PNG and SVG use the same crop. `--dpi` scales output dimensions without changing
+the layout used to measure it. These defaults intentionally change image dimensions
+from earlier releases; documents that depend on the old dimensions may need updating.
+
 ## SVG exports
 
 ```sh
