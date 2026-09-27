@@ -74,11 +74,6 @@ shared strings, a three-node cycle, empty/quoted/long strings, and a char.
 The snapshot is at line 10. Regenerate it with `generate_trace(...,
 breakpoints={10}, inline_strings=False)`.
 
-The approved throwaway prototype is preserved at commit `cc98e9c` on
-`prototype/string-style-option-b`. Its original screenshots are in
-`artifacts/option-b-review` at the repository root. Implementation comparison
-exports are kept in this directory's `images/` folder.
-
 ## Production examples
 
 ![Compact strings with both list implementations and a cycle](images/compact-horizontal-light.png)
@@ -89,4 +84,5 @@ exports are kept in this directory's `images/` folder.
 - [Editable compact SVG](images/compact-horizontal-light.svg)
 
 Run `uv run python docs/string-style/capture.py` from the repository root to
-regenerate these examples. See [validation results](validation.md).
+regenerate these examples. See [known exceptions](../known-exceptions.md) for
+compatibility and validation limitations.

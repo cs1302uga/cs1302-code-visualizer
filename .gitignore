@@ -32,3 +32,6 @@ scripts/installer/shims/bin/
 
 # Reproducible SVG gallery exports and milestone screenshots
 artifacts/svg-gallery/
+
+# Local proposals, prototypes, and development evidence
+/.scratch/

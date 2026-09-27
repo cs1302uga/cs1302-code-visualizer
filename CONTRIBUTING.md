@@ -69,13 +69,27 @@ uv run python -m scripts.benchmark_cli_batch --num-examples 6
 
 The rendering benchmark checks dimensions and decoded pixels and reports time and Chrome launches. The CLI benchmark compares sequential and batch configurations; `--skip-sequential` reports speedups as `N/A`.
 
-For SVG changes, generate milestone screenshots and inspect PNG/SVG pairs using the [comparison gallery](docs/svg-gallery.md). Keep generated evidence under the ignored `artifacts/svg-gallery/` directory. Use JDK 25 for the full Java example suite; example 33 uses `java.lang.IO`. Multi-file examples use the tracer's file-input mode so companion sources are available.
+For SVG changes, generate milestone screenshots and inspect PNG/SVG pairs using the [comparison gallery](docs/svg-gallery.md). Keep generated evidence under the ignored `.scratch/svg-gallery/` directory. Use JDK 25 for the full Java example suite; example 33 uses `java.lang.IO`. Multi-file examples use the tracer's file-input mode so companion sources are available.
+
+## Development artifacts
+
+Use the ignored root `.scratch/` directory for proposals, throwaway prototypes,
+screenshots, scan results, and temporary validation reports. These files are local;
+share selected evidence through the relevant review channel when needed.
+
+Promote material into tracked files only when it serves an ongoing purpose:
+user documentation, representative examples and their regeneration tools, or
+regression tests and fixtures. After a feature is complete, remove obsolete plans
+and review evidence with ordinary commits; Git history preserves earlier versions.
+Keep still-applicable security, validation, and compatibility exceptions in
+[known exceptions](docs/known-exceptions.md), with rationale and revisit conditions.
+Do not retain historical gate counts or completed-work narratives there.
 
 ## Maintainer tasks
 
 ### Update the tracer
 
-The tracer URL and SHA-256 pin live under `tool.cs1302-code-visualizer` in [pyproject.toml](pyproject.toml). `make update-tracer` invokes the update helper; inspect its resulting changes, run validation, and review the [tracer upgrade notes](docs/tracer-v3.1.2-upgrade.md).
+The tracer URL and SHA-256 pin live under `tool.cs1302-code-visualizer` in [pyproject.toml](pyproject.toml). `make update-tracer` invokes the update helper; inspect its resulting changes, run validation, and review the [known exceptions](docs/known-exceptions.md).
 
 The wheel includes this configuration as `_tracer.toml`. The installer executes a cached tracer only when its checksum matches the pin. A matching cache works offline, even if a refresh fails. A missing, unreadable, or mismatched cache requires a verified replacement. Failed downloads preserve the old file but do not authorize its execution. Missing or invalid metadata requires repairing the configuration or reinstalling the package; there is no checksum override.
 

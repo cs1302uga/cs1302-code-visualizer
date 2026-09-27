@@ -60,10 +60,6 @@ render_image = "cs1302_code_visualizer:main"
 gallery = [
     "pygments>=2.21.0",
 ]
-review = [
-    "pypdf>=6.19.0",
-    "reportlab>=5.0.1",
-]
 
 [tool.basedpyright]
 typeCheckingMode = "standard"

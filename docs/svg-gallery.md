@@ -12,7 +12,7 @@ uv run python -m scripts.svg_gallery --stage baseline --baseline-only
 uv run python -m scripts.svg_gallery --stage final --inkscape
 ```
 
-Open `artifacts/svg-gallery/final/index.html` directly in a browser. No server is required. Each milestone directory contains original exports, exact traces, a results manifest, an overview screenshot, and a comparison screenshot per case. With `--inkscape`, it also contains Inkscape rasterizations linked from each comparison's details.
+Open `.scratch/svg-gallery/final/index.html` directly in a browser. No server is required. Each milestone directory contains original exports, exact traces, a results manifest, an overview screenshot, and a comparison screenshot per case. With `--inkscape`, it also contains Inkscape rasterizations linked from each comparison's details.
 
 Use different milestone names to preserve intermediate evidence. For a focused iteration:
 
@@ -34,10 +34,10 @@ To attach review observations, supply a JSON object mapping case names to notes:
 
 ```sh
 uv run python -m scripts.svg_gallery --stage final --inkscape \
-  --review-file artifacts/svg-gallery/review-notes.json
+  --review-file .scratch/svg-gallery/review-notes.json
 ```
 
-Generated files stay in the ignored `artifacts/svg-gallery/` directory. The generator and focused Java inputs are version-controlled. Traces are cached using source contents, trace arguments, JDK release metadata, and project configuration; use `--refresh-traces` to force retracing. An existing PNG baseline is reused only when its trace and presentation options match the current case.
+Generated files stay in the ignored `.scratch/svg-gallery/` directory. The generator and focused Java inputs are version-controlled. Traces are cached using source contents, trace arguments, JDK release metadata, and project configuration; use `--refresh-traces` to force retracing. An existing PNG baseline is reused only when its trace and presentation options match the current case.
 
 Gallery checks supplement the required `make check`, `make test-examples`, distribution checks, and CI matrix; they do not replace them.
 
@@ -48,8 +48,8 @@ The gallery embeds SVG markup directly so its text can be selected and copied. L
 Run the browser checks sequentially because they exercise the clipboard. They copy known test text and verify pasting into a controlled text area; they do not read pre-existing clipboard contents. The checks replace the clipboard with test text. Firefox and its Selenium driver are required for the second command.
 
 ```sh
-uv run python -m scripts.check_svg_accessibility artifacts/svg-gallery/final
-uv run python -m scripts.check_svg_accessibility artifacts/svg-gallery/final --browser firefox
+uv run python -m scripts.check_svg_accessibility .scratch/svg-gallery/final
+uv run python -m scripts.check_svg_accessibility .scratch/svg-gallery/final --browser firefox
 ```
 
 These checks require `example0` and `edges` in the gallery. They save browser-version results, highlighted-selection screenshots, and an expanded-description screenshot. They cover mouse selection, copying Unicode text in both the gallery and a standalone SVG, Space to expand the description, and Tab to reach the next disclosure. Chrome normalizes layout nonbreaking spaces to ordinary spaces when copying.

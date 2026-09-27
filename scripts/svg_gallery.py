@@ -28,7 +28,7 @@ from cs1302_code_visualizer.trace_generator import ensure_jdk_installed
 from examples.run_batch import _trace_options, parse_example_test_sh
 
 ROOT = Path(__file__).resolve().parents[1]
-ARTIFACTS = ROOT / "artifacts" / "svg-gallery"
+ARTIFACTS = ROOT / ".scratch" / "svg-gallery"
 
 
 def cases():

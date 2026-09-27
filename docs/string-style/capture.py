@@ -18,14 +18,14 @@ def main():
     output = ROOT / "images"
     output.mkdir(exist_ok=True)
     cases = [
-        ("compact", orientation, theme)
-        for orientation in ("horizontal", "vertical")
-        for theme in ("light", "dark")
+        ("compact", "horizontal", "light", ("PNG", "SVG")),
+        ("compact", "vertical", "dark", ("PNG",)),
+        ("default", "horizontal", "light", ("PNG",)),
+        ("inline", "horizontal", "light", ("PNG",)),
     ]
-    cases += [(style, "horizontal", "light") for style in ("default", "inline")]
     with RenderingSession(max_browsers=1) as session:
-        for style, orientation, theme in cases:
-            for format in ("PNG", "SVG"):
+        for style, orientation, theme, formats in cases:
+            for format in formats:
                 data = generate_image(
                     trace,
                     string_style=style,
