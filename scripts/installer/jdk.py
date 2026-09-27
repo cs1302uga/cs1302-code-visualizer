@@ -31,8 +31,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
-from cs1302_code_visualizer.util.archives import extract_zip
-
 # Ensure project root is on sys.path when running as a standalone PEP 723 script
 _project_root = Path(__file__).resolve().parent
 while _project_root != _project_root.parent:  # pragma: no cover
@@ -47,6 +45,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from scripts.installer.archives import extract_zip
 from scripts.installer.common import (
     OptBinDir,
     OptCacheDir,

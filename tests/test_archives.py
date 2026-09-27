@@ -7,7 +7,14 @@ from zipfile import ZipFile, ZipInfo
 
 import pytest
 
-from cs1302_code_visualizer.util.archives import archive_path, extract_zip
+from cs1302_code_visualizer.util.archives import archive_path
+from cs1302_code_visualizer.util.archives import extract_zip as application_extract_zip
+from scripts.installer.archives import extract_zip as standalone_extract_zip
+
+
+@pytest.fixture(params=[application_extract_zip, standalone_extract_zip], ids=["app", "standalone"])
+def extract_zip(request):
+    return request.param
 
 
 def zip_data(entries):
@@ -29,7 +36,7 @@ def test_unsafe_archive_path(tmp_path, name):
         archive_path(tmp_path, name)
 
 
-def test_existing_symlink_cannot_redirect_extraction(tmp_path):
+def test_existing_symlink_cannot_redirect_extraction(tmp_path, extract_zip):
     root = tmp_path / "root"
     root.mkdir()
     (root / "link").symlink_to(tmp_path, target_is_directory=True)
@@ -41,7 +48,7 @@ def test_existing_symlink_cannot_redirect_extraction(tmp_path):
     assert not (tmp_path / "escape").exists()
 
 
-def test_zip_files_modes_and_internal_link(tmp_path):
+def test_zip_files_modes_and_internal_link(tmp_path, extract_zip):
     root = tmp_path / "root"
     entries = [
         ("bin/", b"", stat.S_IFDIR | 0o755),
@@ -59,7 +66,7 @@ def test_zip_files_modes_and_internal_link(tmp_path):
 
 
 @pytest.mark.parametrize("target", ["../../escape", "/absolute"])
-def test_escaping_zip_symlink_is_rejected(tmp_path, target):
+def test_escaping_zip_symlink_is_rejected(tmp_path, target, extract_zip):
     with (
         zip_data([("link", target.encode(), stat.S_IFLNK | 0o777)]) as archive,
         pytest.raises(ValueError, match="symlink escapes"),
