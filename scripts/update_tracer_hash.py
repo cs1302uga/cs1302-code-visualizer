@@ -131,6 +131,7 @@ def get_binary_version(jar_bytes: bytes) -> str:
         if proc.returncode == 0 and proc.stdout.strip():
             return proc.stdout.strip()
     except (subprocess.SubprocessError, OSError):
+        # The optional version probe failed; use the fallback below.
         pass
     return "(unknown)"
 

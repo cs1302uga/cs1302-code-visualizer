@@ -3,7 +3,7 @@ function escapeCssSelector(id: string): string {
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
     return CSS.escape(id);
   }
-  return id.replace(/([ #;?%&,.+*~\':"!^$[\]()=>|\/@])/g, "\\$1");
+  return id.replace(/([\\ #;?%&,.+*~\':"!^$[\]()=>|\/@])/g, "\\$1");
 }
 /**
  * @fileoverview Native TypeScript SVG connector engine for Code Visualizer.
@@ -11,6 +11,36 @@ function escapeCssSelector(id: string): string {
  */
 
 import $ from "jquery";
+
+export const ARROW_LENGTH = 6;
+export const SOURCE_INSET = 8;
+export const SOURCE_RADIUS = 3;
+
+/** Shared, notch-free triangle used by both local string and heap arrows. */
+export function arrowTriangle(x: number, y: number, direction = 1): string {
+  const rear = x - direction * ARROW_LENGTH;
+  return `${x},${y} ${rear},${y-3} ${rear},${y+3}`;
+}
+
+type Point = [number, number];
+
+/** Round the corners of an orthogonal route; the caller supplies the initial move. */
+function roundedSegments(points: Point[]): string {
+  const clean = points.filter((p, i) => !i || p[0] !== points[i-1][0] || p[1] !== points[i-1][1]);
+  let result = "";
+  for (let i = 1; i < clean.length - 1; i++) {
+    const [before, at, after] = [clean[i-1], clean[i], clean[i+1]];
+    const incoming = Math.hypot(at[0]-before[0], at[1]-before[1]);
+    const outgoing = Math.hypot(after[0]-at[0], after[1]-at[1]);
+    const r = Math.min(8, incoming/2, outgoing/2);
+    const entry = at.map((v, j) => v + (before[j]-v)*r/incoming);
+    const exit = at.map((v, j) => v + (after[j]-v)*r/outgoing);
+    result += ` L ${entry[0]} ${entry[1]} Q ${at[0]} ${at[1]} ${exit[0]} ${exit[1]}`;
+  }
+  const end = clean[clean.length-1];
+  return result + ` L ${end[0]} ${end[1]}`;
+}
+
 
 /**
  * Visual styling configuration for SVG connector paths and endpoints.
@@ -128,8 +158,8 @@ export class SvgConnection {
         document.getElementById(this.sourceId);
       rawSource = el as HTMLElement;
     } else {
-      const $s = $(options.source);
-      rawSource = $s[0] as HTMLElement;
+      const node = options.source instanceof HTMLElement ? options.source : options.source[0];
+      rawSource = node instanceof HTMLElement ? node : null;
       this.sourceId = rawSource ? rawSource.id : "";
     }
     this.source = $(rawSource);
@@ -143,8 +173,8 @@ export class SvgConnection {
         document.getElementById(this.targetId);
       rawTarget = el as HTMLElement;
     } else {
-      const $t = $(options.target);
-      rawTarget = $t[0] as HTMLElement;
+      const node = options.target instanceof HTMLElement ? options.target : options.target[0];
+      rawTarget = node instanceof HTMLElement ? node : null;
       this.targetId = rawTarget ? rawTarget.id : "";
     }
     this.target = $(rawTarget);
@@ -200,7 +230,7 @@ export class SvgConnection {
     this.groupElement.appendChild(this.pathElement);
 
     this.dotElement = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    this.dotElement.setAttribute("r", "3");
+    this.dotElement.setAttribute("r", String(SOURCE_RADIUS));
     this.dotElement.setAttribute(
       "fill",
       srcStyle.fillStyle || this.paintStyle.strokeStyle || "#005583"
@@ -301,69 +331,68 @@ export class SvgConnection {
       y2 = dstRect.top + dstRect.height / 2 - containerRect.top;
     }
 
-    // Dot position
+    const valueBox = rawSource.closest(".value-box");
+    const enclosure = rawSource.closest(".instTbl,.classTbl,.dictTbl,.listTbl,.tupleTbl,.stackTbl,.queueTbl,.stackFrame,.zombieStackFrame");
+    if (valueBox && this.anchors[0] !== "LeftMiddle") {
+      const box = valueBox.getBoundingClientRect();
+      x1 = box.right - containerRect.left - SOURCE_INSET;
+      y1 = box.top + box.height / 2 - containerRect.top;
+    }
     this.dotElement.setAttribute("cx", String(x1));
     this.dotElement.setAttribute("cy", String(y1));
 
-    // Path & Arrow trajectory
-    let d = "";
-    let endAngle = 0;
-
-    if (this.anchors[0] === "LeftMiddle" && this.anchors[1] === "LeftMiddle") {
-      // Frame parent pointer curve (arches out to the left)
+    // Every shaft meets the rear edge of the same filled triangular head.
+    const direction = this.anchors[1] === "RightMiddle" ? -1 : 1;
+    const end = x2 - direction * ARROW_LENGTH;
+    let d: string;
+    if (this.anchors[0] === "LeftMiddle") {
       const c = this.curviness || 45;
-      const cp1x = x1 - c;
-      const cp1y = y1;
-      const cp2x = x2 - c;
-      const cp2y = y2;
-      d = `M ${x1} ${y1} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${x2} ${y2}`;
-      endAngle = Math.atan2(y2 - cp2y, x2 - cp2x);
+      d = `M ${x1} ${y1} C ${x1-c} ${y1} ${end-direction*c} ${y2} ${end} ${y2}`;
     } else {
-      // Standard Stack/Heap pointer curve
-      if (x2 >= x1) {
-        const dx = x2 - x1;
-        const c = Math.max(dx * 0.5, 30);
-        const cp1x = x1 + c;
-        const cp1y = y1;
-        const cp2x = x2 - c;
-        const cp2y = y2;
-        d = `M ${x1} ${y1} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${x2} ${y2}`;
-        endAngle = Math.atan2(y2 - cp2y, x2 - cp2x);
+      const exit = enclosure && valueBox
+        ? Math.max(x1, enclosure.getBoundingClientRect().right - containerRect.left - 4) : x1;
+      const sourceHeap = rawSource.closest(".heapObject");
+      const targetHeap = rawTarget.closest(".heapObject");
+      const isReturn = sourceHeap && targetHeap &&
+        targetHeap.getBoundingClientRect().left <= sourceHeap.getBoundingClientRect().left;
+      if (isReturn && enclosure) {
+        const returns = this.manager.connections.filter(c => {
+          const source = c.source[0]?.closest(".heapObject");
+          const target = c.target[0]?.closest(".heapObject");
+          return source && target && target.getBoundingClientRect().left <= source.getBoundingClientRect().left;
+        });
+        const lane = Math.max(0, returns.indexOf(this));
+        const enclosureRect = enclosure.getBoundingClientRect();
+        const objects = Array.from(this.manager.container.querySelectorAll(".heapObject"))
+          .map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
+        const bottom = Math.max(enclosureRect.bottom, dstRect.bottom, ...objects.map(r => r.bottom)) - containerRect.top + 24 + lane * 12;
+        const sourceRight = enclosureRect.right - containerRect.left + 16;
+        const targetLeft = dstRect.left - containerRect.left - 20;
+        const right = Math.max(sourceRight, ...objects.map(r => r.right - containerRect.left + 16)) + lane * 12;
+        const left = Math.min(targetLeft, ...objects.map(r => r.left - containerRect.left - 20)) - lane * 12;
+        const points: Point[] = [[exit, y1], [sourceRight, y1]];
+        // Reach the outer rails through the gap below each endpoint's row, rather
+        // than descending through unrelated arrays elsewhere in the heap.
+        if (right > sourceRight) {
+          const belowSource = sourceHeap.getBoundingClientRect().bottom - containerRect.top + 12;
+          points.push([sourceRight, belowSource], [right, belowSource]);
+        }
+        points.push([right, bottom], [left, bottom]);
+        if (left < targetLeft) {
+          const belowTarget = targetHeap.getBoundingClientRect().bottom - containerRect.top + 12;
+          points.push([left, belowTarget], [targetLeft, belowTarget]);
+        }
+        points.push([targetLeft, y2], [end, y2]);
+        d = `M ${x1} ${y1} H ${exit}` + roundedSegments(points);
+        this.pathElement.dataset.returnLane = String(lane);
       } else {
-        // Self-loop / backward pointer
-        const cp1x = x1 + 40;
-        const cp1y = y1;
-        const cp2x = x2 - 40;
-        const cp2y = y2;
-        d = `M ${x1} ${y1} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${x2} ${y2}`;
-        endAngle = Math.atan2(y2 - cp2y, x2 - cp2x);
+        const bend = end >= exit ? (end - exit) / 2 : 40;
+        d = `M ${x1} ${y1} H ${exit} C ${exit+bend} ${y1} ${end-direction*bend} ${y2} ${end} ${y2}`;
+        delete this.pathElement.dataset.returnLane;
       }
     }
-
     this.pathElement.setAttribute("d", d);
-
-    // Arrow geometry: length 5, width 7, foldback 0.55
-    const len = 5;
-    const halfWidth = 3.5;
-    const foldbackDist = len * (1 - 0.55); // 2.25
-
-    const cos = Math.cos(endAngle);
-    const sin = Math.sin(endAngle);
-
-    const rotatePoint = (rx: number, ry: number): [number, number] => [
-      x2 + rx * cos - ry * sin,
-      y2 + rx * sin + ry * cos,
-    ];
-
-    const pTip = rotatePoint(0, 0);
-    const pTop = rotatePoint(-len, -halfWidth);
-    const pFold = rotatePoint(-foldbackDist, 0);
-    const pBot = rotatePoint(-len, halfWidth);
-
-    this.arrowElement.setAttribute(
-      "points",
-      `${pTip[0]},${pTip[1]} ${pTop[0]},${pTop[1]} ${pFold[0]},${pFold[1]} ${pBot[0]},${pBot[1]}`
-    );
+    this.arrowElement.setAttribute("points", arrowTriangle(x2, y2, direction));
   }
 
   /**
@@ -459,15 +488,18 @@ export class SvgConnectorManager {
       conn.detach();
     }
     this.connections = [];
+    this.container.style.paddingBottom = "";
+    this.container.style.paddingRight = "";
   }
 
   /**
    * Repaints all active connection curves and arrowheads.
    */
   public repaintEverything(): void {
-    for (const conn of this.connections) {
-      conn.update();
-    }
+    for (const conn of this.connections) conn.update();
+    const returns = this.connections.filter(c => c.pathElement.dataset.returnLane !== undefined).length;
+    this.container.style.paddingBottom = returns ? `${32 + returns * 12}px` : "";
+    this.container.style.paddingRight = returns ? `${24 + returns * 12}px` : "";
   }
 
   /**

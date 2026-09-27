@@ -1,0 +1,230 @@
+[
+  {
+    "index": 0,
+    "example": "nodes",
+    "orientation": "horizontal",
+    "theme": "light",
+    "title": "Node chain",
+    "screenshot": {
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 800
+    },
+    "contentHeight": 305.9765625,
+    "scale": 1,
+    "viewport": {
+      "height": 960,
+      "width": 1536
+    },
+    "file": "screenshots/01-nodes-horizontal-light.png"
+  },
+  {
+    "index": 1,
+    "example": "cycle",
+    "orientation": "horizontal",
+    "theme": "light",
+    "title": "Three-node cycle",
+    "screenshot": {
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 800
+    },
+    "contentHeight": 348.9765625,
+    "scale": 1,
+    "viewport": {
+      "height": 960,
+      "width": 1536
+    },
+    "file": "screenshots/02-cycle-horizontal-light.png"
+  },
+  {
+    "index": 2,
+    "example": "links",
+    "orientation": "horizontal",
+    "theme": "light",
+    "title": "LinkBasedList",
+    "screenshot": {
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 800
+    },
+    "contentHeight": 398.953125,
+    "scale": 1,
+    "viewport": {
+      "height": 960,
+      "width": 1536
+    },
+    "file": "screenshots/03-links-horizontal-light.png"
+  },
+  {
+    "index": 3,
+    "example": "array",
+    "orientation": "horizontal",
+    "theme": "light",
+    "title": "ArrayBasedList \u2014 horizontal array",
+    "screenshot": {
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 800
+    },
+    "contentHeight": 391.46875,
+    "scale": 1,
+    "viewport": {
+      "height": 960,
+      "width": 1536
+    },
+    "file": "screenshots/04-array-horizontal-light.png"
+  },
+  {
+    "index": 4,
+    "example": "array",
+    "orientation": "vertical",
+    "theme": "light",
+    "title": "ArrayBasedList \u2014 vertical array",
+    "screenshot": {
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 800
+    },
+    "contentHeight": 454.96875,
+    "scale": 1,
+    "viewport": {
+      "height": 960,
+      "width": 1536
+    },
+    "file": "screenshots/05-array-vertical-light.png"
+  },
+  {
+    "index": 5,
+    "example": "removed",
+    "orientation": "horizontal",
+    "theme": "light",
+    "title": "Both implementations after removal",
+    "screenshot": {
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 800
+    },
+    "contentHeight": 577.421875,
+    "scale": 1,
+    "viewport": {
+      "height": 960,
+      "width": 1536
+    },
+    "file": "screenshots/06-removed-horizontal-light.png"
+  },
+  {
+    "index": 6,
+    "example": "empty",
+    "orientation": "horizontal",
+    "theme": "light",
+    "title": "Both implementations after clear",
+    "screenshot": {
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 800
+    },
+    "contentHeight": 484.4453125,
+    "scale": 1,
+    "viewport": {
+      "height": 960,
+      "width": 1536
+    },
+    "file": "screenshots/07-empty-horizontal-light.png"
+  },
+  {
+    "index": 7,
+    "example": "shared",
+    "orientation": "horizontal",
+    "theme": "light",
+    "title": "Shared string references",
+    "screenshot": {
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 800
+    },
+    "contentHeight": 391.46875,
+    "scale": 1,
+    "viewport": {
+      "height": 960,
+      "width": 1536
+    },
+    "file": "screenshots/08-shared-horizontal-light.png"
+  },
+  {
+    "index": 8,
+    "example": "long",
+    "orientation": "horizontal",
+    "theme": "light",
+    "title": "Long and empty strings \u2014 horizontal array",
+    "screenshot": {
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 800
+    },
+    "contentHeight": 510.046875,
+    "scale": 0.8278819621421164,
+    "viewport": {
+      "height": 960,
+      "width": 1536
+    },
+    "file": "screenshots/09-long-horizontal-light.png"
+  },
+  {
+    "index": 9,
+    "example": "long",
+    "orientation": "vertical",
+    "theme": "light",
+    "title": "Long and empty strings \u2014 vertical array",
+    "screenshot": {
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 800
+    },
+    "contentHeight": 562.6171875,
+    "scale": 0.8278819621421164,
+    "viewport": {
+      "height": 960,
+      "width": 1536
+    },
+    "file": "screenshots/10-long-vertical-light.png"
+  },
+  {
+    "index": 10,
+    "example": "cycle",
+    "orientation": "horizontal",
+    "theme": "dark",
+    "title": "Three-node cycle \u2014 dark theme",
+    "screenshot": {
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 800
+    },
+    "contentHeight": 348.9765625,
+    "scale": 1,
+    "viewport": {
+      "height": 960,
+      "width": 1536
+    },
+    "file": "screenshots/11-cycle-horizontal-dark.png"
+  },
+  {
+    "index": 11,
+    "example": "array",
+    "orientation": "vertical",
+    "theme": "dark",
+    "title": "ArrayBasedList \u2014 dark theme",
+    "screenshot": {
+      "mimeType": "image/png",
+      "width": 1280,
+      "height": 800
+    },
+    "contentHeight": 454.96875,
+    "scale": 1,
+    "viewport": {
+      "height": 960,
+      "width": 1536
+    },
+    "file": "screenshots/12-array-vertical-dark.png"
+  }
+]

@@ -303,6 +303,7 @@ class RenderingSession:
                             os.utime(path, None)
                             return trace
                 except (OSError, ValueError, AttributeError):
+                    # An inaccessible or invalid cache entry is disposable; continue without it.
                     pass
 
             trace = _execute_raw()
@@ -344,5 +345,6 @@ def prune_trace_cache(
                 if not dry_run:
                     path.unlink()
         except OSError:
+            # An inaccessible or invalid cache entry is disposable; continue without it.
             pass
     return count, size

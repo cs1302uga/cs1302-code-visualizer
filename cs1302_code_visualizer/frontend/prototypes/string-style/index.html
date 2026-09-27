@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Compact strings · prototype</title>
+<link rel="stylesheet" href="prototype.css?v=left-aligned-refs">
+<header>
+  <p class="eyebrow">CODE VISUALIZER · THROWAWAY PROTOTYPE</p>
+  <h1>A reference, with its string close by.</h1>
+  <p>Compare three compact layouts against the current default and inline views. All diagrams use the existing renderer.</p>
+  <div class="controls">
+    <label>Example <select id="example">
+      <option value="nodes">Node chain · Cheese, Bread, Milk</option>
+      <option value="cycle">Node cycle · Cheese → Bread → Milk → Cheese</option>
+      <option value="links">LinkBasedList · four items</option>
+      <option value="array">ArrayBasedList · four items, capacity five</option>
+      <option value="removed">Both lists · after remove(0)</option>
+      <option value="empty">Both lists · after clear()</option>
+      <option value="shared">Shared string · stack, nodes, array</option>
+      <option value="long">Long, empty, and escaped strings</option>
+    </select></label>
+    <label>Arrays <select id="orientation"><option>horizontal</option><option>vertical</option></select></label>
+    <label>Theme <select id="theme"><option>light</option><option>dark</option></select></label>
+    <label><input id="compare" type="checkbox"> Show all five views</label>
+  </div>
+  <p id="scenario"></p>
+  <details><summary>Example code and prototype scope</summary><pre id="code"></pre>
+    <p>These are reconstructed memory snapshots based on the course examples, not new Java executions. Cycle, shared-string, and long-string cases are additional fixtures. Compact layout is a local DOM experiment; API, tracer, and export behavior are unchanged.</p>
+    <p>Sources: <a href="http://localhost:8000/java/adt-and-links/node-introduction.html">Node</a> · <a href="http://localhost:8000/java/adt-and-links/list-interface.html">List interface</a> · <a href="http://localhost:8000/java/adt-and-links/examples-both-implementations.html">Both implementations</a></p>
+  </details>
+</header>
+<main id="panels" aria-live="polite"></main>
+<nav class="switcher" aria-label="Prototype variants">
+  <button id="previous" aria-label="Previous variant">←</button>
+  <label>Layout <select id="variant">
+    <option value="A">A · 24 px box / 12 px gap</option>
+    <option value="B">B · aligned boxes / 18 px gap</option>
+    <option value="C">C · 40 px box / 24 px gap</option>
+    <option value="default">Default · strings on heap</option>
+    <option value="inline">Inline · strings inside boxes</option>
+  </select></label>
+  <button id="next" aria-label="Next variant">→</button>
+</nav>
+<script src="../../build/vis-module.bundle.js"></script>
+<script src="prototype.js?v=dot-inset-8"></script>
+</html>

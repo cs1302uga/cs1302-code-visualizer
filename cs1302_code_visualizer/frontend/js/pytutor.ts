@@ -1,3 +1,4 @@
+import { safeMarkup, safeHtml } from "./safeMarkup";
 // Python Tutor: https://github.com/pgbovine/OnlinePythonTutor/
 // Copyright (C) Philip Guo (philip@pgbovine.net)
 // LICENSE: https://github.com/pgbovine/OnlinePythonTutor/blob/master/LICENSE.txt
@@ -39,6 +40,8 @@ require("jquery-ui-dist/jquery-ui.css");
 
 import "@fontsource/recursive";
 import { isModernTrace, convertModernTraceToOpt } from "./modernTraceAdapter";
+import { prepareStringTrace, validateStringStyle } from "./stringStyle";
+import { createValueBox, layoutValueBoxes, renderCompactString } from "./valueLayout";
 import { resolveArrayOrientation } from "./arrayOrientation";
 import { applyTheme, paint } from "./theme";
 require("../css/pytutor");
@@ -342,6 +345,8 @@ export class ExecutionVisualizer {
     if (isModernTrace(dat)) {
       dat = convertModernTraceToOpt(dat);
     }
+    params.stringStyle = validateStringStyle(params.stringStyle);
+    dat = prepareStringTrace(dat, params.stringStyle);
     this.curInputCode = dat.code.rtrim(); // kill trailing spaces
     this.params = params;
     this.curTrace = dat.trace;
@@ -988,12 +993,11 @@ export class ExecutionVisualizer {
     this.add_pytutor_hook("renderPrimitiveObject", function (args) {
       var obj = args.obj,
         d3DomElement = args.d3DomElement;
-      var typ = typeof obj;
       if (obj instanceof Array && obj[0] == "VOID") {
         d3DomElement.append('<span class="voidObj">void</span>');
       } else if (obj instanceof Array && obj[0] == "NUMBER-LITERAL") {
         // actually transmitted as a string
-        d3DomElement.append('<span class="numberObj">' + obj[1] + "</span>");
+        d3DomElement.append(safeMarkup('<span class="numberObj">' + obj[1] + "</span>"));
       } else if (obj instanceof Array && obj[0] == "CHAR-LITERAL") {
         var asc = obj[1].charCodeAt(0);
         var ch = obj[1];
@@ -1014,7 +1018,7 @@ export class ExecutionVisualizer {
         else if (asc >= 32) show = ch;
 
         // stringObj to make monospace
-        d3DomElement.append('<span class="stringObj">\'' + show + "'</span>");
+        d3DomElement.append(safeMarkup('<span class="stringObj">\'' + show + "'</span>"));
       } else return [false]; // we didn't handle it
       return [true]; // we handled it
     });
@@ -1090,22 +1094,22 @@ export class ExecutionVisualizer {
 
       if (obj.length == 1) {
         d3DomElement.append(
-          '<div class="typeLabel">' +
+          safeMarkup('<div class="typeLabel">' +
             typeLabelPrefix +
             fullLabel +
-            "</div>",
+            "</div>"),
         );
-        d3DomElement.append('<table class="' + label + 'Tbl emptyList' + orientationClass + '"></table>');
+        d3DomElement.append(safeMarkup('<table class="' + label + 'Tbl emptyList' + orientationClass + '"></table>'));
         return [true]; //handled
       }
 
       d3DomElement.append(
-        '<div class="typeLabel">' +
+        safeMarkup('<div class="typeLabel">' +
           typeLabelPrefix +
           fullLabel +
-          "</div>",
+          "</div>"),
       );
-      d3DomElement.append('<table class="' + label + 'Tbl' + orientationClass + '"></table>');
+      d3DomElement.append(safeMarkup('<table class="' + label + 'Tbl' + orientationClass + '"></table>'));
       var tbl = d3DomElement.children("table");
 
       if (obj[0] == "LIST") {
@@ -1121,7 +1125,7 @@ export class ExecutionVisualizer {
           // Transpose cell placement while sharing index and value rendering.
           const row = orientation === "vertical" ? $("<tr></tr>").appendTo(tbl) : null;
           $("<td></td>").addClass(label + "Header")
-            .appendTo(row || headerTr).append(elide ? "&hellip;" : ind);
+            .appendTo(row || headerTr).append(safeMarkup(elide ? "&hellip;" : ind));
           const cell = $("<td></td>").addClass(label + "Elt").appendTo(row || contentTr);
           if (!elide) {
             myViz.renderNestedObject(val, stepNum, cell);
@@ -1140,18 +1144,18 @@ export class ExecutionVisualizer {
         tbl.append("<tr></tr><tr></tr>");
         var contentTr = tbl.find("tr:last");
         contentTr.append(
-          '<td class="' +
+          safeMarkup('<td class="' +
             label +
             'FElt">' +
             '<span class="stringObj symbolic">&#8596;</span>' +
-            "</td>",
+            "</td>"),
         );
         $.each(obj, function (ind, val) {
           if (parseInt(ind) < 1) return; // skip type tag and ID entry
-          contentTr.append('<td class="' + label + 'Elt"></td>');
+          contentTr.append(safeMarkup('<td class="' + label + 'Elt"></td>'));
           myViz.renderNestedObject(val, stepNum, contentTr.find("td:last"));
         });
-        contentTr.append('<td class="' + label + 'LElt">' + "</td>");
+        contentTr.append(safeMarkup('<td class="' + label + 'LElt">' + "</td>"));
       }
 
       if (obj[0] == "QUEUE") {
@@ -1159,21 +1163,21 @@ export class ExecutionVisualizer {
         var contentTr = tbl.find("tr:last");
         // Add arrows showing in/out direction
         contentTr.append(
-          '<td class="' +
+          safeMarkup('<td class="' +
             label +
             'FElt">' +
-            '<span class="stringObj symbolic">&#8592;</span></td>',
+            '<span class="stringObj symbolic">&#8592;</span></td>'),
         );
         $.each(obj, function (ind, val) {
           if (parseInt(ind) < 1) return; // skip type tag and ID entry
-          contentTr.append('<td class="' + label + 'Elt"></td>');
+          contentTr.append(safeMarkup('<td class="' + label + 'Elt"></td>'));
           myViz.renderNestedObject(val, stepNum, contentTr.find("td:last"));
         });
         contentTr.append(
-          '<td class="' +
+          safeMarkup('<td class="' +
             label +
             'LElt">' +
-            '<span class="stringObj symbolic">&#8592;</span></td>',
+            '<span class="stringObj symbolic">&#8592;</span></td>'),
         );
       }
 
@@ -1192,7 +1196,7 @@ export class ExecutionVisualizer {
         .find("#dataViz .heapObject")
         .filter(function () {
           let text = $(this).find(".typeLabel").text().trim();
-          return text === "String" || text === "String (length 0)" || text === "empty String";
+          return /^(?:java\.lang\.)?String@[^ ]+(?: \(length 0\))?$/.test(text);
         })
         .each(function () {
           $(this).find(".instKey").remove();
@@ -1200,7 +1204,8 @@ export class ExecutionVisualizer {
           instVal.attr("style", (_, s) => (s || "") + "border: none !important;");
           var stringObj = instVal.find(".stringObj");
           if (stringObj.text().trim() === '""') {
-            $(this).find(".typeLabel").text("String (length 0)");
+            const label = $(this).find(".typeLabel");
+            label.text(label.text().replace(/ \(length 0\)$/, "") + " (length 0)");
             instVal.addClass("emptyStringVal");
             $(this).find(".instTbl").addClass("emptyStringTbl");
             instVal.find(".emptyStringLength").remove();
@@ -1219,21 +1224,7 @@ export class ExecutionVisualizer {
       return old_generateID(sanitized);
     };
 
-    // utility functions
-    var entityMap = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-      "/": "&#x2F;",
-    };
 
-    var escapeHtml = function (string) {
-      return String(string).replace(/[&<>"'\/]/g, function (s) {
-        return entityMap[s];
-      });
-    };
   }
 
   // update fields corresponding to the current and previously executed lines
@@ -1351,7 +1342,6 @@ export class ExecutionVisualizer {
     var LO = lineNoTd.offset().top;
 
     var PO = pcod.offset().top;
-    var ST = pcod.scrollTop();
     var H = pcod.height();
 
     // add a few pixels of fudge factor on the bottom end due to bottom scrollbar
@@ -1448,7 +1438,7 @@ class DataVisualizer {
     this.domRoot
       .find("#globals_area")
       .append(
-        '<div class="stackFrame" id="' +
+        safeMarkup('<div class="stackFrame" id="' +
           this.owner.generateID("globals") +
           '"><div id="' +
           this.owner.generateID("globals_header") +
@@ -1456,7 +1446,7 @@ class DataVisualizer {
           this.getRealLabel("Global frame") +
           '</div><table class="stackFrameVarTable" id="' +
           this.owner.generateID("global_table") +
-          '"></table></div>',
+          '"></table></div>'),
       );
 
     this.jsPlumbInstance = jsPlumb.getInstance({
@@ -1639,7 +1629,6 @@ class DataVisualizer {
   // gets all global and local variable names used in this program
   // execution as indicated by this.curTrace
   getAllProgramVarnames() {
-    let me = this;
     let allVarnames = [];
     $.each(this.curTrace, function (i, curEntry) {
       $.each(curEntry.ordered_globals, function (i, varname) {
@@ -2302,6 +2291,7 @@ class DataVisualizer {
     if (typeof obj == "object") {
       // kludgy
       return (
+        obj[0] == "STRING_REF" ||
         obj[0] == "IMPORTED_FAUX_PRIMITIVE" ||
         obj[0] == "SPECIAL_FLOAT" ||
         obj[0] == "JS_SPECIAL_VAL" ||
@@ -2504,35 +2494,6 @@ class DataVisualizer {
 
     // Render globals and then stack frames using d3:
 
-    // TODO: this sometimes seems buggy on Safari, so nix it for now:
-    function highlightAliasedConnectors(d, i) {
-      // if this row contains a stack pointer, then highlight its arrow and
-      // ALL aliases that also point to the same heap object
-      var stackPtrId = $(this).find("div.stack_pointer").attr("id");
-      if (stackPtrId) {
-        var foundTargetId = null;
-        myViz.jsPlumbInstance.select({ source: stackPtrId }).each(function (c) {
-          foundTargetId = c.targetId;
-        });
-
-        // use foundTargetId to highlight ALL ALIASES
-        myViz.jsPlumbInstance.select().each(function (c) {
-          if (c.targetId == foundTargetId) {
-            c.setHover(true);
-            $(c.canvas).css("z-index", 2000); // ... and move it to the VERY FRONT
-          } else {
-            c.setHover(false);
-          }
-        });
-      }
-    }
-
-    function unhighlightAllConnectors(d, i) {
-      myViz.jsPlumbInstance.select().each(function (c) {
-        c.setHover(false);
-      });
-    }
-
     // TODO: coalesce code for rendering globals and stack frames,
     // since there's so much copy-and-paste grossness right now
 
@@ -2614,7 +2575,7 @@ class DataVisualizer {
       .order() // VERY IMPORTANT to put in the order corresponding to data elements
       .each(function (varname, i) {
         if (i == 0) {
-          $(this).html(varname);
+          $(this).html(safeHtml(varname));
         } else {
           // always delete and re-render the global var ...
           // NB: trying to cache and compare the old value using,
@@ -2643,16 +2604,17 @@ class DataVisualizer {
             myViz.renderCStructArray(val, curInstr, $(this));
           } else {
             $(this).attr("data-reference-target", String(getRefID(val)));
+            const valueTarget = $(createValueBox(this));
             var heapObjID = myViz.generateHeapObjID(getRefID(val), curInstr);
 
             if (myViz.params.textualMemoryLabels) {
               var labelID = varDivID + "_text_label";
-              $(this).append(
-                '<div class="objectIdLabel" id="' +
+              valueTarget.append(
+                safeMarkup('<div class="objectIdLabel" id="' +
                   labelID +
-                  '">id' +
+                  '">' +
                   getRefID(val) +
-                  "</div>",
+                  "</div>"),
               );
               $(this)
                 .find("div#" + labelID)
@@ -2672,8 +2634,8 @@ class DataVisualizer {
               // add a stub so that we can connect it with a connector later.
               // IE needs this div to be NON-EMPTY in order to properly
               // render jsPlumb endpoints, so that's why we add an "&nbsp;"!
-              $(this).append(
-                '<div class="stack_pointer" id="' + varDivID + '">&nbsp;</div>',
+              valueTarget.append(
+                $('<div>').addClass('stack_pointer').attr('id', varDivID).text(String(getRefID(val))),
               );
 
               assert(!myViz.jsPlumbManager.connectionEndpointIDs.has(varDivID));
@@ -2812,7 +2774,7 @@ class DataVisualizer {
     sfdEnter
       .append("div")
       .attr("class", "stackFrameHeader")
-      .html(function (frame, i) {
+      .html(safeHtml(function (frame, i) {
         // pretty-print lambdas and display other weird characters
         // (might contain '<' or '>' for weird names like <genexpr>)
         var funcName = htmlspecialchars(frame.func_name).replace(
@@ -2836,7 +2798,7 @@ class DataVisualizer {
         }
 
         return headerLabel;
-      });
+      }));
 
     sfdEnter.append("table").attr("class", "stackFrameVarTable");
 
@@ -2939,7 +2901,7 @@ class DataVisualizer {
               varname === "this"
                 ? `<span class="javaStackVarThis">${htmlsanitize(varname)}</span>`
                 : htmlsanitize(varname);
-            $(this).html(typeHtml + varNameHtml);
+            $(this).html(safeHtml(typeHtml + varNameHtml));
           }
         } else {
           // always delete and re-render the stack var ...
@@ -2969,15 +2931,16 @@ class DataVisualizer {
             myViz.renderCStructArray(val, curInstr, $(this));
           } else {
             $(this).attr("data-reference-target", String(getRefID(val)));
+            const valueTarget = $(createValueBox(this));
             var heapObjID = myViz.generateHeapObjID(getRefID(val), curInstr);
             if (myViz.params.textualMemoryLabels) {
               var labelID = varDivID + "_text_label";
-              $(this).append(
-                '<div class="objectIdLabel" id="' +
+              valueTarget.append(
+                safeMarkup('<div class="objectIdLabel" id="' +
                   labelID +
-                  '">id' +
+                  '">' +
                   getRefID(val) +
-                  "</div>",
+                  "</div>"),
               );
               $(this)
                 .find("div#" + labelID)
@@ -2997,8 +2960,8 @@ class DataVisualizer {
               // add a stub so that we can connect it with a connector later.
               // IE needs this div to be NON-EMPTY in order to properly
               // render jsPlumb endpoints, so that's why we add an "&nbsp;"!
-              $(this).append(
-                '<div class="stack_pointer" id="' + varDivID + '">&nbsp;</div>',
+              valueTarget.append(
+                $('<div>').addClass('stack_pointer').attr('id', varDivID).text(String(getRefID(val))),
               );
 
               assert(!myViz.jsPlumbManager.connectionEndpointIDs.has(varDivID));
@@ -3107,7 +3070,6 @@ class DataVisualizer {
         // only consider nudging if srcID and dstID are on different rows
         if (srcRowID != dstRowID) {
           var srcAnchorLeft = srcAnchorObject.offset().left;
-          var srcHeapObjectLeft = srcHeapObject.offset().left;
           var dstHeapObjectLeft = dstHeapObject.offset().left;
 
           // if srcAnchorObject is to the RIGHT of dstHeapObject, then nudge
@@ -3259,6 +3221,20 @@ class DataVisualizer {
       totalParentPointersRendered++;
     }
 
+    // Label heap identities independently of declared-variable type visibility.
+    myViz.domRoot.find(".heapObject[data-object-id]").each((_i, element) => {
+      const id = element.dataset.objectId;
+      const object = curEntry.heap[id];
+      const label = element.querySelector(":scope > .typeLabel, :scope > .heapPrimitive > .typeLabel");
+      if (!label || !object) return;
+      const runtimeType = curEntry.heap_attrs?.[id]?.type;
+      const type = ["INSTANCE", "CLASS", "HEAP_PRIMITIVE", "COLOR"].includes(object[0]) ? object[1] :
+        typeof runtimeType === "string" ? runtimeType :
+        object[0] === "LIST" ? "array" : object[0] === "JAVA_LAMBDA" ? "lambda" : object[0].toLowerCase();
+      const count = label.textContent.match(/ \((?:length|size) \d+\)$/)?.[0] || "";
+      label.textContent = `${myViz.trimTypePrefix(type)}@${id}${count}`;
+    });
+    layoutValueBoxes(myViz.domRoot[0]);
     if (!myViz.params.textualMemoryLabels) {
       // re-render existing connectors and then ...
       //
@@ -3436,7 +3412,7 @@ class DataVisualizer {
               varsHiddenNoDups.push(e);
             }
           });
-          shs.append("Hidden variables: " + varlistToHtml(varsHiddenNoDups));
+          shs.append(safeMarkup("Hidden variables: " + varlistToHtml(varsHiddenNoDups)));
         }
         if (myViz.fieldsHidden.length > 0) {
           // filter out duplicates:
@@ -3447,7 +3423,7 @@ class DataVisualizer {
             }
           });
           shs.append(
-            "<br/>Hidden object fields: " + varlistToHtml(fieldsHiddenNoDups),
+            safeMarkup("<br/>Hidden object fields: " + varlistToHtml(fieldsHiddenNoDups)),
           );
         }
       }
@@ -3466,32 +3442,30 @@ class DataVisualizer {
   // new element to render
   renderPrimitiveObject(obj, stepNum: number, d3DomElement) {
     d3DomElement.removeAttr("data-reference-target");
-    var myViz = this; // to prevent confusion of 'this' inside of nested functions
-
-    if (
-      this.owner.try_hook("renderPrimitiveObject", {
-        obj: obj,
-        d3DomElement: d3DomElement,
-      })[0]
-    )
+    var myViz = this;
+    if (Array.isArray(obj) && obj[0] === "STRING_REF") {
+      renderCompactString(d3DomElement[0], String(obj[1]), obj[2], !!this.params.textualMemoryLabels);
       return;
+    }
+    d3DomElement = $(createValueBox(d3DomElement[0]));
+    if (this.owner.try_hook("renderPrimitiveObject", { obj, d3DomElement })[0]) return;
 
     var typ = typeof obj;
 
     if (obj == null) {
       d3DomElement.append(
-        '<span class="nullObj">' + this.getRealLabel("None") + "</span>",
+        safeMarkup('<span class="nullObj">' + this.getRealLabel("None") + "</span>"),
       );
     } else if (typ == "number") {
-      d3DomElement.append('<span class="numberObj">' + obj + "</span>");
+      d3DomElement.append(safeMarkup('<span class="numberObj">' + obj + "</span>"));
     } else if (typ == "boolean") {
       if (obj) {
         d3DomElement.append(
-          '<span class="boolObj">' + this.getRealLabel("True") + "</span>",
+          safeMarkup('<span class="boolObj">' + this.getRealLabel("True") + "</span>"),
         );
       } else {
         d3DomElement.append(
-          '<span class="boolObj">' + this.getRealLabel("False") + "</span>",
+          safeMarkup('<span class="boolObj">' + this.getRealLabel("False") + "</span>"),
         );
       }
     } else if (typ == "string") {
@@ -3499,10 +3473,11 @@ class DataVisualizer {
       var literalStr = htmlspecialchars(obj);
 
       // print as a double-quoted string literal
+      literalStr = literalStr.replace(/\\/g, '\\\\');
       literalStr = literalStr.replace(doubleQuoteAllRegex, '\\"'); // replace ALL
       literalStr = '"' + literalStr + '"';
 
-      d3DomElement.append('<span class="stringObj">' + literalStr + "</span>");
+      d3DomElement.append(safeMarkup('<span class="stringObj">' + literalStr + "</span>"));
     } else if (typ == "object") {
       if (obj[0] == "C_DATA") {
         var typeName = obj[2];
@@ -3536,12 +3511,12 @@ class DataVisualizer {
         if (isValidPtr) {
           // for pointers, put cdataId in the header
           d3DomElement.append(
-            '<div id="' +
+            safeMarkup('<div id="' +
               cdataId +
               '" class="cdataHeader">' +
               leader +
               typeName +
-              "</div>",
+              "</div>"),
           );
 
           var ptrVal = obj[3];
@@ -3556,11 +3531,11 @@ class DataVisualizer {
 
           // make it really narrow so that the div doesn't STRETCH too wide
           d3DomElement.append(
-            '<div style="width: 10px;" id="' +
+            safeMarkup('<div style="width: 10px;" id="' +
               ptrSrcId +
               '" class="cdataElt">&nbsp;' +
               debugInfo +
-              "</div>",
+              "</div>"),
           );
 
           // special case: display 0x0 address as a NULL pointer value,
@@ -3598,7 +3573,7 @@ class DataVisualizer {
           // for non-pointers, put cdataId on the element itself, so that
           // pointers can point directly at the element, not the header
           d3DomElement.append(
-            '<div class="cdataHeader">' + leader + typeName + "</div>",
+            safeMarkup('<div class="cdataHeader">' + leader + typeName + "</div>"),
           );
 
           var rep = "";
@@ -3611,6 +3586,7 @@ class DataVisualizer {
               rep = "\uD83D\uDC80"; // skull emoji
             } else {
               // a regular string
+              literalStr = literalStr.replace(/\\/g, '\\\\');
               literalStr = literalStr.replace(newlineAllRegex, "\\n"); // replace ALL
               literalStr = literalStr.replace(tabAllRegex, "\\t"); // replace ALL
               literalStr = literalStr.replace(doubleQuoteAllRegex, '\\"'); // replace ALL
@@ -3630,7 +3606,7 @@ class DataVisualizer {
           }
 
           d3DomElement.append(
-            '<div id="' + cdataId + '" class="cdataElt">' + rep + "</div>",
+            safeMarkup('<div id="' + cdataId + '" class="cdataElt">' + rep + "</div>"),
           );
         }
       } else if (obj[0] == "IMPORTED_FAUX_PRIMITIVE") {
@@ -3638,10 +3614,10 @@ class DataVisualizer {
         // libraries/modules, which should be displayed as 'primitives'
         // so that we don't clutter up the display by dedicating heap
         // space for them or trying to recurse into viewing their insides
-        d3DomElement.append('<span class="importedObj">' + obj[1] + "</span>");
+        d3DomElement.append(safeMarkup('<span class="importedObj">' + obj[1] + "</span>"));
       } else {
         assert(obj[0] == "SPECIAL_FLOAT" || obj[0] == "JS_SPECIAL_VAL");
-        d3DomElement.append('<span class="numberObj">' + obj[1] + "</span>");
+        d3DomElement.append(safeMarkup('<span class="numberObj">' + obj[1] + "</span>"));
       }
     } else {
       assert(false);
@@ -3682,15 +3658,16 @@ class DataVisualizer {
       myViz.jsPlumbManager.heap_pointer_src_id++; // just make sure each source has a UNIQUE ID
 
       var dstDivID = heapObjID;
+      d3DomElement = $(createValueBox(d3DomElement[0]));
 
       if (myViz.params.textualMemoryLabels) {
         var labelID = srcDivID + "_text_label";
         d3DomElement.append(
-          '<div class="objectIdLabel" id="' +
+          safeMarkup('<div class="objectIdLabel" id="' +
             labelID +
-            '">id' +
+            '">' +
             objID +
-            "</div>",
+            "</div>"),
         );
 
         myViz.domRoot.find("div#" + labelID).hover(
@@ -3712,7 +3689,7 @@ class DataVisualizer {
         // add a stub so that we can connect it with a connector later.
         // IE needs this div to be NON-EMPTY in order to properly
         // render jsPlumb endpoints, so that's why we add an "&nbsp;"!
-        d3DomElement.append('<div id="' + srcDivID + '">&nbsp;</div>');
+        d3DomElement.append($('<div>').attr('id', srcDivID).text(String(objID)));
 
         assert(!myViz.jsPlumbManager.connectionEndpointIDs.has(srcDivID));
         myViz.jsPlumbManager.connectionEndpointIDs.set(srcDivID, dstDivID);
@@ -3729,7 +3706,7 @@ class DataVisualizer {
     // connectors can point to it:
     // TODO: what about C/C++ objects on the stack that are the target of pointers?
     d3DomElement.append(
-      '<div class="heapObject" id="' + heapObjID + '"></div>',
+      safeMarkup('<div class="heapObject" id="' + heapObjID + '"></div>'),
     );
     d3DomElement = myViz.domRoot.find("#" + heapObjID); // TODO: maybe inefficient
     d3DomElement.attr("data-object-id", String(objID));
@@ -3782,20 +3759,20 @@ class DataVisualizer {
 
       if (obj.length == 1) {
         d3DomElement.append(
-          '<div class="typeLabel">' +
+          safeMarkup('<div class="typeLabel">' +
             typeLabelPrefix +
             fullLabel +
-            "</div>",
+            "</div>"),
         );
-        d3DomElement.append('<table class="' + label + 'Tbl emptyList"></table>');
+        d3DomElement.append(safeMarkup('<table class="' + label + 'Tbl emptyList"></table>'));
       } else {
         d3DomElement.append(
-          '<div class="typeLabel">' +
+          safeMarkup('<div class="typeLabel">' +
             typeLabelPrefix +
             fullLabel +
-            "</div>",
+            "</div>"),
         );
-        d3DomElement.append('<table class="' + label + 'Tbl"></table>');
+        d3DomElement.append(safeMarkup('<table class="' + label + 'Tbl"></table>'));
         var tbl = d3DomElement.children("table");
 
         if (obj[0] == "LIST" || obj[0] == "TUPLE") {
@@ -3807,10 +3784,10 @@ class DataVisualizer {
 
             // add a new column and then pass in that newly-added column
             // as d3DomElement to the recursive call to child:
-            headerTr.append('<td class="' + label + 'Header"></td>');
-            headerTr.find("td:last").append(parseInt(ind) - 1);
+            headerTr.append(safeMarkup('<td class="' + label + 'Header"></td>'));
+            headerTr.find("td:last").append(safeMarkup(parseInt(ind) - 1));
 
-            contentTr.append('<td class="' + label + 'Elt"></td>');
+            contentTr.append(safeMarkup('<td class="' + label + 'Elt"></td>'));
             myViz.renderNestedObject(val, stepNum, contentTr.find("td:last"));
           });
         } else if (obj[0] == "SET") {
@@ -3879,24 +3856,24 @@ class DataVisualizer {
 
       if (isInstance) {
         d3DomElement.append(
-          '<div class="typeLabel">' +
+          safeMarkup('<div class="typeLabel">' +
             typeLabelPrefix +
             displayClass +
             typeLabelSuffix +
-            "</div>",
+            "</div>"),
         );
       } else if (isPprintInstance) {
         d3DomElement.append(
-          '<div class="typeLabel">' +
+          safeMarkup('<div class="typeLabel">' +
             typeLabelPrefix +
             displayClass +
             typeLabelSuffix +
-            "</div>",
+            "</div>"),
         );
         d3DomElement.append(
-          '<table class="customObjTbl"><tr><td class="customObjElt">' +
+          safeMarkup('<table class="customObjTbl"><tr><td class="customObjElt">' +
             htmlspecialchars(obj[2]) +
-            "</td></tr></table>",
+            "</td></tr></table>"),
         );
       } else {
         var superclassStr = "";
@@ -3909,18 +3886,18 @@ class DataVisualizer {
             "] ";
         }
         d3DomElement.append(
-          '<div class="typeLabel">' +
+          safeMarkup('<div class="typeLabel">' +
             typeLabelPrefix +
             displayClass +
             " class " +
             superclassStr +
-            "</div>",
+            "</div>"),
         );
       }
 
       if (isInstance || obj.length > headerLength) {
         var lab = isInstance ? "inst" : "class";
-        d3DomElement.append('<table class="' + lab + 'Tbl"></table>');
+        d3DomElement.append(safeMarkup('<table class="' + lab + 'Tbl"></table>'));
 
         var tbl = d3DomElement.children("table:last"); // tricky, there's more than 1 table if isPprintInstance is true
 
@@ -3943,10 +3920,10 @@ class DataVisualizer {
 
           let isFinal = attrs?.final?.[Number(ind) - 2] === true;
           tbl.append(
-            `<tr class="${lab}Entry${isFinal ? " isFinal" : ""}">
+            safeMarkup(`<tr class="${lab}Entry${isFinal ? " isFinal" : ""}">
                <td class="${lab}Key"></td>
                <td class="${lab}Val"></td>
-             </tr>`,
+             </tr>`),
           );
 
           var newRow = tbl.find("tr:last");
@@ -3965,8 +3942,8 @@ class DataVisualizer {
               myViz.params.includeTypes && fieldType
                 ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(fieldType))}</div>`
                 : "";
-            keyTd.append(typeHtml);
-            keyTd.append('<span class="keyObj">' + attrnameStr + "</span>");
+            keyTd.append(safeMarkup(typeHtml));
+            keyTd.append(safeMarkup('<span class="keyObj">' + attrnameStr + "</span>"));
           } else {
             // when strings are rendered as heap objects ...
             myViz.renderNestedObject(kvPair[0], stepNum, keyTd);
@@ -3992,10 +3969,10 @@ class DataVisualizer {
 
       if (!myViz.params.compactFuncLabels) {
         d3DomElement.append(
-          '<div class="typeLabel">' +
+          safeMarkup('<div class="typeLabel">' +
             typeLabelPrefix +
             myViz.getRealLabel("function") +
-            "</div>",
+            "</div>"),
         );
       }
 
@@ -4003,25 +3980,25 @@ class DataVisualizer {
 
       if (parentFrameID) {
         d3DomElement.append(
-          '<div class="funcObj">' +
+          safeMarkup('<div class="funcObj">' +
             funcPrefix +
             " " +
             funcName +
             " [parent=f" +
             parentFrameID +
-            "]</div>",
+            "]</div>"),
         );
       } else if (myViz.params.showAllFrameLabels) {
         d3DomElement.append(
-          '<div class="funcObj">' +
+          safeMarkup('<div class="funcObj">' +
             funcPrefix +
             " " +
             funcName +
-            " [parent=Global]</div>",
+            " [parent=Global]</div>"),
         );
       } else {
         d3DomElement.append(
-          '<div class="funcObj">' + funcPrefix + " " + funcName + "</div>",
+          safeMarkup('<div class="funcObj">' + funcPrefix + " " + funcName + "</div>"),
         );
       }
 
@@ -4042,7 +4019,7 @@ class DataVisualizer {
           var keyTd = newRow.find("td:first");
           var valTd = newRow.find("td:last");
           keyTd.append(
-            '<span class="keyObj">' + htmlspecialchars(kvPair[0]) + "</span>",
+            safeMarkup('<span class="keyObj">' + htmlspecialchars(kvPair[0]) + "</span>"),
           );
           myViz.renderNestedObject(kvPair[1], stepNum, valTd);
         });
@@ -4051,7 +4028,6 @@ class DataVisualizer {
       /* TODO: refactor me */
       // JavaScript function
       assert(obj.length == 5);
-      var funcName = htmlspecialchars(obj[1]);
       var funcCode = typeLabelPrefix + htmlspecialchars(obj[2]);
       var funcProperties = obj[3]; // either null or a non-empty list of key-value pairs
       var parentFrameID = obj[4];
@@ -4060,17 +4036,16 @@ class DataVisualizer {
         d3DomElement.append('<table class="classTbl"></table>');
         var tbl = d3DomElement.children("table");
         tbl.append(
-          '<tr><td class="funcCod" colspan="2"><pre class="funcCode">' +
+          safeMarkup('<tr><td class="funcCod" colspan="2"><pre class="funcCode">' +
             funcCode +
             "</pre>" +
-            "</td></tr>",
+            "</td></tr>"),
         );
 
         if (funcProperties) {
           assert(funcProperties.length > 0);
           let rawFuncName = obj[1];
           $.each(funcProperties, function (ind, kvPair) {
-            let instKey = kvPair[0];
             if (myViz.inHideFieldsSet(rawFuncName, kvPair[0])) {
               console.log("render HIDING", rawFuncName, kvPair[0]);
               myViz.fieldsHidden.push(
@@ -4086,7 +4061,7 @@ class DataVisualizer {
             var keyTd = newRow.find("td:first");
             var valTd = newRow.find("td:last");
             keyTd.append(
-              '<span class="keyObj">' + htmlspecialchars(kvPair[0]) + "</span>",
+              safeMarkup('<span class="keyObj">' + htmlspecialchars(kvPair[0]) + "</span>"),
             );
             myViz.renderNestedObject(kvPair[1], stepNum, valTd);
           });
@@ -4094,26 +4069,26 @@ class DataVisualizer {
 
         if (parentFrameID) {
           tbl.append(
-            '<tr class="classEntry"><td class="classKey">parent</td><td class="classVal">' +
+            safeMarkup('<tr class="classEntry"><td class="classKey">parent</td><td class="classVal">' +
               "f" +
               parentFrameID +
-              "</td></tr>",
+              "</td></tr>"),
           );
         } else if (myViz.params.showAllFrameLabels) {
           tbl.append(
-            '<tr class="classEntry"><td class="classKey">parent</td><td class="classVal">' +
+            safeMarkup('<tr class="classEntry"><td class="classKey">parent</td><td class="classVal">' +
               "global" +
-              "</td></tr>",
+              "</td></tr>"),
           );
         }
       } else {
         // compact form:
-        d3DomElement.append('<pre class="funcCode">' + funcCode + "</pre>");
+        d3DomElement.append(safeMarkup('<pre class="funcCode">' + funcCode + "</pre>"));
       }
     } else if (obj[0] == "JAVA_LAMBDA") {
       assert(obj.length == 2);
       d3DomElement.append(
-        '<div class="typeLabel">' + typeLabelPrefix + "lambda" + "</div>",
+        safeMarkup('<div class="typeLabel">' + typeLabelPrefix + "lambda" + "</div>"),
       );
       let lambdaCode = obj[1];
       // this is a little bit hacky but I think it's safe? you're not going to
@@ -4124,11 +4099,11 @@ class DataVisualizer {
         (p) => (lambdaCode = lambdaCode.replaceAll(p, "")),
       );
       d3DomElement.append(
-        '<table class="lambdaObjTbl"><tr><td class="lambdaObjElt">' +
+        safeMarkup('<table class="lambdaObjTbl"><tr><td class="lambdaObjElt">' +
           '<pre class="funcCode"><code class="language-java">' +
           htmlsanitize(lambdaCode) +
           "</code></pre>" +
-          "</td></tr></table>",
+          "</td></tr></table>"),
       );
     } else if (obj[0] == "HEAP_PRIMITIVE") {
       assert(obj.length == 3);
@@ -4141,7 +4116,7 @@ class DataVisualizer {
       d3DomElement
         .find("div.heapPrimitive")
         .append(
-          '<div class="typeLabel">' + typeLabelPrefix + typeName + "</div>",
+          safeMarkup('<div class="typeLabel">' + typeLabelPrefix + typeName + "</div>"),
         );
       myViz.renderPrimitiveObject(
         primitiveVal,
@@ -4157,16 +4132,16 @@ class DataVisualizer {
       let typeLabelSuffix = realLabel ? " " + realLabel : "";
 
       d3DomElement.append(
-        '<div class="typeLabel">' +
+        safeMarkup('<div class="typeLabel">' +
           typeLabelPrefix +
           displayClass +
           typeLabelSuffix +
-          "</div>",
+          "</div>"),
       );
 
       let sanitizedHex = htmlspecialchars(hexColor);
       d3DomElement.append(
-        '<table class="colorObjTbl"><tr><td class="colorObjElt">' +
+        safeMarkup('<table class="colorObjTbl"><tr><td class="colorObjElt">' +
           '<span class="colorSwatchContainer">' +
           '<span class="colorSwatch" style="background-color: ' +
           sanitizedHex +
@@ -4175,7 +4150,7 @@ class DataVisualizer {
           '<span class="colorHexLabel">' +
           sanitizedHex +
           "</span>" +
-          "</td></tr></table>",
+          "</td></tr></table>"),
       );
     } else if (
       obj[0] == "C_STRUCT" ||
@@ -4193,12 +4168,12 @@ class DataVisualizer {
       strRepr = htmlspecialchars(strRepr); // escape strings!
 
       d3DomElement.append(
-        '<div class="typeLabel">' + typeLabelPrefix + typeName + "</div>",
+        safeMarkup('<div class="typeLabel">' + typeLabelPrefix + typeName + "</div>"),
       );
       d3DomElement.append(
-        '<table class="customObjTbl"><tr><td class="customObjElt">' +
+        safeMarkup('<table class="customObjTbl"><tr><td class="customObjElt">' +
           strRepr +
-          "</td></tr></table>",
+          "</td></tr></table>"),
       );
     }
   }
@@ -4209,18 +4184,17 @@ class DataVisualizer {
 
     if (obj[0] == "C_STRUCT") {
       assert(obj.length >= 3);
-      var addr = obj[1];
       var typename = obj[2];
 
       var leader = "";
       if (myViz.params.lang === "cpp") {
         // call it 'object' instead of 'struct'
         d3DomElement.append(
-          '<div class="typeLabel">' + leader + "object " + typename + "</div>",
+          safeMarkup('<div class="typeLabel">' + leader + "object " + typename + "</div>"),
         );
       } else {
         d3DomElement.append(
-          '<div class="typeLabel">' + leader + "struct " + typename + "</div>",
+          safeMarkup('<div class="typeLabel">' + leader + "struct " + typename + "</div>"),
         );
       }
 
@@ -4253,7 +4227,7 @@ class DataVisualizer {
           assert(typeof kvPair[0] == "string");
           // common case ...
           var attrnameStr = htmlspecialchars(kvPair[0]);
-          keyTd.append('<span class="keyObj">' + attrnameStr + "</span>");
+          keyTd.append(safeMarkup('<span class="keyObj">' + attrnameStr + "</span>"));
 
           // values can be arbitrary objects, so recurse:
           myViz.renderNestedObject(kvPair[1], stepNum, valTd);
@@ -4269,12 +4243,11 @@ class DataVisualizer {
       // any better than this since it doesn't make sense to display
       // more than 2 dimensions at once on screen
       assert(obj.length >= 3);
-      var addr = obj[1];
       var dimensions = obj[2];
       assert(dimensions.length > 1); // make sure we're really multidimensional!
 
       var leader = "";
-      d3DomElement.append('<div class="typeLabel">' + leader + "array</div>");
+      d3DomElement.append(safeMarkup('<div class="typeLabel">' + leader + "array</div>"));
       d3DomElement.append('<table class="cArrayTbl"></table>');
       var tbl = d3DomElement.children("table");
 
@@ -4321,7 +4294,7 @@ class DataVisualizer {
           // add a new column and then pass in that newly-added column
           // as d3DomElement to the recursive call to child:
           headerTr.append('<td class="cMultidimArrayHeader"></td>');
-          headerTr.find("td:last").append(indToDisplay);
+          headerTr.find("td:last").append(safeMarkup(indToDisplay));
 
           contentTr.append('<td class="cMultidimArrayElt"></td>');
           myViz.renderNestedObject(val, stepNum, contentTr.find("td:last"));
@@ -4330,10 +4303,9 @@ class DataVisualizer {
     } else {
       assert(obj[0] == "C_ARRAY");
       assert(obj.length >= 2);
-      var addr = obj[1];
 
       var leader = "";
-      d3DomElement.append('<div class="typeLabel">' + leader + "array</div>");
+      d3DomElement.append(safeMarkup('<div class="typeLabel">' + leader + "array</div>"));
       d3DomElement.append('<table class="cArrayTbl"></table>');
       var tbl = d3DomElement.children("table");
 
@@ -4346,7 +4318,7 @@ class DataVisualizer {
         // add a new column and then pass in that newly-added column
         // as d3DomElement to the recursive call to child:
         headerTr.append('<td class="cArrayHeader"></td>');
-        headerTr.find("td:last").append(parseInt(ind) - 2 /* adjust */);
+        headerTr.find("td:last").append(safeMarkup(parseInt(ind) - 2) /* adjust */);
 
         contentTr.append('<td class="cArrayElt"></td>');
         myViz.renderNestedObject(val, stepNum, contentTr.find("td:last"));
@@ -4355,6 +4327,7 @@ class DataVisualizer {
   }
 
   redrawConnectors() {
+    layoutValueBoxes(this.domRoot[0]);
     this.jsPlumbInstance.repaintEverything();
   }
 
@@ -4568,24 +4541,6 @@ class CodeDisplay {
       .attr("fill", darkArrowColor);
 
     if (editCodeBaseURL) {
-      // kinda kludgy
-      var pyVer = "2"; // default
-      if (lang === "js") {
-        pyVer = "js";
-      } else if (lang === "ts") {
-        pyVer = "ts";
-      } else if (lang === "java") {
-        pyVer = "java";
-      } else if (lang === "py3") {
-        pyVer = "3";
-      } else if (lang === "py3anaconda") {
-        pyVer = "py3anaconda";
-      } else if (lang === "c") {
-        pyVer = "c";
-      } else if (lang === "cpp") {
-        pyVer = "cpp";
-      }
-
       var urlStr = "removed to let project build";
       this.domRoot.find("#editBtn").attr("href", urlStr);
     } else {
@@ -4679,13 +4634,13 @@ class CodeDisplay {
           return this.owner.generateID("cod" + d.lineNumber); // make globally unique (within the page)
         }
       })
-      .html(function (d, i) {
+      .html(safeHtml(function (d, i) {
         if (i == 0) {
           return d.lineNumber;
         } else {
           return htmlspecialchars(d.text);
         }
-      });
+      }));
 
     // create a left-most gutter td that spans ALL rows ...
     // (NB: valign="top" is CRUCIAL for this to work in IE)
@@ -4909,7 +4864,6 @@ class CodeDisplay {
       var LO = lineNoTd.offset().top;
 
       var PO = pcod.offset().top;
-      var ST = pcod.scrollTop();
       var H = pcod.height();
 
       // add a few pixels of fudge factor on the bottom end due to bottom scrollbar
@@ -5001,7 +4955,7 @@ class NavigationController {
     this.domRoot.find("#vcrControls #jmpLastInstr").attr("disabled", true);
 
     var ruiDiv = this.domRoot.find("#rawUserInputDiv");
-    ruiDiv.find("#userInputPromptStr").html(this.owner.userInputPromptStr);
+    ruiDiv.find("#userInputPromptStr").html(safeHtml(this.owner.userInputPromptStr));
     ruiDiv.find("#raw_input_submit_btn").click(() => {
       var userInput = ruiDiv.find("#raw_input_textbox").val();
       // advance instruction count by 1 to get to the NEXT instruction
@@ -5089,7 +5043,7 @@ class NavigationController {
           connectorSpec = [connectorType, { gap: gap }];
         }
 
-        if (connectorSpec) {
+        {
           myself.owner.dataViz.jsPlumbInstance.importDefaults({
             Connector: connectorSpec,
             Overlays: [
@@ -5113,7 +5067,7 @@ class NavigationController {
       // redraw all jsPlumb connectors with new options
       uiControlsPane.find(".jsplumbOptionSlider").each((i, e) => {
         e.oninput = function () {
-          $(e).siblings(".sliderVal").html(this.value);
+          $(e).siblings(".sliderVal").text(this.value);
           rerenderJsPlumbConnectors();
         };
       });
@@ -5178,10 +5132,10 @@ class NavigationController {
 
       uiControlsPane
         .find("#hideVarsChoices")
-        .html("<b><em>Choices:</em></b> " + varnameChoices);
+        .html(safeHtml("<b><em>Choices:</em></b> " + varnameChoices));
       uiControlsPane
         .find("#hideFieldsChoices")
-        .html("<b><em>Choices:</em></b> " + fieldnameChoices);
+        .html(safeHtml("<b><em>Choices:</em></b> " + fieldnameChoices));
 
       uiControlsPane.find("#updateHideVarsBtn").click(() => {
         let hideVarsLst = processHideString(
@@ -5219,7 +5173,7 @@ class NavigationController {
     vcrControls.find("#jmpStepBack").attr("disabled", false);
     vcrControls.find("#jmpStepFwd").attr("disabled", false);
     vcrControls.find("#jmpLastInstr").attr("disabled", false);
-    this.domRoot.find("#curInstr").html(msg);
+    this.domRoot.find("#curInstr").html(safeHtml(msg));
 
     if (isFirstInstr) {
       vcrControls.find("#jmpFirstInstr").attr("disabled", true);
@@ -5296,9 +5250,9 @@ class NavigationController {
       this.domRoot
         .find("#errorOutput")
         .html(
-          htmlspecialchars(msg) +
+          safeHtml(htmlspecialchars(msg) +
             `
-      <div style="font-size: 11pt; color: #666">(${unsupportedFeaturesStr})</div>`,
+      <div style="font-size: 11pt; color: #666">(${unsupportedFeaturesStr})</div>`),
         )
         .show();
     } else {

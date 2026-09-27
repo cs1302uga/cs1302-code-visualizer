@@ -15,6 +15,7 @@ from .array_options import add_array_arguments, array_options_from_args
 from .browser_driver import generate_step_images
 from .errors import CodeVisError, CodeVisualizerError
 from .session import RenderingSession
+from .string_options import add_string_argument, string_options_from_args
 from .theme_options import add_theme_argument, theme_options
 
 
@@ -158,6 +159,7 @@ class AtomicJobWriter:
                 try:
                     backup.unlink(missing_ok=True)
                 except OSError:
+                    # Cleanup is best-effort; preserve the successful commit or original error.
                     pass
         return committed_paths
 
@@ -169,6 +171,7 @@ class AtomicJobWriter:
                     if temp_path.exists():
                         temp_path.unlink(missing_ok=True)
                 except OSError:
+                    # Cleanup is best-effort; preserve the successful commit or original error.
                     pass
 
 
@@ -317,6 +320,7 @@ def run_batch_cli(args: argparse.Namespace) -> int:
     jobs: list[tuple[str, str, Path | None, set[int], dict[str, Any]]] = []
     array_defaults = {
         **array_options_from_args(args),
+        **string_options_from_args(args),
         **theme_options(getattr(args, "theme", None)),
     }
 
@@ -379,6 +383,7 @@ def run_batch_cli(args: argparse.Namespace) -> int:
                     try:
                         array_options = {
                             **array_options_from_args(args, payload),
+                            **string_options_from_args(args, payload),
                             **theme_options(payload.get("theme", getattr(args, "theme", None))),
                         }
                     except (TypeError, ValueError) as exc:
@@ -444,7 +449,11 @@ def run_batch_cli(args: argparse.Namespace) -> int:
 def run_single_cli(args: argparse.Namespace) -> int:
     """Handle single-file visualization."""
     source_code = ""
-    array_options = {**array_options_from_args(args), **theme_options(getattr(args, "theme", None))}
+    array_options = {
+        **array_options_from_args(args),
+        **string_options_from_args(args),
+        **theme_options(getattr(args, "theme", None)),
+    }
 
     if args.files and len(args.files) == 1:
         source_path = Path(args.files[0])
@@ -637,6 +646,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
 
     add_theme_argument(parser)
+    add_string_argument(parser)
     add_array_arguments(parser)
     args = parser.parse_args(argv)
 

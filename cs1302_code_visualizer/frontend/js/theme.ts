@@ -55,7 +55,8 @@ svg.codevis-diagram [data-codevis-stroke="${role}"] { stroke: ${paint(role as Pa
 const surfaces: [PaintRole, string][] = [
   ["activeStack", ".highlightedStackFrame"],
   ["stack", ".stackFrame, .zombieStackFrame"],
-  ["value", ".instVal, .listElt, .stackFrameValue, .colorObjTbl, .lambdaObjTbl"],
+  ["object", ".value-cell:not(.stackFrameValue)"],
+  ["value", ".value-box, .instVal, .listElt, .stackFrameValue, .colorObjTbl, .lambdaObjTbl"],
   ["object", ".instTbl, .listTbl, .instKey"],
   ["canvas", ".ExecutionVisualizer"],
 ];

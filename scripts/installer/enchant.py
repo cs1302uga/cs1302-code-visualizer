@@ -264,6 +264,7 @@ def get_installed_version(target_path: Path) -> str | None:
             if match:
                 return match.group(1)
     except (OSError, subprocess.SubprocessError):
+        # The optional version probe failed; use the fallback below.
         pass
 
     # Fallback to directory name pattern if executable output fails
@@ -296,6 +297,7 @@ def get_latest_github_version() -> str:
                     if clean_ver and clean_ver[0].isdigit():
                         return clean_ver
     except (requests.RequestException, ValueError, KeyError):
+        # The optional version probe failed; use the fallback below.
         pass
     return DEFAULT_FALLBACK_VERSION
 
@@ -322,6 +324,7 @@ def get_github_release_versions() -> list[str]:
                     if clean_ver and clean_ver not in versions:
                         versions.append(clean_ver)
     except (requests.RequestException, ValueError, KeyError):
+        # The optional version probe failed; use the fallback below.
         pass
 
     if not versions:
@@ -393,7 +396,7 @@ def download_and_build_enchant(version_str: str, cfg: Config) -> Path:
             ),
             tarfile.open(tarball_path, "r:gz") as tar,
         ):
-            tar.extractall(tmp_work_dir, numeric_owner=True, filter="tar")
+            tar.extractall(tmp_work_dir, numeric_owner=True, filter="data")
 
         if not extract_src_dir.is_dir():
             subdirs = [p for p in tmp_work_dir.iterdir() if p.is_dir()]

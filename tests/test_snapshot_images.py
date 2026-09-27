@@ -62,7 +62,7 @@ def test_snapshot_batch_preserves_order_options_and_resets_viewport(session, for
     assert "remove()" in driver.execute_script.call_args.args[0]
     assert frontend.call_count == 1
     expected = {key: value for key, value in options.items() if key not in {"format", "session"}}
-    expected.update(trace=payloads()[0], dpi=1, visualizer="pytutor")
+    expected.update(trace=payloads()[0], dpi=1, visualizer="pytutor", string_style="default")
     if session is not None:
         expected["session"] = session
     reset.assert_called_once_with(driver)

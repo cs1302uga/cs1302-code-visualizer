@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>String style review</title>
+<style>
+body{margin:24px;font:14px system-ui;background:#fff;color:#183046}header{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:28px}label{display:flex;gap:6px;align-items:center}select{font:inherit}#diagram{width:max-content}body:has([data-codevis-theme=dark]){background:#1a1c1e;color:#ddd}
+</style>
+<header><strong>String style review</strong>
+<label>Strings <select id="style"><option>compact</option><option>default</option><option>inline</option></select></label>
+<label>Arrays <select id="orientation"><option>horizontal</option><option>vertical</option></select></label>
+<label>Theme <select id="theme"><option>light</option><option>dark</option></select></label>
+<label><input id="types" type="checkbox" checked>Declared types</label>
+<label><input id="text" type="checkbox">Text-only references</label>
+</header>
+<div id="diagram"></div>
+<script src="../../cs1302_code_visualizer/frontend/build/vis-module.bundle.js"></script>
+<script>
+let instance;
+const controls = Object.fromEntries([...document.querySelectorAll('select,input')].map(e=>[e.id,e]));
+const tracePromise = fetch('fixtures/lists.json').then(r=>r.json()).then(t=>t['10']);
+window.renderReview = async function() {
+  const trace = await tracePromise;
+  instance?.destroy();
+  window.instance = instance = CodeVisualizer.create({lang:'java',trace,element:document.getElementById('diagram'),options:{
+    stringStyle:controls.style.value,arrayOrientation:controls.orientation.value,theme:controls.theme.value,
+    includeTypes:controls.types.checked,textualMemoryLabels:controls.text.checked,stripTypePrefixes:['java.lang.']
+  }});
+  await document.fonts.ready;
+  instance.redrawConnectors();
+};
+Object.values(controls).forEach(e=>e.addEventListener('change',renderReview));
+renderReview();
+</script>
+</html>

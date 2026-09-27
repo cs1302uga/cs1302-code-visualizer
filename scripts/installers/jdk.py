@@ -35,12 +35,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
 
+# Ensure project root is on sys.path when running as a standalone PEP 723 script
+_project_root = Path(__file__).resolve().parent
+while _project_root != _project_root.parent:  # pragma: no cover
+    if (_project_root / "pyproject.toml").is_file():
+        if str(_project_root) not in sys.path:
+            sys.path.insert(0, str(_project_root))
+        break
+    _project_root = _project_root.parent
+
 import click
 import requests
 import typer
 from packaging.requirements import InvalidRequirement, Requirement
 from rich.console import Console
 from rich.table import Table
+
+from scripts.installer.archives import extract_zip
 
 console = Console()
 err_console = Console(stderr=True)
@@ -271,6 +282,7 @@ def format_path_for_display(path: Path | str | None) -> str:
             rel = p.relative_to(home)
             return f"~/{rel}"
     except (ValueError, RuntimeError):
+        # The path cannot be shortened here; retain its full display form.
         pass
     return str(p)
 
@@ -421,6 +433,7 @@ def get_latest_adoptium_lts() -> str:
             if lts_num:
                 return str(lts_num)
     except (requests.RequestException, ValueError):
+        # The optional version probe failed; use the fallback below.
         pass
     return "21"
 
@@ -585,10 +598,10 @@ def download_and_extract_jdk(
         ):
             if os_name == "windows" or archive_file.name.endswith(".zip"):
                 with zipfile.ZipFile(archive_file) as zf:
-                    zf.extractall(extract_dir)
+                    extract_zip(zf, extract_dir)
             else:
                 with tarfile.open(archive_file, mode="r:*") as tf:
-                    tf.extractall(extract_dir, numeric_owner=True, filter="tar")
+                    tf.extractall(extract_dir, numeric_owner=True, filter="data")
 
             # If extracted archive has a single top-level directory, promote it
             subdirs = [p for p in extract_dir.iterdir() if p.is_dir()]

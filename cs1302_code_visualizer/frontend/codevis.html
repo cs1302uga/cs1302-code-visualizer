@@ -26,6 +26,12 @@
       <div id="viz-status-announcer" class="visually-hidden" aria-live="polite"></div>
 
       <h2>Quick Tester</h2>
+      <label for="string-style">String style</label>
+      <select id="string-style">
+        <option value="default">Default (separate heap objects)</option>
+        <option value="compact">Compact</option>
+        <option value="inline">Inline</option>
+      </select>
 
       <form class="row g-3 mb-3">
         <div class="col-md-6">
@@ -112,6 +118,7 @@
             element: document.getElementById("quick-viz-output"),
             options: {
               includeTypes: true,
+              stringStyle: document.getElementById("string-style").value,
               stripTypePrefixes: ["java.lang."]
             }
           });

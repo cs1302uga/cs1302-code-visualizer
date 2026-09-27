@@ -50,6 +50,12 @@ from .array_options import (
     validate_array_options,
 )
 from .errors import CodeVisRenderError
+from .string_options import (
+    StringStyle,
+    add_string_argument,
+    resolve_string_style,
+    string_options_from_args,
+)
 from .theme_options import Theme, add_theme_argument, theme_options
 from .util.certificates import ensure_certifi_bundle
 
@@ -239,10 +245,14 @@ def _wait_for_screenshot_ready(driver: webdriver.Chrome) -> WebElement:
     result: object = driver.execute_async_script(
         """
         const done = arguments[arguments.length - 1];
+        const failure = document.getElementById('screenshotError');
+        if (failure) { done({error: failure.textContent}); return; }
         const existing = document.getElementById('screenshotReadyIndicator');
         if (existing) { done(existing); return; }
         let finished = false;
         const observer = new MutationObserver(() => {
+            const failure = document.getElementById('screenshotError');
+            if (failure) { finish({error: failure.textContent}); return; }
             const element = document.getElementById('screenshotReadyIndicator');
             if (element) finish(element);
         });
@@ -257,6 +267,8 @@ def _wait_for_screenshot_ready(driver: webdriver.Chrome) -> WebElement:
         observer.observe(document, {childList: true, subtree: true});
         """
     )
+    if isinstance(result, dict) and "error" in result:
+        raise ValueError(f"Unable to render trace: {result['error']}")
     if not isinstance(result, WebElement):
         raise NoSuchElementException("screenshotReadyIndicator was not found within four seconds")
     return result
@@ -270,6 +282,7 @@ def online_python_tutor_frontend(
     include_types: bool = True,
     text_memory_labels: bool = True,
     strip_type_prefixes: Sequence[str] | None = None,
+    string_style: StringStyle = "default",
     theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
@@ -278,6 +291,7 @@ def online_python_tutor_frontend(
     session: RenderingSession | None = None,
 ):
     """Context manager for interacting with the OnlinePythonTutor frontend in Chrome."""
+    resolve_string_style(string_style)
     theme_options(theme)
     validate_array_options(array_orientation, alternate_array_orientations, array_orientations)
     prefixes = list(strip_type_prefixes) if strip_type_prefixes is not None else []
@@ -300,6 +314,7 @@ def online_python_tutor_frontend(
             "textMemoryLabels": str(text_memory_labels).lower(),
             "stripTypePrefixes": json.dumps(prefixes),
             "visualizer": visualizer,
+            "stringStyle": string_style,
             "arrayOrientation": array_orientation,
             "alternateArrayOrientations": str(alternate_array_orientations).lower(),
             "arrayOrientations": json.dumps(array_orientations or {}),
@@ -451,6 +466,7 @@ def render_html(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    string_style: StringStyle = "default",
     theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
@@ -471,6 +487,7 @@ def render_html(
         include_types: Whether type labels should be included in the visualization.
         text_memory_labels: Whether memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: List of package prefixes to strip from displayed types.
+        string_style: String presentation: default, compact, or inline.
         theme: Light, dark, auto, or None for the default host-inherited theme.
         array_orientation: Base array orientation, or the 1D orientation when alternating.
         alternate_array_orientations: Flip orientation for each additional dimension.
@@ -484,6 +501,7 @@ def render_html(
     Returns:
         HTML snippet containing the container <div>, optional bundle <script> tag, and inline initialization <script>.
     """
+    resolve_string_style(string_style)
     theme_options(theme)
     validate_array_options(array_orientation, alternate_array_orientations, array_orientations)
     trace_data = resolve_trace_payload(trace, breakpoint=breakpoint)
@@ -505,6 +523,7 @@ def render_html(
         "visualizer": visualizer,
         "hideFields": list(hide_fields) if hide_fields is not None else [],
         "hideVars": list(hide_vars) if hide_vars is not None else [],
+        "stringStyle": string_style,
         "arrayOrientation": array_orientation,
         "alternateArrayOrientations": alternate_array_orientations,
         "arrayOrientations": array_orientations or {},
@@ -547,6 +566,7 @@ def generate_image(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    string_style: StringStyle = "default",
     theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
@@ -566,6 +586,7 @@ def generate_image(
         include_types: Whether or not type tags should be included in this visualization.
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        string_style: String presentation: default, compact, or inline.
         theme: Light, dark, auto, or None for the default host-inherited theme.
         array_orientation: Base array orientation, or the 1D orientation when alternating.
         alternate_array_orientations: Flip orientation for each additional dimension.
@@ -589,6 +610,7 @@ def generate_image(
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
+        string_style=string_style,
         array_orientation=array_orientation,
         alternate_array_orientations=alternate_array_orientations,
         array_orientations=array_orientations,
@@ -670,6 +692,17 @@ def _capture_viz(
 
     # Both browser ownership modes capture beyond the viewport. Native screenshots
     # truncate overflowing steps and cannot guarantee a shared sequence canvas.
+    # An iframe still clips its own painted overflow during a beyond-viewport
+    # capture. Give independent snapshot frames room for external arrow routes.
+    driver.execute_script(
+        "const frame = window.frameElement;"
+        "if (frame) {"
+        "frame.style.width = Math.max(innerWidth, arguments[0]) + 'px';"
+        "frame.style.height = Math.max(innerHeight, arguments[1]) + 'px';"
+        "}",
+        bounds["right"],
+        bounds["bottom"],
+    )
     left, top = max(0, bounds["left"]), max(0, bounds["top"])
     result = driver.execute_cdp_cmd(
         "Page.captureScreenshot",
@@ -710,6 +743,7 @@ def generate_step_images(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    string_style: StringStyle = "default",
     theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
@@ -727,6 +761,7 @@ def generate_step_images(
         include_types: Whether or not type tags should be included in this visualization.
         text_memory_labels: Whether or not memory connections should be rendered as text instead of arrows.
         strip_type_prefixes: A list of prefix strings to strip from the beginning of type labels.
+        string_style: String presentation: default, compact, or inline.
         theme: Light, dark, auto, or None for the default host-inherited theme.
         array_orientation: Base array orientation, or the 1D orientation when alternating.
         alternate_array_orientations: Flip orientation for each additional dimension.
@@ -757,6 +792,7 @@ def generate_step_images(
                 text_memory_labels=text_memory_labels,
                 strip_type_prefixes=strip_type_prefixes,
                 **theme_options(theme),
+                string_style=string_style,
                 array_orientation=array_orientation,
                 alternate_array_orientations=alternate_array_orientations,
                 array_orientations=array_orientations,
@@ -775,6 +811,7 @@ def generate_step_images(
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
+        string_style=string_style,
         array_orientation=array_orientation,
         alternate_array_orientations=alternate_array_orientations,
         array_orientations=array_orientations,
@@ -851,6 +888,7 @@ def generate_snapshot_images(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    string_style: StringStyle = "default",
     theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
@@ -873,6 +911,7 @@ def generate_snapshot_images(
         include_types: Whether to display type tags.
         text_memory_labels: Whether to replace reference arrows with labels.
         strip_type_prefixes: Prefixes removed from displayed type names.
+        string_style: String presentation: default, compact, or inline.
         theme: Light, dark, auto, or None for the default adaptive theme.
         array_orientation: Base orientation of array objects.
         alternate_array_orientations: Whether successive dimensions alternate.
@@ -897,6 +936,7 @@ def generate_snapshot_images(
                 include_types=include_types,
                 text_memory_labels=text_memory_labels,
                 strip_type_prefixes=strip_type_prefixes,
+                string_style=string_style,
                 array_orientation=array_orientation,
                 alternate_array_orientations=alternate_array_orientations,
                 array_orientations=array_orientations,
@@ -914,6 +954,7 @@ def generate_snapshot_images(
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
+        string_style=string_style,
         array_orientation=array_orientation,
         alternate_array_orientations=alternate_array_orientations,
         array_orientations=array_orientations,
@@ -1020,9 +1061,14 @@ def main() -> None:
     )
 
     add_theme_argument(parser)
+    add_string_argument(parser)
     add_array_arguments(parser)
     args = parser.parse_args()
-    array_options = {**array_options_from_args(args), **theme_options(args.theme)}
+    array_options = {
+        **array_options_from_args(args),
+        **string_options_from_args(args),
+        **theme_options(args.theme),
+    }
 
     bp: int | tuple[int, int] | None = -1
     if args.breakpoint is not None:
@@ -1141,9 +1187,14 @@ def render_html_cli() -> None:
     )
 
     add_theme_argument(parser)
+    add_string_argument(parser)
     add_array_arguments(parser)
     args = parser.parse_args()
-    array_options = {**array_options_from_args(args), **theme_options(args.theme)}
+    array_options = {
+        **array_options_from_args(args),
+        **string_options_from_args(args),
+        **theme_options(args.theme),
+    }
 
     bp: int | tuple[int, int] | None = -1
     if args.breakpoint is not None:

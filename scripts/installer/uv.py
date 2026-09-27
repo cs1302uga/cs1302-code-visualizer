@@ -34,6 +34,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from cs1302_code_visualizer.util.archives import extract_zip
 from scripts.installer.common import (
     OptBinDir,
     OptCacheDir,
@@ -273,6 +274,7 @@ def get_installed_version(target_path: Path | None) -> str | None:
             if match:
                 return match.group(1)
     except (OSError, subprocess.SubprocessError):
+        # The optional version probe failed; use the fallback below.
         pass
 
     resolved_dir = target_path.resolve() if target_path.is_symlink() else target_path
@@ -311,6 +313,7 @@ def get_latest_github_version() -> str:
                         if tag:
                             return tag
     except (requests.RequestException, ValueError):
+        # The optional version probe failed; use the fallback below.
         pass
 
     return DEFAULT_FALLBACK_VERSION
@@ -337,6 +340,7 @@ def get_github_release_versions() -> list[str]:
                     if tag and tag not in versions:
                         versions.append(tag)
     except (requests.RequestException, ValueError):
+        # The optional version probe failed; use the fallback below.
         pass
 
     if not versions:
@@ -415,10 +419,10 @@ def download_and_extract_uv(version: str, cfg: Config) -> Path:
 
         if archive_format == "zip":
             with zipfile.ZipFile(archive_path, "r") as zf:
-                zf.extractall(target_version_dir)
+                extract_zip(zf, target_version_dir)
         else:
             with tarfile.open(archive_path, "r:gz") as tf:
-                tf.extractall(target_version_dir)
+                tf.extractall(target_version_dir, filter="data")
 
         # Move nested extracted directory contents up if extracted in a subdirectory
         children = list(target_version_dir.iterdir())

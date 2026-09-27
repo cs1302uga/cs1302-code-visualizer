@@ -69,8 +69,8 @@ export function measureExportBounds(root: HTMLElement): ExportBounds {
       const surface = visiblePaint(style.backgroundColor) && paintRole(node, "background") !== "canvas";
       if (style.visibility === "visible" && (border || surface || node.classList.contains("colorSwatchContainer"))) {
         // Tables may paint a collapsed border outside their DOM box. Allow its
-        // half-width (also covering subpixel border rasterization) before rounding.
-        const [t, r, b, l] = borderWidths.map(width => width / 2);
+        // half-width, with at least one CSS pixel for antialiasing, before rounding.
+        const [t, r, b, l] = borderWidths.map(width => width ? Math.max(1, width / 2) : 0);
         add({ left: rect.left - l, top: rect.top - t,
           right: rect.right + r, bottom: rect.bottom + b }, clips);
       }

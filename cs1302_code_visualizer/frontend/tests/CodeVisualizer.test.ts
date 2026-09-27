@@ -181,7 +181,7 @@ describe("CodeVisualizer", () => {
 
       const typeLabel = heapObject?.querySelector(".typeLabel");
       expect(typeLabel).not.toBeNull();
-      expect(typeLabel?.textContent).toBe("Object");
+      expect(typeLabel?.textContent).toBe("Object@1");
 
       const emptyInstTable = heapObject?.querySelector("table.instTbl.emptyInst");
       expect(emptyInstTable).not.toBeNull();
@@ -237,7 +237,7 @@ describe("CodeVisualizer", () => {
       const emptyInstTable = heapObject?.querySelector("table.instTbl.emptyInst");
       expect(emptyInstTable).not.toBeNull();
       expect(emptyInstTable?.classList.contains("emptyInst")).toBe(true);
-      expect(heapObject?.querySelector(".typeLabel")?.textContent).toBe("Secret");
+      expect(heapObject?.querySelector(".typeLabel")?.textContent).toBe("Secret@1");
       const description = JSON.stringify(describeSvg(container));
       expect(description).not.toContain("hidden");
       expect(description).not.toContain("42");
@@ -293,7 +293,7 @@ describe("CodeVisualizer", () => {
 
       // Object 1: java.awt.Color (#FF0000)
       const obj1 = heapObjects[0];
-      expect(obj1.querySelector(".typeLabel")?.textContent).toBe("Color");
+      expect(obj1.querySelector(".typeLabel")?.textContent).toBe("Color@1");
       const colorTbl1 = obj1.querySelector("table.colorObjTbl");
       expect(colorTbl1).not.toBeNull();
       const swatch1 = obj1.querySelector(".colorSwatch") as HTMLElement;
@@ -304,7 +304,7 @@ describe("CodeVisualizer", () => {
 
       // Object 2: Color with alpha (#00FF0080)
       const obj2 = heapObjects[1];
-      expect(obj2.querySelector(".typeLabel")?.textContent).toBe("Color");
+      expect(obj2.querySelector(".typeLabel")?.textContent).toBe("Color@2");
       const colorTbl2 = obj2.querySelector("table.colorObjTbl");
       expect(colorTbl2).not.toBeNull();
       const swatch2 = obj2.querySelector(".colorSwatch") as HTMLElement;
@@ -366,7 +366,7 @@ describe("CodeVisualizer", () => {
       expect(heapObjects.length).toBe(1);
 
       const lambdaObj = heapObjects[0];
-      expect(lambdaObj.querySelector(".typeLabel")?.textContent).toBe("lambda");
+      expect(lambdaObj.querySelector(".typeLabel")?.textContent).toBe("lambda@1");
       const lambdaTbl = lambdaObj.querySelector("table.lambdaObjTbl");
       expect(lambdaTbl).not.toBeNull();
       const lambdaElt = lambdaTbl?.querySelector("td.lambdaObjElt");
@@ -483,7 +483,7 @@ describe("CodeVisualizer", () => {
       // Verify empty string (heap id 1)
       const emptyStrObj = heapObjects[0];
       const emptyStrTypeLabel = emptyStrObj.querySelector(".typeLabel");
-      expect(emptyStrTypeLabel?.textContent).toBe("String (length 0)");
+      expect(emptyStrTypeLabel?.textContent).toBe("String@1 (length 0)");
       const emptyStringTbl = emptyStrObj.querySelector(".instTbl.emptyStringTbl");
       expect(emptyStringTbl).not.toBeNull();
       const emptyStringVal = emptyStringTbl?.querySelector(".instVal.emptyStringVal");
@@ -493,7 +493,7 @@ describe("CodeVisualizer", () => {
       // Verify empty array (heap id 2)
       const emptyArrObj = heapObjects[1];
       const emptyArrTypeLabel = emptyArrObj.querySelector(".typeLabel");
-      expect(emptyArrTypeLabel?.textContent).toBe("int[] (length 0)");
+      expect(emptyArrTypeLabel?.textContent).toBe("int[]@2 (length 0)");
       const emptyListTable = emptyArrObj.querySelector("table.listTbl.emptyList");
       expect(emptyListTable).not.toBeNull();
 
@@ -552,14 +552,14 @@ describe("CodeVisualizer", () => {
       expect(heapObjects.length).toBe(3);
 
       // Populated string: simple String header
-      expect(heapObjects[0].querySelector(".typeLabel")?.textContent).toBe("String");
+      expect(heapObjects[0].querySelector(".typeLabel")?.textContent).toBe("String@1");
 
       // Populated array: int[] (length 3)
-      expect(heapObjects[1].querySelector(".typeLabel")?.textContent).toBe("int[] (length 3)");
+      expect(heapObjects[1].querySelector(".typeLabel")?.textContent).toBe("int[]@2 (length 3)");
 
       // Populated collection: ArrayList<Integer> (size 2)
       expect(heapObjects[2].querySelector(".typeLabel")?.textContent).toBe(
-        "ArrayList<Integer> (size 2)",
+        "ArrayList<Integer>@3 (size 2)",
       );
 
       instance.destroy?.();

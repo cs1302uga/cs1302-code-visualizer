@@ -155,7 +155,6 @@ def main():
     for ex in all_examples:
         idx = ex["index"]
         title = ex["title"]
-        slug = f"example-{idx}"
         rel_java = ex["java_file"]
         cmd = ex["cmd"]
         step_count = ex["step_count"]

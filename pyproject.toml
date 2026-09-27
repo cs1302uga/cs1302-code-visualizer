@@ -1,6 +1,6 @@
 [project]
 name = "cs1302-code-visualizer"
-version = "0.16.2"
+version = "0.17.0"
 description = "Visualize Java program memory state and output a screenshot."
 authors = [
     {name = "Gabe Livengood", email = "timothy.livengood@uga.edu"},
@@ -59,6 +59,10 @@ render_image = "cs1302_code_visualizer:main"
 [project.optional-dependencies]
 gallery = [
     "pygments>=2.21.0",
+]
+review = [
+    "pypdf>=6.19.0",
+    "reportlab>=5.0.1",
 ]
 
 [tool.basedpyright]

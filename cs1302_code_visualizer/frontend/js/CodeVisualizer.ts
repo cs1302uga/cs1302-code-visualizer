@@ -11,6 +11,8 @@
 import { ExecutionVisualizer } from "./pytutor";
 import type { ArrayOrientationOptions } from "./arrayOrientation";
 import { applyTheme, Theme } from "./theme";
+import type { StringStyle } from "./stringStyle";
+export type { StringStyle } from "./stringStyle";
 export type { Theme } from "./theme";
 export type { ArrayOrientation, ArrayOrientationOptions } from "./arrayOrientation";
 
@@ -28,6 +30,7 @@ export type VisualizerType = "pytutor" | "json-pre";
  * Configuration options for visualizer instances.
  */
 export interface Options extends ArrayOrientationOptions {
+  stringStyle?: StringStyle;
   theme?: Theme;
   includeTypes?: boolean;
   textualMemoryLabels?: boolean;
@@ -170,6 +173,7 @@ export function create({
   }
 
   const frontendOptions = {
+    stringStyle: options?.stringStyle,
     theme: options?.theme,
     jumpToEnd: true,
     hideCode: true,

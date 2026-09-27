@@ -113,7 +113,8 @@ export function isModernTrace(trace: unknown): trace is ModernTrace {
  * @param val The value to encode.
  * @return The OPT-encoded value.
  */
-export function encodeValue(val: unknown): unknown {
+export function encodeValue(val: unknown, type?: string): unknown {
+  if (type === "char" && typeof val === "string") return ["CHAR-LITERAL", val];
   if (val === null || val === undefined) {
     return null;
   }
@@ -164,24 +165,24 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): Record<string
       stdinOffset: step.stdinOffset ?? 0,
       file: null,
       stack_to_render: [],
-      globals: {},
-      globals_attrs: {},
+      globals: Object.create(null),
+      globals_attrs: Object.create(null),
       ordered_globals: [],
-      heap: {},
-      heap_attrs: {},
+      heap: Object.create(null),
+      heap_attrs: Object.create(null),
     };
 
     // 1. Convert call stack
     if (Array.isArray(step.callStack)) {
       step.callStack.forEach((frame, frameIdx) => {
-        const encodedLocals: Record<string, unknown> = {};
-        const localsAttrs: Record<string, unknown> = {};
+        const encodedLocals: Record<string, unknown> = Object.create(null);
+        const localsAttrs: Record<string, unknown> = Object.create(null);
         const orderedVarnames: string[] = [];
 
         if (Array.isArray(frame.locals)) {
           frame.locals.forEach((loc) => {
             orderedVarnames.push(loc.name);
-            encodedLocals[loc.name] = encodeValue(loc.value);
+            encodedLocals[loc.name] = encodeValue(loc.value, loc.type);
             localsAttrs[loc.name] = {
               type: loc.type,
               final: loc.final ?? false,
@@ -216,7 +217,7 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): Record<string
           staticGroup.fields.forEach((f) => {
             const globalKey = className ? `${className}.${f.name}` : f.name;
             optStep["ordered_globals"].push(globalKey);
-            optStep["globals"][globalKey] = encodeValue(f.value);
+            optStep["globals"][globalKey] = encodeValue(f.value, f.type);
             optStep["globals_attrs"][globalKey] = {
               type: f.type,
               final: f.final ?? false,
@@ -238,7 +239,7 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): Record<string
         const objType = heapObj.type || "Object";
 
         if (kind === "array" && Array.isArray(heapObj.elements)) {
-          optStep["heap"][idStr] = ["LIST", ...heapObj.elements.map(encodeValue)];
+          optStep["heap"][idStr] = ["LIST", ...heapObj.elements.map(v => encodeValue(v, objType === "char[]" ? "char" : undefined))];
           optStep["heap_attrs"][idStr] = { type: objType };
         } else if (kind === "string") {
           optStep["heap"][idStr] = [
@@ -250,7 +251,7 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): Record<string
         } else if (kind === "object" && Array.isArray(heapObj.fields)) {
           const fieldEntries = heapObj.fields.map((f) => [
             f.name,
-            encodeValue(f.value),
+            encodeValue(f.value, f.type),
           ]);
           optStep["heap"][idStr] = ["INSTANCE", objType, ...fieldEntries];
           optStep["heap_attrs"][idStr] = { type: objType };
@@ -281,7 +282,7 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): Record<string
           optStep["heap"][idStr] = heapObj;
         } else {
           const fields = heapObj.fields
-            ? heapObj.fields.map((f) => [f.name, encodeValue(f.value)])
+            ? heapObj.fields.map((f) => [f.name, encodeValue(f.value, f.type)])
             : [];
           optStep["heap"][idStr] = ["INSTANCE", objType, ...fields];
           optStep["heap_attrs"][idStr] = { type: objType };
