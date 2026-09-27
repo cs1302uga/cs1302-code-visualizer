@@ -2,7 +2,6 @@
  * @fileoverview Browser entry point for rendering trace files directly from URL parameters.
  */
 
-import $ from "jquery";
 import { ExecutionVisualizer } from "./pytutor";
 import { JsonPreVisualizer, VisualizerInstance } from "./CodeVisualizer";
 import { arrayOrientationOptionsFromParams } from "./arrayOrientation";
@@ -55,6 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
         document.body.appendChild(screenshotReadyIndicator);
       } else {
         const frontendOptions = {
+          stringStyle: urlParams.get("stringStyle") ?? "default",
           theme,
           jumpToEnd: true,
           hideCode: true,
@@ -87,5 +87,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         setTimeout(notifyReady, 50);
       }
+    }).catch(error => {
+      const message = document.createElement("div");
+      message.id = "screenshotError";
+      message.textContent = String(error);
+      document.body.append(message);
     });
 });

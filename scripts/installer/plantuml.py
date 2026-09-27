@@ -313,6 +313,7 @@ def get_latest_github_version() -> str | None:
             if isinstance(data, dict) and "tag_name" in data:
                 return clean_version_tag(str(data["tag_name"]))
     except (requests.RequestException, ValueError):
+        # The optional version probe failed; use the fallback below.
         pass
     return None
 

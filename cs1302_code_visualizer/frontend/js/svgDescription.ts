@@ -20,7 +20,10 @@ function visible(element: Element): boolean {
 function words(element: Element | null): string {
   if (!element || !visible(element)) return "";
   const reference = element.getAttribute("data-reference-target");
-  if (reference !== null) return `reference to object ${reference}`;
+  if (reference !== null) {
+    const literal = element.querySelector(".compact-string > .stringObj");
+    return `reference to object ${reference}${literal ? `, ${literal.textContent}` : ""}`;
+  }
   if (element.classList.contains("stringObj")) return element.textContent ?? "";
   return Array.from(element.childNodes, node => node instanceof Element
     ? words(node) : (node.textContent ?? "").replace(/\s+/g, " ")).join(" ").trim();

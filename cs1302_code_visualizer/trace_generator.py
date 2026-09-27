@@ -50,6 +50,7 @@ from .errors import (
     JDKInstallationError,
     TracerDownloadError,
 )
+from .util.archives import archive_path, extract_zip
 from .util.certificates import ensure_certifi_bundle
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -131,7 +132,7 @@ def get_sanitized_java_env(env: Mapping[str, str] | None = None) -> dict[str, st
         if var in clean_env:
             val = clean_env[var]
             cleaned_val = re.sub(
-                r'(?:^|\s+)-Djava\.awt\.headless=["\']?(?:true|false)["\']?(?:\s+|$)',
+                r"(?<!\S)-Djava\.awt\.headless=[\"']?(?:true|false)[\"']?(?=\s|$)",
                 " ",
                 val,
             ).strip()
@@ -415,7 +416,7 @@ def download_jdk() -> None:
                 os = "windows"
             case "Darwin":
                 os = "mac"
-            case str(s):
+            case s:
                 message: str = (
                     f"Cannot automatically download a JDK for your computer's platform ({s})."
                 )
@@ -426,7 +427,7 @@ def download_jdk() -> None:
                 arch = "x64"
             case "aarch64" | "arm64":
                 arch = "aarch64"
-            case str(m):
+            case m:
                 raise JDKInstallationError(
                     f"Cannot automatically download a JDK for your computer's architecture ({m} {os}). Please download and provide one yourself."
                 )
@@ -463,17 +464,17 @@ def download_jdk() -> None:
             if os == "windows":
                 with zipfile.ZipFile(temp_file) as zip:
                     toplevel_dir = zip.namelist()[0]
-                    zip.extractall(CACHE_DIR)
+                    extract_zip(zip, CACHE_DIR)
             elif os == "mac":
-                with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
+                with tarfile.open(temp_file.name, mode="r:*", errorlevel=2) as tar:
                     toplevel_dir = Path(tar.getnames()[0]) / "Contents" / "Home"
-                    tar.extractall(CACHE_DIR, numeric_owner=True, filter="tar")
+                    tar.extractall(CACHE_DIR, numeric_owner=True, filter="data")
             else:
-                with tarfile.open(temp_file.name, mode="r:*", errorlevel=0) as tar:
+                with tarfile.open(temp_file.name, mode="r:*", errorlevel=2) as tar:
                     toplevel_dir = tar.getnames()[0]
-                    tar.extractall(CACHE_DIR, numeric_owner=True, filter="tar")
+                    tar.extractall(CACHE_DIR, numeric_owner=True, filter="data")
 
-        _ = shutil.move(CACHE_DIR / toplevel_dir, CACHE_DIR / "jdk")
+        _ = shutil.move(archive_path(CACHE_DIR, str(toplevel_dir)), CACHE_DIR / "jdk")
 
         if not jdk_exists(str(CACHE_DIR / "jdk")):
             raise JDKInstallationError(

@@ -14,6 +14,9 @@ wheels/
 .coverage
 .pytest_cache/
 
+# Local CodeQL databases, diagnostics, and reports
+static_analysis_codeql_*/
+
 # Local dependency cache and generated shims
 scripts/cache/
 scripts/shims/bin/

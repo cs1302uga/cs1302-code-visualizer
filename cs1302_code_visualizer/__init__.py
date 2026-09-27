@@ -18,7 +18,7 @@ from collections import defaultdict, deque
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from . import browser_driver, trace_generator
 from .array_options import ArrayOrientation, validate_array_options
@@ -44,6 +44,12 @@ from .errors import (
     TracerDownloadError,
 )
 from .session import RenderingSession
+from .string_options import (
+    OMITTED,
+    StringStyle,
+    add_string_argument,
+    resolve_string_style,
+)
 from .theme_options import Theme, add_theme_argument, theme_options
 from .trace_generator import generate_trace, generate_traces, get_sanitized_java_env
 
@@ -60,6 +66,7 @@ __all__ = [
     "JDKInstallationError",
     "RenderError",
     "RenderingSession",
+    "StringStyle",
     "TraceGeneratorError",
     "TracerDownloadError",
     "generate_image",
@@ -79,6 +86,10 @@ __all__ = [
 ]
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+# Public annotations stay narrow while runtime defaults distinguish omission.
+_DEFAULT_STRING_STYLE = cast(StringStyle, OMITTED)
+_DEFAULT_INLINE_STRINGS = cast(bool, OMITTED)
 
 # Enable DEBUG_MODE with
 # CS1302_DEBUG=1
@@ -107,7 +118,8 @@ def render_images(
     timeout_secs: int | None = None,
     dpi: int = 1,
     format: str = "PNG",
-    inline_strings: bool = True,
+    inline_strings: bool = _DEFAULT_INLINE_STRINGS,
+    string_style: StringStyle = _DEFAULT_STRING_STYLE,
     remove_main_args: bool = True,
     include_types: bool = True,
     text_memory_labels: bool = False,
@@ -138,7 +150,8 @@ def render_images(
         dpi: Positive integer scale for raster resolution or SVG display dimensions.
         format: SVG for standalone vector output with editable text, or a raster format
             accepted by PIL's Image.save() method.
-        inline_strings: True if strings should be inlined in the visualization, false if they should be
+        string_style: String presentation: default (separate heap objects), compact, or inline.
+        inline_strings: Deprecated. True if strings should be inlined in the visualization, false if they should be
             rendered separately on the heap.
         remove_main_args: False if the visualization should include the main method's `args` parameter,
             True otherwise.
@@ -168,6 +181,7 @@ def render_images(
 
     Note that exceptions may be raised if image generation fails.
     """
+    string_style = resolve_string_style(string_style, inline_strings)
     theme_options(theme)
     validate_array_options(array_orientation, alternate_array_orientations, array_orientations)
     if not (java_home and trace_generator.jdk_exists(java_home)):
@@ -181,7 +195,7 @@ def render_images(
         java_home,
         java_source,
         timeout_secs,
-        inline_strings,
+        False,
         remove_main_args,
         breakpoints,
         accumulate_breakpoints=render_all_breakpoint_occurrences,
@@ -198,6 +212,7 @@ def render_images(
         breakpoints,
         dpi=dpi,
         format=format,
+        string_style=string_style,
         include_types=include_types,
         text_memory_labels=text_memory_labels,
         strip_type_prefixes=strip_type_prefixes,
@@ -219,6 +234,7 @@ def _resolve_and_render_trace(
     include_types: bool = True,
     text_memory_labels: bool = False,
     strip_type_prefixes: Sequence[str] | None = None,
+    string_style: StringStyle = "default",
     theme: Theme | None = None,
     array_orientation: ArrayOrientation = "horizontal",
     alternate_array_orientations: bool = False,
@@ -250,6 +266,7 @@ def _resolve_and_render_trace(
                             json.dumps(frame_payload),
                             dpi=dpi,
                             format=format,
+                            string_style=string_style,
                             include_types=include_types,
                             text_memory_labels=text_memory_labels,
                             strip_type_prefixes=strip_type_prefixes,
@@ -276,6 +293,7 @@ def _resolve_and_render_trace(
                     json.dumps(frame_payload),
                     dpi=dpi,
                     format=format,
+                    string_style=string_style,
                     include_types=include_types,
                     text_memory_labels=text_memory_labels,
                     strip_type_prefixes=strip_type_prefixes,
@@ -296,6 +314,7 @@ def _resolve_and_render_trace(
                         json.dumps(occurrence),
                         dpi=dpi,
                         format=format,
+                        string_style=string_style,
                         include_types=include_types,
                         text_memory_labels=text_memory_labels,
                         strip_type_prefixes=strip_type_prefixes,
@@ -315,6 +334,7 @@ def _resolve_and_render_trace(
                 json.dumps(trace_dict),
                 dpi=dpi,
                 format=format,
+                string_style=string_style,
                 include_types=include_types,
                 text_memory_labels=text_memory_labels,
                 strip_type_prefixes=strip_type_prefixes,
@@ -334,7 +354,8 @@ def render_image(
     timeout_secs: int | None = None,
     dpi: int = 1,
     format: str = "PNG",
-    inline_strings: bool = False,
+    inline_strings: bool = _DEFAULT_INLINE_STRINGS,
+    string_style: StringStyle = _DEFAULT_STRING_STYLE,
     remove_main_args: bool = True,
     breakpoint_line: int | tuple[int, int] = -1,
     verbose: bool = False,
@@ -367,7 +388,8 @@ def render_image(
         format: SVG for standalone vector output with editable text, or a raster format
             accepted by PIL's Image.save() method.
 
-        inline_strings: True if strings should be inlined in the visualization, false if they should
+        string_style: String presentation: default (separate heap objects), compact, or inline.
+        inline_strings: Deprecated. True if strings should be inlined in the visualization, false if they should
             be rendered separately on the heap.
 
         remove_main_args: False if the visualization should include the main method's `args`
@@ -416,6 +438,7 @@ def render_image(
     if verbose:
         logging.basicConfig(level=logging.DEBUG)
 
+    string_style = resolve_string_style(string_style, inline_strings)
     theme_options(theme)
     validate_array_options(array_orientation, alternate_array_orientations, array_orientations)
     if not (java_home and trace_generator.jdk_exists(java_home)):
@@ -447,7 +470,7 @@ def render_image(
             java_home,
             java_source,
             timeout_secs,
-            inline_strings,
+            False,
             remove_main_args,
             breakpoints=breakpoints,
             accumulate_breakpoints=breakpoint_index is not None,
@@ -484,6 +507,7 @@ def render_image(
             trace,
             dpi=dpi,
             format=format,
+            string_style=string_style,
             include_types=include_types,
             text_memory_labels=text_memory_labels,
             strip_type_prefixes=strip_type_prefixes,
@@ -496,7 +520,7 @@ def render_image(
         return output
     except Exception as exc:
         raise CodeVisRenderError(
-            f"Unable to generate image from execution trace:\n\n{trace}\n",
+            f"Unable to generate image from execution trace: {exc}\n\n{trace}\n",
         ) from exc
 
 
@@ -509,7 +533,7 @@ class BatchRenderJob:
     job_id: str | None = None
     all_breakpoints: bool = False
     accumulate_breakpoints: bool = False
-    inline_strings: bool = True
+    inline_strings: bool = _DEFAULT_INLINE_STRINGS
     remove_main_args: bool = True
     include_types: bool = True
     text_memory_labels: bool = False
@@ -525,9 +549,19 @@ class BatchRenderJob:
     alternate_array_orientations: bool = False
     array_orientations: dict[str, ArrayOrientation] | None = None
     theme: Theme | None = None
+    string_style: StringStyle = _DEFAULT_STRING_STYLE
 
     def __post_init__(self) -> None:
-        """Reject invalid array settings before a batch job starts tracing."""
+        """Resolve compatibility options and validate settings before tracing."""
+        object.__setattr__(
+            self,
+            "string_style",
+            resolve_string_style(
+                self.string_style,
+                self.inline_strings,
+                stacklevel=4,
+            ),
+        )
         theme_options(self.theme)
         validate_array_options(
             self.array_orientation,
@@ -571,7 +605,7 @@ def _render_batch_with_session(
                 job.accumulate_breakpoints or job.render_all_breakpoint_occurrences
             ),
             remove_main_args=job.remove_main_args,
-            inline_strings=job.inline_strings,
+            inline_strings=False,
             type_style=job.type_style,
             timeout_ms=int(job.timeout_secs * 1000) if job.timeout_secs else 30000,
             include_enum_static_fields=job.include_enum_static_fields,
@@ -600,6 +634,7 @@ def _render_batch_with_session(
                 job_spec.breakpoints,
                 dpi=job_spec.dpi,
                 format=job_spec.format,
+                string_style=job_spec.string_style,
                 include_types=job_spec.include_types,
                 text_memory_labels=job_spec.text_memory_labels,
                 strip_type_prefixes=job_spec.strip_type_prefixes,
@@ -699,6 +734,7 @@ def main() -> None:
         default=None,
     )
     add_theme_argument(parser)
+    add_string_argument(parser)
     args = parser.parse_args()
 
     with fileinput.input(args.input) as f:
@@ -708,7 +744,7 @@ def main() -> None:
         **theme_options(args.theme),
         dpi=2,
         strip_type_prefixes=["java.lang."],
-        inline_strings=False,
+        string_style=args.string_style,
         include_types=True,
         include_enum_static_fields=False,
         stdin=args.stdin,

@@ -93,3 +93,17 @@ Each file is traced as a separate program. Batch mode preserves relative directo
 - [Visualization themes](docs/themes.md): colors, Auto mode, embedding, and contrast.
 - [Python integration](HACKING.md): embed rendering in scripts and course builds.
 - [Contributing](CONTRIBUTING.md): develop, test, and release the project.
+
+## String presentation
+
+Use `--string-style compact` for reference boxes followed by string literals,
+`--string-style inline` for literals inside value boxes, or `--string-style default`
+for separate string heap objects. The default is `default` for every renderer.
+
+```sh
+code-visualizer Main.java --string-style compact -o compact.svg
+```
+
+Python renderers accept `string_style="compact"`. The old rendering argument
+`inline_strings` is deprecated; see the [string style guide](docs/string-style/README.md)
+for migration, shared-string identity, and examples.

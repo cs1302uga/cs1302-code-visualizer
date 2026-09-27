@@ -22,6 +22,7 @@ Single-program mode creates parent directories and replaces existing files. Batc
 | `-b N`, `--breakpoint N` | Select a source line; repeat to request multiple lines. |
 | `-a`, `--all-steps` | Trace and render all execution steps. |
 | `--format PNG` | Select a raster encoding or standalone `SVG`; default is PNG. Match explicit filename extensions to the encoding. |
+| `--string-style compact\|default\|inline` | Choose string presentation; default: separate heap objects. |
 | `--theme light\|dark\|auto` | Select a palette; omit for host-adaptive inline SVG. Auto follows the system. |
 | `--dpi 2` | Scale raster resolution or SVG display dimensions; default is 1. |
 | `--no-types` | Hide type tags. |
@@ -82,7 +83,7 @@ A manifest has one JSON object per nonblank line:
 {"id":"lesson-one","source":"class Main { public static void main(String[] args) { int n = 1; System.out.println(n); } }"}
 ```
 
-Supported job fields are `id`, `source`, `breakpoints` (an array of line numbers), `array_orientation`, `alternate_array_orientations`, `array_orientations`, and `theme`. Omitted IDs use `job_` plus the zero-based manifest line index. Empty or omitted breakpoints inherit CLI breakpoints. Array settings inherit CLI defaults; per-object maps merge with job entries taking precedence. A job’s `theme` overrides the CLI theme; an omitted field inherits it, while `null` restores the default host-adaptive behavior. Invalid theme or array settings reject the manifest before any job executes. Supply a manifest file: batch mode currently does not read a manifest from `-i -`.
+Supported job fields are `id`, `source`, `breakpoints` (an array of line numbers), `array_orientation`, `alternate_array_orientations`, `array_orientations`, `theme`, and `string_style`. Omitted IDs use `job_` plus the zero-based manifest line index. Empty or omitted breakpoints inherit CLI breakpoints. Array settings inherit CLI defaults; per-object maps merge with job entries taking precedence. A job’s `theme` overrides the CLI theme; an omitted field inherits it, while `null` restores the default host-adaptive behavior. Invalid theme or array settings reject the manifest before any job executes. A job’s `string_style` overrides the CLI choice; omission inherits it. Invalid string styles also reject the manifest before execution. Supply a manifest file: batch mode currently does not read a manifest from `-i -`.
 
 ## Output paths
 
@@ -154,3 +155,17 @@ With no theme option, standalone exports use light colors and inline SVG markup 
 Batch mode accepts the same flag. A manifest job can override it with `"theme": "light"`, `"dark"`, or `"auto"`. Omit the field to inherit the CLI choice; set it to `null` to restore the default host-adaptive choice. Invalid values reject the manifest before any job runs.
 
 See the [theme guide](themes.md) for light/dark examples, an inline HTML recipe, inactive-frame arrows, and Auto troubleshooting. See [Python integration](../HACKING.md#visualization-themes) for the corresponding API options.
+
+## String styles
+
+All rendering commands accept `--string-style compact|default|inline`, including
+batch rendering and the lower-level image and HTML commands. For example:
+
+```sh
+code-visualizer Main.java --string-style compact --format SVG -o main.svg
+```
+
+Manifest jobs can set `"string_style": "compact"` independently. The deprecated
+`inline_strings` job field maps `true` to `inline` and `false` to `default`; supplying
+both job fields is an error. See the [string style guide](string-style/README.md)
+for Python migration and legacy trace compatibility.

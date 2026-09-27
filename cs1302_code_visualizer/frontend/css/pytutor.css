@@ -519,8 +519,6 @@ div.ExecutionVisualizer table.classTbl td.classKey {
   padding-bottom: 6px;
   padding-left: 10px;
   padding-right: 4px;
-
-  text-align: right;
 }
 
 div.ExecutionVisualizer table.dictTbl td.dictVal,
@@ -629,7 +627,6 @@ div.ExecutionVisualizer div.stackFrameHeader {
 }
 
 div.ExecutionVisualizer td.stackFrameVar {
-  text-align: right;
   padding-right: 8px;
   padding-top: 3px;
   padding-bottom: 3px;
@@ -1107,4 +1104,55 @@ div.ExecutionVisualizer table {
 
 div.ExecutionVisualizer div#heap {
     padding-left: unset!important;
+}
+
+/* Shared value geometry for all string styles. */
+div.ExecutionVisualizer td.value-cell {
+  border: 0 !important;
+  padding: 0 !important;
+  background: var(--object-background-color) !important;
+}
+div.ExecutionVisualizer .stackFrame td.value-cell { background: transparent !important; }
+div.ExecutionVisualizer .value-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  box-sizing: border-box;
+  min-width: 40px;
+  height: 19px;
+  padding: 1px 14px 1px 6px;
+  border: var(--value-border);
+  border-radius: var(--value-border-radius);
+  background: var(--value-background-color);
+  white-space: nowrap;
+  text-align: left;
+}
+div.ExecutionVisualizer .value-box > div { flex: 1; }
+div.ExecutionVisualizer .compact-string {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding-right: 3px;
+  white-space: nowrap;
+}
+div.ExecutionVisualizer .compact-string > .stringObj { white-space: pre !important; }
+div.ExecutionVisualizer .compact-string-arrow {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  overflow: visible;
+  pointer-events: none;
+}
+div.ExecutionVisualizer table.dictTbl td.dictKey,
+div.ExecutionVisualizer table.instTbl td.instKey,
+div.ExecutionVisualizer table.classTbl td.classKey,
+div.ExecutionVisualizer .stackFrameVar {
+  text-align: initial;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 0.25rem;
 }

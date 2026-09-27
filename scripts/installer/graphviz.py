@@ -30,6 +30,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
+from cs1302_code_visualizer.util.archives import extract_zip
+
 # Ensure project root is on sys.path when running as a standalone PEP 723 script
 _project_root = Path(__file__).resolve().parent
 while _project_root != _project_root.parent:  # pragma: no cover
@@ -358,6 +360,7 @@ def get_installed_version(target: Path | None) -> str | None:
             if m:
                 return m.group(1)
         except (OSError, subprocess.TimeoutExpired):
+            # The optional version probe failed; use the fallback below.
             pass
 
     return None
@@ -411,6 +414,7 @@ def get_latest_gitlab_version() -> str | None:
             if isinstance(data, dict) and "tag_name" in data:
                 return clean_version_tag(str(data["tag_name"]))
     except (requests.RequestException, ValueError):
+        # The optional version probe failed; use the fallback below.
         pass
 
     try:
@@ -424,6 +428,7 @@ def get_latest_gitlab_version() -> str | None:
             if isinstance(data, list) and data:
                 return clean_version_tag(str(data[0].get("tag_name", "")))
     except (requests.RequestException, ValueError):
+        # The optional version probe failed; use the fallback below.
         pass
     return None
 
@@ -531,25 +536,10 @@ def unpack_archive(archive_path: Path, target_dir: Path, cfg: Config) -> None:
     try:
         if zipfile.is_zipfile(archive_path):
             with zipfile.ZipFile(archive_path, "r") as zf:
-                for member in zf.infolist():
-                    extracted_path = Path(zf.extract(member, temp_extract))
-                    mode = member.external_attr >> 16
-                    if mode:
-                        if stat.S_ISLNK(mode):
-                            try:
-                                link_target = extracted_path.read_text(encoding="utf-8").strip()
-                                extracted_path.unlink()
-                                extracted_path.symlink_to(link_target)
-                            except (OSError, UnicodeDecodeError):  # pragma: no cover
-                                pass
-                        else:
-                            try:
-                                extracted_path.chmod(mode)
-                            except OSError:  # pragma: no cover
-                                pass
+                extract_zip(zf, temp_extract)
         elif tarfile.is_tarfile(archive_path):
             with tarfile.open(archive_path, "r:*") as tf:
-                tf.extractall(temp_extract)
+                tf.extractall(temp_extract, filter="data")
         else:
             raise ValueError(f"Unsupported archive format: {archive_path.name}")
 
@@ -681,6 +671,7 @@ def create_shims_for_version(target_dir: Path, cfg: Config) -> list[str]:
             try:
                 item.chmod(item.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
             except OSError:  # pragma: no cover
+                # Permission adjustment is best-effort; retain existing permissions on failure.
                 pass
             name = item.name
             shim_path = cfg.bin_dir / name

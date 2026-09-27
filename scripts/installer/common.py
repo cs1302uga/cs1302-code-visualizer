@@ -222,12 +222,14 @@ def format_path_for_display(path: Path | None) -> str:
         if len(str(rel_cwd)) < len(str(abs_path)):
             return f"./{rel_cwd}"
     except ValueError:
+        # The path cannot be shortened here; retain its full display form.
         pass
 
     try:
         rel_home = abs_path.relative_to(home)
         return f"~/{rel_home}"
     except ValueError:
+        # The path cannot be shortened here; retain its full display form.
         pass
 
     return str(abs_path)

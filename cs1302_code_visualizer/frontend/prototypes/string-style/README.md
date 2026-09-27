@@ -10,7 +10,7 @@ Run from the repository root:
 python3 -m http.server 8765 --bind 127.0.0.1 --directory cs1302_code_visualizer/frontend
 ```
 
-Open http://localhost:8765/prototypes/string-style/?variant=B
+Open <http://localhost:8765/prototypes/string-style/?variant=B>
 
 The checked-in frontend bundle supplies the existing renderer. No build is needed.
 Use the bottom switcher or left/right keys for A (24/12 px), B (40 px minimum
@@ -67,9 +67,9 @@ bounds after fonts settle.
 
 Fixtures reconstruct states described by these local course pages:
 
-- http://localhost:8000/java/adt-and-links/node-introduction.html
-- http://localhost:8000/java/adt-and-links/list-interface.html
-- http://localhost:8000/java/adt-and-links/examples-both-implementations.html
+- <http://localhost:8000/java/adt-and-links/node-introduction.html>
+- <http://localhost:8000/java/adt-and-links/list-interface.html>
+- <http://localhost:8000/java/adt-and-links/examples-both-implementations.html>
 
 Node has String item and Node next. ArrayBasedList has int size and String[]
 array (capacity five in these examples). LinkBasedList has int size and Node

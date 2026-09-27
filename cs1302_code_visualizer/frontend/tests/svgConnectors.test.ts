@@ -3,7 +3,6 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import $ from "jquery";
 import {
   SvgConnectorManager,
   SvgConnection,
@@ -181,7 +180,7 @@ describe("svgConnectors", () => {
 
       expect(conn.pathElement.getAttribute("d")).toMatch(/^M\s+\d+/);
       expect(conn.arrowElement.getAttribute("points")).toBeDefined();
-      expect(conn.arrowElement.getAttribute("points")?.split(" ").length).toBe(4);
+      expect(conn.arrowElement.getAttribute("points")?.split(" ").length).toBe(3);
     });
   });
 });

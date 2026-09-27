@@ -38,7 +38,7 @@ describe("array orientation rendering", () => {
         const tbl = table(container, id);
         expect(tbl).not.toBeNull();
         expect(tbl.classList.contains(`array-${orientations[index]}`)).toBe(true);
-        const cells = [...tbl.rows].map(row => [...row.cells].map(cell => cell.className));
+        const cells = [...tbl.rows].map(row => [...row.cells].map(cell => cell.className.replace(" value-cell", "")));
         const length = id === 4 ? 3 : 2;
         expect(cells).toEqual(orientations[index] === "vertical"
           ? Array.from({ length }, () => ["listHeader", "listElt"])
