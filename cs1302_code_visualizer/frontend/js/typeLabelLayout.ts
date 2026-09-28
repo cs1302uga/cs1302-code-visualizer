@@ -11,9 +11,6 @@ export function declaredTypes(trace: any[]): string[] {
     for (const frame of state.stack_to_render ?? []) {
       for (const attrs of Object.values(frame.locals_attrs ?? {}) as any[]) add(attrs?.type);
     }
-    for (const attrs of Object.values(state.heap_attrs ?? {}) as any[]) {
-      if (Array.isArray(attrs?.type)) add(attrs.type);
-    }
   }
   return [...types].sort();
 }
@@ -26,7 +23,7 @@ export class TypeLabelLayout {
     this.types = [...new Set([...declaredTypes(trace), ...shared].map(trim))];
   }
   apply(root: HTMLElement): void {
-    const label = root.querySelector<HTMLElement>(".fieldTypeLabel");
+    const label = root.querySelector<HTMLElement>(".stackFrameVar .fieldTypeLabel");
     if (!label) return;
     const style = getComputedStyle(label);
     const signature = [style.font, style.fontVariationSettings, style.letterSpacing,

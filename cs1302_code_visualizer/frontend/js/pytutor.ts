@@ -2565,7 +2565,7 @@ class DataVisualizer {
           myViz.params.includeTypes && type
             ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(type))}</div>`
             : "";
-        return [typeHtml + d, d];
+        return [typeHtml + `<span class="stackVarName">${htmlsanitize(d)}</span>`, d];
       });
 
     var globalVarTableCellsEnter = globalVarTableCells
@@ -2910,7 +2910,7 @@ class DataVisualizer {
               varname === "this"
                 ? `<span class="javaStackVarThis">${htmlsanitize(varname)}</span>`
                 : htmlsanitize(varname);
-            $(this).html(safeHtml(typeHtml + varNameHtml));
+            $(this).html(safeHtml(typeHtml + `<span class="stackVarName">${varNameHtml}</span>`));
           }
         } else {
           // always delete and re-render the stack var ...

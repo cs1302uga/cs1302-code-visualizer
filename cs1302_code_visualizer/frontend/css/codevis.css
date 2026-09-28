@@ -159,7 +159,7 @@ div.ExecutionVisualizer .instVal.emptyStringVal {
   box-sizing: border-box;
 }
 
-div.ExecutionVisualizer td.instKey, div.ExecutionVisualizer td.stackFrameVar {
+div.ExecutionVisualizer td.instKey {
     gap: 0.25rem;
     display: flex;
     flex-direction: row;

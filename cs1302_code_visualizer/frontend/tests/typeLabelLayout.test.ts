@@ -7,8 +7,8 @@ describe("trace-wide type labels", () => {
     const states=[{globals_attrs:{x:{type:"int"}}},
       {stack_to_render:[{locals_attrs:{m:{type:"java.util.Map<String, Integer>"}}}],
         heap_attrs:{1:{type:["boolean"]},2:{type:"UnusedRuntimeType"}}}];
-    expect(declaredTypes(states)).toEqual(["boolean","int","java.util.Map<String, Integer>"]);
-    const root=document.createElement("div");root.innerHTML='<div class="fieldTypeLabel">int</div>';
+    expect(declaredTypes(states)).toEqual(["int","java.util.Map<String, Integer>"]);
+    const root=document.createElement("div");root.innerHTML='<div class="stackFrameVar"><div class="fieldTypeLabel">int</div></div>';
     document.body.append(root);
     const spy=vi.spyOn(HTMLElement.prototype,"getBoundingClientRect").mockImplementation(function(this:HTMLElement){
       return {width:(this.textContent?.length??0)*7} as DOMRect;

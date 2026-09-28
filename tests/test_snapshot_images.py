@@ -235,6 +235,7 @@ def test_shared_type_metadata_supports_legacy_and_modern_selected_states():
                             "locals_attrs": {
                                 "m": {"type": "Map<String, Integer>"},
                                 "unknown": {"type": None},
+                                "alternatives": {"type": ["byte", None]},
                             }
                         }
                     ],
@@ -243,11 +244,19 @@ def test_shared_type_metadata_supports_legacy_and_modern_selected_states():
                 }
             ]
         },
-        {"steps": [{"callStack": [{"locals": [{"name": "x", "type": "long"}]}]}]},
+        {
+            "steps": [
+                {
+                    "callStack": [{"locals": [{"name": "x", "type": "long"}]}],
+                    "statics": [{"fields": [{"name": "flag", "type": "boolean"}]}],
+                    "heap": {"1": {"fields": [{"name": "field", "type": "UnrelatedLongType"}]}},
+                }
+            ]
+        },
     ]
     assert browser_driver._layout_types(payload) == {
         "Map<String, Integer>",
-        "int",
-        "String",
+        "boolean",
+        "byte",
         "long",
     }

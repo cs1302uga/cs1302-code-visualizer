@@ -1148,8 +1148,7 @@ div.ExecutionVisualizer .compact-string-arrow {
 }
 div.ExecutionVisualizer table.dictTbl td.dictKey,
 div.ExecutionVisualizer table.instTbl td.instKey,
-div.ExecutionVisualizer table.classTbl td.classKey,
-div.ExecutionVisualizer .stackFrameVar {
+div.ExecutionVisualizer table.classTbl td.classKey {
   text-align: initial;
   display: flex;
   flex-wrap: nowrap;
@@ -1163,3 +1162,24 @@ div.ExecutionVisualizer .stackFrameVar {
 .ExecutionVisualizer .fieldTypeLabel { white-space: nowrap; }
 .ExecutionVisualizer .fieldTypeLabel { flex-shrink: 0; }
 .ExecutionVisualizer .stackFrameVar .fieldTypeLabel { min-width: var(--type-label-width, 0px); }
+
+/* Align types independently of the right-aligned names in every stack row. */
+div.ExecutionVisualizer td.stackFrameVar {
+  display: grid;
+  grid-template-columns: auto minmax(max-content, 1fr);
+  align-items: baseline;
+  column-gap: 0.25rem;
+  text-align: left;
+}
+div.ExecutionVisualizer .stackFrameVar .fieldTypeLabel {
+  grid-column: 1;
+}
+div.ExecutionVisualizer .stackVarName {
+  grid-column: 2;
+  justify-self: end;
+}
+div.ExecutionVisualizer .stackFrameVar .retval {
+  grid-column: 1 / -1;
+  justify-self: end;
+  text-align: right;
+}
