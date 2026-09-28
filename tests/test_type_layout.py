@@ -12,6 +12,52 @@ from tests.test_map_rendering import FIXTURE
 
 @pytest.mark.parametrize("include_types", [True, False])
 @pytest.mark.parametrize("globals_frame", [True, False])
+@pytest.mark.parametrize("future_name", ["longVariableName", "__return__"])
+def test_future_variable_names_do_not_move_existing_columns(
+    rendering_session, include_types, globals_frame, future_name
+):
+    """Reserve future name widths even when declared-type labels are hidden."""
+    trace = json.loads(FIXTURE.read_text())
+    first = trace["trace"][0]
+    first["heap"] = {}
+    first["heap_attrs"] = {}
+    frame = first["stack_to_render"][0]
+    frame["encoded_locals"] = {"n": 1}
+    frame["ordered_varnames"] = ["n"]
+    frame["locals_attrs"] = {"n": {"type": "int"}}
+    later = copy.deepcopy(first)
+    later_frame = later["stack_to_render"][0]
+    later_frame["encoded_locals"][future_name] = 2
+    later_frame["ordered_varnames"].append(future_name)
+    later_frame["locals_attrs"][future_name] = {"type": "int"}
+    trace["trace"] = [first, later]
+    if globals_frame:
+        for state in trace["trace"]:
+            local = state["stack_to_render"][0]
+            state["globals"] = local["encoded_locals"]
+            state["ordered_globals"] = local["ordered_varnames"]
+            state["globals_attrs"] = local["locals_attrs"]
+            state["stack_to_render"] = []
+    with browser_driver.online_python_tutor_frontend(
+        json.dumps(trace), include_types=include_types, session=rendering_session
+    ) as frontend:
+        positions = frontend["driver"].execute_script("""
+            return [0, 1, 0].map(step => {
+                window.optFrontend.renderStep(step);
+                const row=document.querySelector('.stackFrameVarTable tr');
+                const name=row.querySelector('.stackVarName');
+                const range=document.createRange(); range.selectNodeContents(name);
+                return [range.getBoundingClientRect().right,
+                    row.querySelector('.stackFrameValue').getBoundingClientRect().left];
+            });
+        """)
+        for name_right, value_left in positions[1:]:
+            assert name_right == pytest.approx(positions[0][0], abs=0.1)
+            assert value_left == pytest.approx(positions[0][1], abs=0.1)
+
+
+@pytest.mark.parametrize("include_types", [True, False])
+@pytest.mark.parametrize("globals_frame", [True, False])
 def test_stack_columns_align_independently_of_variable_name(
     rendering_session, include_types, globals_frame
 ):

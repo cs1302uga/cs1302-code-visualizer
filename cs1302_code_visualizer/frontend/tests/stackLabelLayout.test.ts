@@ -1,5 +1,5 @@
 import {describe, expect, it, vi} from "vitest";
-import {declaredTypes, TypeLabelLayout} from "../js/typeLabelLayout";
+import {declaredTypes, StackLabelLayout} from "../js/stackLabelLayout";
 import {stringValue} from "../js/stringStyle";
 
 describe("trace-wide type labels", () => {
@@ -13,7 +13,7 @@ describe("trace-wide type labels", () => {
     const spy=vi.spyOn(HTMLElement.prototype,"getBoundingClientRect").mockImplementation(function(this:HTMLElement){
       return {width:(this.textContent?.length??0)*7} as DOMRect;
     });
-    const layout=new TypeLabelLayout(states,["java.util.List<VeryLongTypeName>"],s=>s.replace("java.util.",""));
+    const layout=new StackLabelLayout(states,["java.util.List<VeryLongTypeName>"],s=>s.replace("java.util.",""));
     layout.apply(root);
     expect(root.style.getPropertyValue("--type-label-width")).toBe(`${"List<VeryLongTypeName>".length*7}px`);
     const count=spy.mock.calls.length;layout.apply(root);expect(spy).toHaveBeenCalledTimes(count);

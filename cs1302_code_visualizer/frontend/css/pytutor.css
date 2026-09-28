@@ -1177,6 +1177,8 @@ div.ExecutionVisualizer .stackFrameVar .fieldTypeLabel {
 div.ExecutionVisualizer .stackVarName {
   grid-column: 2;
   justify-self: end;
+  min-width: var(--stack-name-width, 0px);
+  text-align: right;
 }
 div.ExecutionVisualizer .stackFrameVar .retval {
   grid-column: 1 / -1;

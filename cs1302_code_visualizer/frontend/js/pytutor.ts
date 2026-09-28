@@ -42,7 +42,7 @@ import "@fontsource/recursive";
 import { isModernTrace, convertModernTraceToOpt } from "./modernTraceAdapter";
 import { prepareStringTrace, validateStringStyle, stringValue } from "./stringStyle";
 import { createValueBox, layoutValueBoxes, renderCompactString } from "./valueLayout";
-import { TypeLabelLayout } from "./typeLabelLayout";
+import { StackLabelLayout } from "./stackLabelLayout";
 import { resolveArrayOrientation } from "./arrayOrientation";
 import { applyTheme, paint } from "./theme";
 require("../css/pytutor");
@@ -1383,7 +1383,7 @@ class DataVisualizer {
 
   curTraceLayouts: any[]; // initialized in precomputeCurTraceLayouts
 
-  private typeLabelLayout: TypeLabelLayout;
+  private stackLabelLayout: StackLabelLayout;
 
   jsPlumbInstance: any;
   jsPlumbManager: any;
@@ -1411,7 +1411,7 @@ class DataVisualizer {
       this.params.stripTypePrefixes.sort().reverse();
     }
 
-    this.typeLabelLayout = new TypeLabelLayout(this.curTrace, this.owner.layoutTypes, type => this.trimTypePrefix(type));
+    this.stackLabelLayout = new StackLabelLayout(this.curTrace, this.owner.layoutTypes, type => this.trimTypePrefix(type));
 
     this.domRoot = domRoot;
     this.domRootD3 = domRootD3;
@@ -3245,7 +3245,7 @@ class DataVisualizer {
       label.textContent = `${myViz.trimTypePrefix(type)}@${id}${count}`;
     });
     myViz.jsPlumbInstance.prepareLayout();
-    myViz.typeLabelLayout.apply(myViz.domRoot[0]);
+    myViz.stackLabelLayout.apply(myViz.domRoot[0]);
     layoutValueBoxes(myViz.domRoot[0]);
     if (!myViz.params.textualMemoryLabels) {
       // re-render existing connectors and then ...
@@ -4341,7 +4341,7 @@ class DataVisualizer {
 
   redrawConnectors() {
     this.jsPlumbInstance.prepareLayout();
-    this.typeLabelLayout.apply(this.domRoot[0]);
+    this.stackLabelLayout.apply(this.domRoot[0]);
     layoutValueBoxes(this.domRoot[0]);
     this.jsPlumbInstance.repaintEverything();
   }
