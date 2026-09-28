@@ -1,0 +1,404 @@
+{
+  "bounds": {
+    "left": 35,
+    "top": 105,
+    "right": 471,
+    "bottom": 266
+  },
+  "texts": [
+    {
+      "text": "main:5",
+      "x": 12,
+      "y": 10.5,
+      "width": 43.421875,
+      "height": 16,
+      "font": "Recursive, monospace",
+      "size": "13px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "Node",
+      "x": 20,
+      "y": 38,
+      "width": 26.1328125,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "n",
+      "x": 50.1328125,
+      "y": 35.5,
+      "width": 7.8046875,
+      "height": 16,
+      "font": "Recursive, monospace",
+      "size": "13px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "70",
+      "x": 72.9375,
+      "y": 38,
+      "width": 12,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "String@95",
+      "x": 349.90625,
+      "y": 10.5,
+      "width": 56.7421875,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "\"Hello\"",
+      "x": 359.90625,
+      "y": 31.5,
+      "width": 36.703125,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "Node@70",
+      "x": 160.9375,
+      "y": 72,
+      "width": 50.1328125,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "String",
+      "x": 169.9375,
+      "y": 93,
+      "width": 33.0625,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "item",
+      "x": 207,
+      "y": 90.5,
+      "width": 29.90625,
+      "height": 16,
+      "font": "Recursive, monospace",
+      "size": "13px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "95",
+      "x": 251.90625,
+      "y": 93,
+      "width": 12,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "Node",
+      "x": 177.1328125,
+      "y": 114,
+      "width": 26.1328125,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "next",
+      "x": 207.265625,
+      "y": 111.5,
+      "width": 29.640625,
+      "height": 16,
+      "font": "Recursive, monospace",
+      "size": "13px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "70",
+      "x": 251.90625,
+      "y": 114,
+      "width": 12,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    }
+  ],
+  "shapes": [
+    {
+      "id": "v6__stack0",
+      "className": "stackFrame highlightedStackFrame",
+      "text": "main:5Noden70",
+      "x": 5,
+      "y": 4.5,
+      "width": 109.9375,
+      "height": 55
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "70",
+      "x": 65.9375,
+      "y": 34.5,
+      "width": 40,
+      "height": 19
+    },
+    {
+      "id": "v6__heap_object_95",
+      "className": "heapObject",
+      "text": "String@95\n               \n               \"Hello\"\n             ",
+      "x": 347.90625,
+      "y": 10.5,
+      "width": 67,
+      "height": 39.5
+    },
+    {
+      "id": "",
+      "className": "instTbl",
+      "text": "\n               \n               \"Hello\"\n             ",
+      "x": 349.90625,
+      "y": 25,
+      "width": 65,
+      "height": 25
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "\"Hello\"",
+      "x": 352.90625,
+      "y": 28,
+      "width": 59,
+      "height": 19
+    },
+    {
+      "id": "v6__heap_object_70",
+      "className": "heapObject",
+      "text": "Node@70\n               Stringitem\n               95\n             \n               Nodenext\n               70\n             ",
+      "x": 158.9375,
+      "y": 72,
+      "width": 128.96875,
+      "height": 60.5
+    },
+    {
+      "id": "",
+      "className": "instTbl",
+      "text": "\n               Stringitem\n               95\n             \n               Nodenext\n               70\n             ",
+      "x": 160.9375,
+      "y": 86.5,
+      "width": 126.96875,
+      "height": 46
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "95",
+      "x": 244.90625,
+      "y": 89.5,
+      "width": 40,
+      "height": 19
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "70",
+      "x": 244.90625,
+      "y": 110.5,
+      "width": 40,
+      "height": 19
+    }
+  ],
+  "connectors": [
+    {
+      "sourceId": "v6__heap_pointer_src_1",
+      "targetId": "v6__heap_object_95",
+      "source": {
+        "x": 251.90625,
+        "y": 93,
+        "width": 18,
+        "height": 12
+      },
+      "sourceBox": {
+        "x": 244.90625,
+        "y": 89.5,
+        "width": 40,
+        "height": 19
+      },
+      "sourceOwner": "v6__heap_object_70",
+      "sourceOwnerRect": {
+        "x": 158.9375,
+        "y": 72,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "target": {
+        "x": 347.90625,
+        "y": 10.5,
+        "width": 67,
+        "height": 39.5
+      },
+      "targetBody": {
+        "x": 349.90625,
+        "y": 25,
+        "width": 65,
+        "height": 25
+      },
+      "path": "M 285.90625 178 H 292.90625 C 321.90625 178 321.90625 109.25 350.90625 109.25",
+      "circle": "<circle r=\"3\" fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" cx=\"285.90625\" cy=\"178\"></circle>",
+      "polygon": "<polygon fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" points=\"356.90625,109.25 350.90625,106.25 350.90625,112.25\"></polygon>",
+      "transform": [
+        1,
+        0,
+        0,
+        1,
+        26,
+        26
+      ]
+    },
+    {
+      "sourceId": "v6__heap_pointer_src_2",
+      "targetId": "v6__heap_object_70",
+      "source": {
+        "x": 251.90625,
+        "y": 114,
+        "width": 18,
+        "height": 12
+      },
+      "sourceBox": {
+        "x": 244.90625,
+        "y": 110.5,
+        "width": 40,
+        "height": 19
+      },
+      "sourceOwner": "v6__heap_object_70",
+      "sourceOwnerRect": {
+        "x": 158.9375,
+        "y": 72,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "target": {
+        "x": 158.9375,
+        "y": 72,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "targetBody": {
+        "x": 160.9375,
+        "y": 86.5,
+        "width": 126.96875,
+        "height": 46
+      },
+      "path": "M 285.90625 199 H 292.90625 L 304.90625 199 Q 312.90625 199 312.90625 207 L 312.90625 215.5 Q 312.90625 223.5 320.90625 223.5 L 433.90625 223.5 Q 439.90625 223.5 439.90625 229.5 L 439.90625 229.5 Q 439.90625 235.5 433.90625 235.5 L 155.9375 235.5 Q 147.9375 235.5 147.9375 227.5 L 147.9375 188.25 Q 147.9375 181.25 154.9375 181.25 L 161.9375 181.25",
+      "circle": "<circle r=\"3\" fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" cx=\"285.90625\" cy=\"199\"></circle>",
+      "polygon": "<polygon fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" points=\"167.9375,181.25 161.9375,178.25 161.9375,184.25\"></polygon>",
+      "transform": [
+        1,
+        0,
+        0,
+        1,
+        26,
+        26
+      ]
+    },
+    {
+      "sourceId": "v6__0__n",
+      "targetId": "v6__heap_object_70",
+      "source": {
+        "x": 72.9375,
+        "y": 38,
+        "width": 18,
+        "height": 12
+      },
+      "sourceBox": {
+        "x": 65.9375,
+        "y": 34.5,
+        "width": 40,
+        "height": 19
+      },
+      "sourceOwner": "v6__stack0",
+      "sourceOwnerRect": {
+        "x": 5,
+        "y": 4.5,
+        "width": 109.9375,
+        "height": 55
+      },
+      "target": {
+        "x": 158.9375,
+        "y": 72,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "targetBody": {
+        "x": 160.9375,
+        "y": 86.5,
+        "width": 126.96875,
+        "height": 46
+      },
+      "path": "M 106.9375 123 H 119.9375 C 140.9375 123 140.9375 181.25 161.9375 181.25",
+      "circle": "<circle r=\"3\" fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" cx=\"106.9375\" cy=\"123\"></circle>",
+      "polygon": "<polygon fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" points=\"167.9375,181.25 161.9375,178.25 161.9375,184.25\"></polygon>",
+      "transform": [
+        1,
+        0,
+        0,
+        1,
+        26,
+        26
+      ]
+    }
+  ],
+  "settings": {
+    "stringStyle": "default",
+    "otherOptions": "CodeVisualizer.create defaults"
+  },
+  "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) T3Code(Nightly)/0.0.43-nightly.20260927.2331 Chrome/152.0.7977.130 Electron/44.4.2 Safari/537.36",
+  "fonts": [
+    {
+      "family": "Recursive",
+      "weight": "400",
+      "status": "unloaded"
+    },
+    {
+      "family": "Recursive",
+      "weight": "400",
+      "status": "unloaded"
+    },
+    {
+      "family": "Recursive",
+      "weight": "400",
+      "status": "unloaded"
+    },
+    {
+      "family": "Recursive",
+      "weight": "400",
+      "status": "loaded"
+    }
+  ],
+  "dpr": 2
+}

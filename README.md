@@ -2,7 +2,7 @@
 
 Create memory diagrams from Java programs for lectures, assignments, and other teaching materials.
 
-![Java memory diagram showing a Person record](demo.png)
+![The main frame holds alice, which refers to a Person with age 42 and a name reference to the Alice string](demo.png)
 
 ## Install
 
@@ -11,7 +11,7 @@ Install [uv](https://docs.astral.sh/uv/) and Google Chrome. Python 3.13 or newer
 Download the `.whl` file from the project's [GitHub releases](https://github.com/cs1302uga/cs1302-code-visualizer/releases). In the directory containing that file, install it with uv (replace the filename with the version you downloaded):
 
 ```sh
-uv tool install ./cs1302_code_visualizer-0.17.0-py3-none-any.whl
+uv tool install ./cs1302_code_visualizer-0.18.0-py3-none-any.whl
 code-visualizer --help
 ```
 
@@ -42,6 +42,46 @@ For editable vector artwork, use `code-visualizer Main.java --format SVG -o main
 SVG also supports all steps and batch rendering; see [SVG exports](docs/cli.md#svg-exports).
 
 Open `main.png` and insert it into your teaching material. Use `--dpi 2` for a larger image. Single-file mode replaces existing output files; choose a new filename to retain an earlier image.
+
+## Read the diagram
+
+Start at a variable's reference dot and follow the arrowhead to its object. In
+this example, `alice` refers to a `Person`; `age` contains `42`, while `name`
+refers to the String `"Alice"`.
+
+- Stack frames show method invocations and their visible variables. A label such
+  as `main:5` includes source-line context, not an execution-step count.
+- Heap labels such as `Person@92` show the runtime class and trace object ID.
+  IDs identify shared objects; they are not memory addresses.
+- Several references to one object are aliases. A returning arrow can form a
+  cycle or self-reference; an arrow crossing is not a connection.
+- `null` has no target arrow. Array indices identify elements regardless of
+  whether the array is displayed horizontally or vertically.
+- The active frame is highlighted. Blue references come from it or heap objects;
+  muted references come from inactive frames, not necessarily unreachable objects.
+
+See [reading memory diagrams](docs/reading-diagrams.md) for the visual key,
+string styles, and how presentation options change what is visible.
+
+Type labels stay on one line, with declared-type space reserved across supplied
+states or requested snapshots. Maps have an enclosing object border. Separate
+String objects show `(length N)` using Java’s UTF-16 length. Arrows stop at target
+boundaries and avoid arrowheads for different targets. Parallel shafts to different
+targets stay separated. Aliases also use separate horizontal lanes away from their
+target. Departures prefer clearance from box borders. Readable shaft crossings may remain.
+
+## Accessibility
+
+Both default palettes are tested for **at least 7:1 text contrast** (the WCAG 2.2
+AAA text-contrast threshold) and **3:1 border/reference contrast** (the AA
+non-text threshold). SVG exports include an accessible summary and full state
+description; their labels remain selectable when viewed directly or inline.
+PNG needs a text alternative supplied by the author.
+
+These are criterion-specific features, not a claim of complete WCAG AA or AAA
+conformance. Custom colors, embedding, and assistive-technology behavior require
+review. See [accessibility and WCAG scope](docs/accessibility.md) for default
+light/dark colors, criterion levels, SVG descriptions, and publishing guidance.
 
 ## Choose colors
 
@@ -90,6 +130,9 @@ Each file is traced as a separate program. Batch mode preserves relative directo
 
 - [Example gallery](examples/README.md): Java concepts and rendered diagrams.
 - [CLI guide](docs/cli.md): detailed command usage and troubleshooting.
+- [Reading diagrams](docs/reading-diagrams.md): frames, values, references, and object identity.
+- [Accessibility](docs/accessibility.md): WCAG criterion levels, palettes, and text alternatives.
+- [Reference arrows](docs/reference-routing/README.md): routing, text clearance, and a runnable example.
 - [Visualization themes](docs/themes.md): colors, Auto mode, embedding, and contrast.
 - [Python integration](HACKING.md): embed rendering in scripts and course builds.
 - [Contributing](CONTRIBUTING.md): develop, test, and release the project.

@@ -1,0 +1,171 @@
+{
+  "code": "public class Main {\n    public static void main(String[] args) {\n        Node finish = new Node(\"Hello\");\n        finish.next = new Node(\"World\");\n        String[] items = { \"A long literal stays completely visible\", \"World\" };\n        Node n = finish.next;\n        System.out.println(\"snapshot\");\n    }\n}\n\nclass Node {\n    String item;\n    Node next;\n    Node(String item) { this.item = item; }\n}\n",
+  "stdin": "",
+  "trace": [
+    {
+      "stdout": "snapshot\n",
+      "stderr": "",
+      "event": "step_line",
+      "func_name": "main",
+      "line": 7,
+      "stack_to_render": [
+        {
+          "func_name": "main:7",
+          "encoded_locals": {
+            "finish": [
+              "REF",
+              70
+            ],
+            "items": [
+              "REF",
+              71
+            ],
+            "n": [
+              "REF",
+              72
+            ]
+          },
+          "locals_attrs": {
+            "finish": {
+              "type": "Node",
+              "final": false
+            },
+            "items": {
+              "type": "String[]",
+              "final": false
+            },
+            "n": {
+              "type": "Node",
+              "final": false
+            }
+          },
+          "ordered_varnames": [
+            "finish",
+            "items",
+            "n"
+          ],
+          "parent_frame_id_list": [],
+          "is_highlighted": true,
+          "is_zombie": false,
+          "is_parent": false,
+          "unique_hash": "0",
+          "frame_id": 0,
+          "file": "Main.java"
+        }
+      ],
+      "globals": {},
+      "globals_attrs": {},
+      "ordered_globals": [],
+      "heap": {
+        "97": [
+          "INSTANCE",
+          "String",
+          [
+            "___NO_LABEL!___",
+            "Hello"
+          ]
+        ],
+        "98": [
+          "INSTANCE",
+          "String",
+          [
+            "___NO_LABEL!___",
+            "A long literal stays completely visible"
+          ]
+        ],
+        "99": [
+          "INSTANCE",
+          "String",
+          [
+            "___NO_LABEL!___",
+            "World"
+          ]
+        ],
+        "68": [
+          "LIST"
+        ],
+        "70": [
+          "INSTANCE",
+          "Node",
+          [
+            "item",
+            [
+              "REF",
+              97
+            ]
+          ],
+          [
+            "next",
+            [
+              "REF",
+              72
+            ]
+          ]
+        ],
+        "71": [
+          "LIST",
+          [
+            "REF",
+            98
+          ],
+          [
+            "REF",
+            99
+          ]
+        ],
+        "72": [
+          "INSTANCE",
+          "Node",
+          [
+            "item",
+            [
+              "REF",
+              99
+            ]
+          ],
+          [
+            "next",
+            null
+          ]
+        ]
+      },
+      "heap_attrs": {
+        "97": {
+          "type": "String"
+        },
+        "98": {
+          "type": "String"
+        },
+        "99": {
+          "type": "String"
+        },
+        "68": {
+          "type": "String[]"
+        },
+        "70": {
+          "type": [
+            "String",
+            "Node"
+          ]
+        },
+        "71": {
+          "type": "String[]"
+        },
+        "72": {
+          "type": [
+            "String",
+            "Node"
+          ]
+        }
+      },
+      "file": "Main.java",
+      "stdinConsumed": "",
+      "stdinOffset": 0
+    }
+  ],
+  "userlog": "",
+  "sources": {
+    "Main.java": "public class Main {\n    public static void main(String[] args) {\n        Node finish = new Node(\"Hello\");\n        finish.next = new Node(\"World\");\n        String[] items = { \"A long literal stays completely visible\", \"World\" };\n        Node n = finish.next;\n        System.out.println(\"snapshot\");\n    }\n}\n\nclass Node {\n    String item;\n    Node next;\n    Node(String item) { this.item = item; }\n}\n"
+  },
+  "entryFile": "Main.java"
+}

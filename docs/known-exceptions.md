@@ -39,10 +39,13 @@ not a record of completed work or a substitute for fresh validation.
   otherwise equivalent tracer runs. Cross-version comparisons may normalize those
   values and expected source-metadata differences, but must retain raw output and
   investigate other differences. Revisit when tracer identity semantics change.
-- **Connector geometry:** representative fixtures and route tests do not guarantee
-  that arbitrary graphs are free of crossings. Older array review captures noted
-  crossings; subsequent routing changes mean those captures are not evidence of
-  current behavior. Reproduce any reported crossing against the current renderer.
+- **Connector geometry:** ordinary crossings through clear space are permitted;
+  arbitrary graphs are not guaranteed to be crossing-free or independently
+  traceable. Text remains protected. Fixed-position routing uses a bounded set of
+  candidates before local spacing repair; externally constrained CSS can prevent
+  repair and cause a diagnostic. Revisit when routing candidates, CSS layout, or
+  attachment rules change. Reproduce reported failures against the current
+  renderer using the [routing validation guidance](reference-routing/README.md#validation-and-performance).
 - **Build advisories:** webpack emits bundle-size advisories. Successful builds do
   not resolve that performance concern; reassess when bundle contents or delivery
   requirements change.

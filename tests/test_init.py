@@ -437,7 +437,8 @@ def test_render_batch_window_is_bounded_and_ordered(monkeypatch):
     session = Mock(max_browsers=2, tracer_workers=1)
     session.batch_tracer.submit.side_effect = submit
     monkeypatch.setattr(
-        cs1302_code_visualizer, "_resolve_and_render_trace",
+        cs1302_code_visualizer,
+        "_resolve_and_render_trace",
         lambda trace, *args, **kwargs: {1: json.loads(trace)["index"].encode()},
     )
     jobs = [
@@ -510,3 +511,26 @@ def test_render_batch_errors_close_owned_session(monkeypatch, failure_stage):
         list(cs1302_code_visualizer.render_batch_images(jobs))
     session.__exit__.assert_called_once()
     assert not future.cancelled()
+
+
+@pytest.mark.parametrize("all_occurrences", [False, True])
+def test_breakpoint_type_budget_excludes_unrequested_states(all_occurrences):
+    from cs1302_code_visualizer import _resolve_and_render_trace
+
+    trace = {
+        "code": "",
+        "trace": [
+            {"line": 2, "globals_attrs": {"x": {"type": "int"}}},
+            {"line": 4, "globals_attrs": {"x": {"type": "Map<String, Integer>"}}},
+            {"line": 8, "globals_attrs": {"x": {"type": "ExcludedMuchLongerType"}}},
+        ],
+    }
+    with patch(
+        "cs1302_code_visualizer.browser_driver.generate_image", return_value=b"IMG"
+    ) as render:
+        _resolve_and_render_trace(json.dumps(trace), {2, 4}, render_all_occurrences=all_occurrences)
+    assert render.call_count == 2
+    for call in render.call_args_list:
+        payload = json.loads(call.args[0])
+        assert payload["_layoutTypes"] == ["Map<String, Integer>", "int"]
+        assert payload["trace"][0]["line"] in {2, 4}

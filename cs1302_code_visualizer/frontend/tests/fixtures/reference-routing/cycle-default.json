@@ -1,0 +1,912 @@
+{
+  "bounds": {
+    "left": 35,
+    "top": 105,
+    "right": 788,
+    "bottom": 389
+  },
+  "texts": [
+    {
+      "text": "main:7",
+      "x": 12,
+      "y": 10.5,
+      "width": 43.421875,
+      "height": 16,
+      "font": "Recursive, monospace",
+      "size": "13px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "Node",
+      "x": 20,
+      "y": 38,
+      "width": 26.1328125,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "first",
+      "x": 50.1328125,
+      "y": 35.5,
+      "width": 28.8671875,
+      "height": 16,
+      "font": "Recursive, monospace",
+      "size": "13px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "70",
+      "x": 94,
+      "y": 38,
+      "width": 12,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "String@95",
+      "x": 370.96875,
+      "y": 10.5,
+      "width": 56.7421875,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "\"Hello\"",
+      "x": 380.96875,
+      "y": 31.5,
+      "width": 36.703125,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "String@103",
+      "x": 517.9375,
+      "y": 72,
+      "width": 63.140625,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "\"World\"",
+      "x": 527.9375,
+      "y": 93,
+      "width": 41.203125,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "String@106",
+      "x": 664.90625,
+      "y": 133.5,
+      "width": 63.140625,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "\"Again\"",
+      "x": 674.90625,
+      "y": 154.5,
+      "width": 38.40625,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "Node@70",
+      "x": 182,
+      "y": 195,
+      "width": 50.1328125,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "String",
+      "x": 191,
+      "y": 216,
+      "width": 33.0625,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "item",
+      "x": 228.0625,
+      "y": 213.5,
+      "width": 29.90625,
+      "height": 16,
+      "font": "Recursive, monospace",
+      "size": "13px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "95",
+      "x": 272.96875,
+      "y": 216,
+      "width": 12,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "Node",
+      "x": 198.1953125,
+      "y": 237,
+      "width": 26.1328125,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "next",
+      "x": 228.328125,
+      "y": 234.5,
+      "width": 29.640625,
+      "height": 16,
+      "font": "Recursive, monospace",
+      "size": "13px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "96",
+      "x": 272.96875,
+      "y": 237,
+      "width": 12,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "Node@96",
+      "x": 328.96875,
+      "y": 195,
+      "width": 50.1328125,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "String",
+      "x": 337.96875,
+      "y": 216,
+      "width": 33.0625,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "item",
+      "x": 375.03125,
+      "y": 213.5,
+      "width": 29.90625,
+      "height": 16,
+      "font": "Recursive, monospace",
+      "size": "13px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "103",
+      "x": 419.9375,
+      "y": 216,
+      "width": 18,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "Node",
+      "x": 345.1640625,
+      "y": 237,
+      "width": 26.1328125,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "next",
+      "x": 375.296875,
+      "y": 234.5,
+      "width": 29.640625,
+      "height": 16,
+      "font": "Recursive, monospace",
+      "size": "13px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "104",
+      "x": 419.9375,
+      "y": 237,
+      "width": 18,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "Node@104",
+      "x": 475.9375,
+      "y": 195,
+      "width": 56.53125,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "String",
+      "x": 484.9375,
+      "y": 216,
+      "width": 33.0625,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "item",
+      "x": 522,
+      "y": 213.5,
+      "width": 29.90625,
+      "height": 16,
+      "font": "Recursive, monospace",
+      "size": "13px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "106",
+      "x": 566.90625,
+      "y": 216,
+      "width": 18,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "Node",
+      "x": 492.1328125,
+      "y": 237,
+      "width": 26.1328125,
+      "height": 12.5,
+      "font": "Recursive, monospace",
+      "size": "10.6667px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "next",
+      "x": 522.265625,
+      "y": 234.5,
+      "width": 29.640625,
+      "height": 16,
+      "font": "Recursive, monospace",
+      "size": "13px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    },
+    {
+      "text": "70",
+      "x": 566.90625,
+      "y": 237,
+      "width": 12,
+      "height": 12,
+      "font": "Recursive, monospace",
+      "size": "10px",
+      "weight": "400",
+      "variation": "\"MONO\" 1"
+    }
+  ],
+  "shapes": [
+    {
+      "id": "v5__stack0",
+      "className": "stackFrame highlightedStackFrame",
+      "text": "main:7Nodefirst70",
+      "x": 5,
+      "y": 4.5,
+      "width": 131,
+      "height": 55
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "70",
+      "x": 87,
+      "y": 34.5,
+      "width": 40,
+      "height": 19
+    },
+    {
+      "id": "v5__heap_object_95",
+      "className": "heapObject",
+      "text": "String@95\n               \n               \"Hello\"\n             ",
+      "x": 368.96875,
+      "y": 10.5,
+      "width": 67,
+      "height": 39.5
+    },
+    {
+      "id": "",
+      "className": "instTbl",
+      "text": "\n               \n               \"Hello\"\n             ",
+      "x": 370.96875,
+      "y": 25,
+      "width": 65,
+      "height": 25
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "\"Hello\"",
+      "x": 373.96875,
+      "y": 28,
+      "width": 59,
+      "height": 19
+    },
+    {
+      "id": "v5__heap_object_103",
+      "className": "heapObject",
+      "text": "String@103\n               \n               \"World\"\n             ",
+      "x": 515.9375,
+      "y": 72,
+      "width": 72,
+      "height": 39.5
+    },
+    {
+      "id": "",
+      "className": "instTbl",
+      "text": "\n               \n               \"World\"\n             ",
+      "x": 517.9375,
+      "y": 86.5,
+      "width": 70,
+      "height": 25
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "\"World\"",
+      "x": 520.9375,
+      "y": 89.5,
+      "width": 64,
+      "height": 19
+    },
+    {
+      "id": "v5__heap_object_106",
+      "className": "heapObject",
+      "text": "String@106\n               \n               \"Again\"\n             ",
+      "x": 662.90625,
+      "y": 133.5,
+      "width": 69,
+      "height": 39.5
+    },
+    {
+      "id": "",
+      "className": "instTbl",
+      "text": "\n               \n               \"Again\"\n             ",
+      "x": 664.90625,
+      "y": 148,
+      "width": 67,
+      "height": 25
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "\"Again\"",
+      "x": 667.90625,
+      "y": 151,
+      "width": 61,
+      "height": 19
+    },
+    {
+      "id": "v5__heap_object_70",
+      "className": "heapObject",
+      "text": "Node@70\n               Stringitem\n               95\n             \n               Nodenext\n               96\n             ",
+      "x": 180,
+      "y": 195,
+      "width": 128.96875,
+      "height": 60.5
+    },
+    {
+      "id": "",
+      "className": "instTbl",
+      "text": "\n               Stringitem\n               95\n             \n               Nodenext\n               96\n             ",
+      "x": 182,
+      "y": 209.5,
+      "width": 126.96875,
+      "height": 46
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "95",
+      "x": 265.96875,
+      "y": 212.5,
+      "width": 40,
+      "height": 19
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "96",
+      "x": 265.96875,
+      "y": 233.5,
+      "width": 40,
+      "height": 19
+    },
+    {
+      "id": "v5__heap_object_96",
+      "className": "heapObject",
+      "text": "Node@96\n               Stringitem\n               103\n             \n               Nodenext\n               104\n             ",
+      "x": 326.96875,
+      "y": 195,
+      "width": 128.96875,
+      "height": 60.5
+    },
+    {
+      "id": "",
+      "className": "instTbl",
+      "text": "\n               Stringitem\n               103\n             \n               Nodenext\n               104\n             ",
+      "x": 328.96875,
+      "y": 209.5,
+      "width": 126.96875,
+      "height": 46
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "103",
+      "x": 412.9375,
+      "y": 212.5,
+      "width": 40,
+      "height": 19
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "104",
+      "x": 412.9375,
+      "y": 233.5,
+      "width": 40,
+      "height": 19
+    },
+    {
+      "id": "v5__heap_object_104",
+      "className": "heapObject",
+      "text": "Node@104\n               Stringitem\n               106\n             \n               Nodenext\n               70\n             ",
+      "x": 473.9375,
+      "y": 195,
+      "width": 128.96875,
+      "height": 60.5
+    },
+    {
+      "id": "",
+      "className": "instTbl",
+      "text": "\n               Stringitem\n               106\n             \n               Nodenext\n               70\n             ",
+      "x": 475.9375,
+      "y": 209.5,
+      "width": 126.96875,
+      "height": 46
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "106",
+      "x": 559.90625,
+      "y": 212.5,
+      "width": 40,
+      "height": 19
+    },
+    {
+      "id": "",
+      "className": "value-box",
+      "text": "70",
+      "x": 559.90625,
+      "y": 233.5,
+      "width": 40,
+      "height": 19
+    }
+  ],
+  "connectors": [
+    {
+      "sourceId": "v5__heap_pointer_src_1",
+      "targetId": "v5__heap_object_95",
+      "source": {
+        "x": 272.96875,
+        "y": 216,
+        "width": 18,
+        "height": 12
+      },
+      "sourceBox": {
+        "x": 265.96875,
+        "y": 212.5,
+        "width": 40,
+        "height": 19
+      },
+      "sourceOwner": "v5__heap_object_70",
+      "sourceOwnerRect": {
+        "x": 180,
+        "y": 195,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "target": {
+        "x": 368.96875,
+        "y": 10.5,
+        "width": 67,
+        "height": 39.5
+      },
+      "targetBody": {
+        "x": 370.96875,
+        "y": 25,
+        "width": 65,
+        "height": 25
+      },
+      "path": "M 306.96875 301 H 313.96875 C 342.96875 301 342.96875 109.25 371.96875 109.25",
+      "circle": "<circle r=\"3\" fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" cx=\"306.96875\" cy=\"301\"></circle>",
+      "polygon": "<polygon fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" points=\"377.96875,109.25 371.96875,106.25 371.96875,112.25\"></polygon>",
+      "transform": [
+        1,
+        0,
+        0,
+        1,
+        26,
+        26
+      ]
+    },
+    {
+      "sourceId": "v5__heap_pointer_src_2",
+      "targetId": "v5__heap_object_96",
+      "source": {
+        "x": 272.96875,
+        "y": 237,
+        "width": 18,
+        "height": 12
+      },
+      "sourceBox": {
+        "x": 265.96875,
+        "y": 233.5,
+        "width": 40,
+        "height": 19
+      },
+      "sourceOwner": "v5__heap_object_70",
+      "sourceOwnerRect": {
+        "x": 180,
+        "y": 195,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "target": {
+        "x": 326.96875,
+        "y": 195,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "targetBody": {
+        "x": 328.96875,
+        "y": 209.5,
+        "width": 126.96875,
+        "height": 46
+      },
+      "path": "M 306.96875 322 H 313.96875 C 321.96875 322 321.96875 304.25 329.96875 304.25",
+      "circle": "<circle r=\"3\" fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" cx=\"306.96875\" cy=\"322\"></circle>",
+      "polygon": "<polygon fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" points=\"335.96875,304.25 329.96875,301.25 329.96875,307.25\"></polygon>",
+      "transform": [
+        1,
+        0,
+        0,
+        1,
+        26,
+        26
+      ]
+    },
+    {
+      "sourceId": "v5__heap_pointer_src_3",
+      "targetId": "v5__heap_object_103",
+      "source": {
+        "x": 419.9375,
+        "y": 216,
+        "width": 18,
+        "height": 12
+      },
+      "sourceBox": {
+        "x": 412.9375,
+        "y": 212.5,
+        "width": 40,
+        "height": 19
+      },
+      "sourceOwner": "v5__heap_object_96",
+      "sourceOwnerRect": {
+        "x": 326.96875,
+        "y": 195,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "target": {
+        "x": 515.9375,
+        "y": 72,
+        "width": 72,
+        "height": 39.5
+      },
+      "targetBody": {
+        "x": 517.9375,
+        "y": 86.5,
+        "width": 70,
+        "height": 25
+      },
+      "path": "M 453.9375 301 H 460.9375 C 489.9375 301 489.9375 170.75 518.9375 170.75",
+      "circle": "<circle r=\"3\" fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" cx=\"453.9375\" cy=\"301\"></circle>",
+      "polygon": "<polygon fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" points=\"524.9375,170.75 518.9375,167.75 518.9375,173.75\"></polygon>",
+      "transform": [
+        1,
+        0,
+        0,
+        1,
+        26,
+        26
+      ]
+    },
+    {
+      "sourceId": "v5__heap_pointer_src_4",
+      "targetId": "v5__heap_object_104",
+      "source": {
+        "x": 419.9375,
+        "y": 237,
+        "width": 18,
+        "height": 12
+      },
+      "sourceBox": {
+        "x": 412.9375,
+        "y": 233.5,
+        "width": 40,
+        "height": 19
+      },
+      "sourceOwner": "v5__heap_object_96",
+      "sourceOwnerRect": {
+        "x": 326.96875,
+        "y": 195,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "target": {
+        "x": 473.9375,
+        "y": 195,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "targetBody": {
+        "x": 475.9375,
+        "y": 209.5,
+        "width": 126.96875,
+        "height": 46
+      },
+      "path": "M 453.9375 322 H 460.9375 C 468.9375 322 468.9375 304.25 476.9375 304.25",
+      "circle": "<circle r=\"3\" fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" cx=\"453.9375\" cy=\"322\"></circle>",
+      "polygon": "<polygon fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" points=\"482.9375,304.25 476.9375,301.25 476.9375,307.25\"></polygon>",
+      "transform": [
+        1,
+        0,
+        0,
+        1,
+        26,
+        26
+      ]
+    },
+    {
+      "sourceId": "v5__heap_pointer_src_5",
+      "targetId": "v5__heap_object_106",
+      "source": {
+        "x": 566.90625,
+        "y": 216,
+        "width": 18,
+        "height": 12
+      },
+      "sourceBox": {
+        "x": 559.90625,
+        "y": 212.5,
+        "width": 40,
+        "height": 19
+      },
+      "sourceOwner": "v5__heap_object_104",
+      "sourceOwnerRect": {
+        "x": 473.9375,
+        "y": 195,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "target": {
+        "x": 662.90625,
+        "y": 133.5,
+        "width": 69,
+        "height": 39.5
+      },
+      "targetBody": {
+        "x": 664.90625,
+        "y": 148,
+        "width": 67,
+        "height": 25
+      },
+      "path": "M 600.90625 301 H 607.90625 C 636.90625 301 636.90625 232.25 665.90625 232.25",
+      "circle": "<circle r=\"3\" fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" cx=\"600.90625\" cy=\"301\"></circle>",
+      "polygon": "<polygon fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" points=\"671.90625,232.25 665.90625,229.25 665.90625,235.25\"></polygon>",
+      "transform": [
+        1,
+        0,
+        0,
+        1,
+        26,
+        26
+      ]
+    },
+    {
+      "sourceId": "v5__heap_pointer_src_6",
+      "targetId": "v5__heap_object_70",
+      "source": {
+        "x": 566.90625,
+        "y": 237,
+        "width": 18,
+        "height": 12
+      },
+      "sourceBox": {
+        "x": 559.90625,
+        "y": 233.5,
+        "width": 40,
+        "height": 19
+      },
+      "sourceOwner": "v5__heap_object_104",
+      "sourceOwnerRect": {
+        "x": 473.9375,
+        "y": 195,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "target": {
+        "x": 180,
+        "y": 195,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "targetBody": {
+        "x": 182,
+        "y": 209.5,
+        "width": 126.96875,
+        "height": 46
+      },
+      "path": "M 600.90625 322 H 607.90625 L 619.90625 322 Q 627.90625 322 627.90625 330 L 627.90625 338.5 Q 627.90625 346.5 635.90625 346.5 L 750.90625 346.5 Q 756.90625 346.5 756.90625 352.5 L 756.90625 352.5 Q 756.90625 358.5 750.90625 358.5 L 177 358.5 Q 169 358.5 169 350.5 L 169 311.25 Q 169 304.25 176 304.25 L 183 304.25",
+      "circle": "<circle r=\"3\" fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" cx=\"600.90625\" cy=\"322\"></circle>",
+      "polygon": "<polygon fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" points=\"189,304.25 183,301.25 183,307.25\"></polygon>",
+      "transform": [
+        1,
+        0,
+        0,
+        1,
+        26,
+        26
+      ]
+    },
+    {
+      "sourceId": "v5__0__first",
+      "targetId": "v5__heap_object_70",
+      "source": {
+        "x": 94,
+        "y": 38,
+        "width": 18,
+        "height": 12
+      },
+      "sourceBox": {
+        "x": 87,
+        "y": 34.5,
+        "width": 40,
+        "height": 19
+      },
+      "sourceOwner": "v5__stack0",
+      "sourceOwnerRect": {
+        "x": 5,
+        "y": 4.5,
+        "width": 131,
+        "height": 55
+      },
+      "target": {
+        "x": 180,
+        "y": 195,
+        "width": 128.96875,
+        "height": 60.5
+      },
+      "targetBody": {
+        "x": 182,
+        "y": 209.5,
+        "width": 126.96875,
+        "height": 46
+      },
+      "path": "M 128 123 H 141 C 162 123 162 304.25 183 304.25",
+      "circle": "<circle r=\"3\" fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" cx=\"128\" cy=\"123\"></circle>",
+      "polygon": "<polygon fill=\"var(--codevis-arrow, var(--_codevis-arrow, #2757dd))\" points=\"189,304.25 183,301.25 183,307.25\"></polygon>",
+      "transform": [
+        1,
+        0,
+        0,
+        1,
+        26,
+        26
+      ]
+    }
+  ],
+  "settings": {
+    "stringStyle": "default",
+    "otherOptions": "CodeVisualizer.create defaults"
+  },
+  "browser": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) T3Code(Nightly)/0.0.43-nightly.20260927.2331 Chrome/152.0.7977.130 Electron/44.4.2 Safari/537.36",
+  "fonts": [
+    {
+      "family": "Recursive",
+      "weight": "400",
+      "status": "unloaded"
+    },
+    {
+      "family": "Recursive",
+      "weight": "400",
+      "status": "unloaded"
+    },
+    {
+      "family": "Recursive",
+      "weight": "400",
+      "status": "unloaded"
+    },
+    {
+      "family": "Recursive",
+      "weight": "400",
+      "status": "loaded"
+    }
+  ],
+  "dpr": 2
+}

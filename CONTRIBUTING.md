@@ -42,6 +42,9 @@ make test-examples
 
 `make check` runs Ruff, Basedpyright, all Markdown checks, Python tests, and frontend tests. Python tests enforce 100% coverage. `make test-examples` exercises the Java examples and retains output artifacts; review generated changes before committing. Run `make deptry` when changing Python dependencies and `make build` to validate distributable builds.
 
+The JDK 25 CI job also runs `make test-examples`, so collection and map rendering
+regressions in the complete Java examples block merging and release validation.
+
 For focused work, use `make test-py`, `make test-frontend`, `make lint`, or `make typecheck`. Python formatting and lint rules are in [pyproject.toml](pyproject.toml), including Google-style docstrings. `make format-py` applies Ruff formatting and fixes.
 
 ## Documentation requirements

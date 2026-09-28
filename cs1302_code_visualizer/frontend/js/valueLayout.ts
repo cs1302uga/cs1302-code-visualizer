@@ -1,7 +1,9 @@
-import { ARROW_LENGTH, SOURCE_INSET, SOURCE_RADIUS, arrowTriangle } from "./svgConnectors";
+import { ARROW_LENGTH, SOURCE_INSET, SOURCE_RADIUS, arrowTriangle } from "./connectorGeometry";
 import { paint } from "./theme";
 
-const valueCellSelector = 'td.instVal,td.classVal,td.dictVal,td.stackFrameValue,td.listElt,td.tupleElt,td.stackElt,td.queueElt,td.setElt';
+// Reference-valued keys need the same reserved endpoint space as values.
+// Primitive keys remain labels, without a value surface.
+const valueCellSelector = 'td.instVal,td.classVal,td.dictVal,td.stackFrameValue,td.listElt,td.tupleElt,td.stackElt,td.queueElt,td.setElt,td.dictKey[data-reference-target]';
 
 /** Create a value surface at render time; compound objects keep their own layout. */
 export function createValueBox(cell: HTMLElement): HTMLElement {

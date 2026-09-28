@@ -249,12 +249,23 @@ def _resolve_and_render_trace(
         and isinstance(parsed_trace["trace"], list)
     )
 
+    def with_types(payload: dict[str, Any], types: list[str]) -> dict[str, Any]:
+        return dict(payload, _layoutTypes=types) if types else payload
+
     if is_chronological:
         source_code: str = parsed_trace.get("code", "")
         frames_list: list[dict[str, Any]] = [
             f for f in parsed_trace["trace"] if isinstance(f, dict)
         ]
         if render_all_occurrences:
+            layout_types = sorted(
+                browser_driver._layout_types([
+                    frame
+                    for frame in frames_list
+                    if frame.get("line") is not None
+                    and (frame["line"] in breakpoints or -1 in breakpoints)
+                ])
+            )
             out_accumulated: dict[int, list[bytes]] = defaultdict(list)
             for frame in frames_list:
                 line_no = frame.get("line")
@@ -263,7 +274,7 @@ def _resolve_and_render_trace(
                     frame_payload = {"code": source_code, "trace": [frame]}
                     out_accumulated[target_key].append(
                         browser_driver.generate_image(
-                            json.dumps(frame_payload),
+                            json.dumps(with_types(frame_payload, layout_types)),
                             dpi=dpi,
                             format=format,
                             string_style=string_style,
@@ -286,11 +297,12 @@ def _resolve_and_render_trace(
                     latest_by_line[line_no] = frame
             if -1 in breakpoints and frames_list:
                 latest_by_line[-1] = frames_list[-1]
+            layout_types = sorted(browser_driver._layout_types(list(latest_by_line.values())))
             out_single: dict[int, bytes] = {}
             for line_no, frame in latest_by_line.items():
                 frame_payload = {"code": source_code, "trace": [frame]}
                 out_single[line_no] = browser_driver.generate_image(
-                    json.dumps(frame_payload),
+                    json.dumps(with_types(frame_payload, layout_types)),
                     dpi=dpi,
                     format=format,
                     string_style=string_style,
@@ -306,12 +318,13 @@ def _resolve_and_render_trace(
             return out_single
     elif render_all_occurrences:
         traces_accumulated: dict[str, list[dict[str, Any]]] = parsed_trace
+        layout_types = sorted(browser_driver._layout_types(parsed_trace))
         out_accumulated_dict: dict[int, list[bytes]] = defaultdict(list)
         for line, occurrences in traces_accumulated.items():
             for occurrence in occurrences:
                 out_accumulated_dict[int(line)].append(
                     browser_driver.generate_image(
-                        json.dumps(occurrence),
+                        json.dumps(with_types(occurrence, layout_types)),
                         dpi=dpi,
                         format=format,
                         string_style=string_style,
@@ -328,10 +341,11 @@ def _resolve_and_render_trace(
         return out_accumulated_dict
     else:
         traces_dict: dict[str, dict[str, Any]] = parsed_trace
+        layout_types = sorted(browser_driver._layout_types(parsed_trace))
         out_single_dict: dict[int, bytes] = {}
         for line, trace_dict in traces_dict.items():
             out_single_dict[int(line)] = browser_driver.generate_image(
-                json.dumps(trace_dict),
+                json.dumps(with_types(trace_dict, layout_types)),
                 dpi=dpi,
                 format=format,
                 string_style=string_style,

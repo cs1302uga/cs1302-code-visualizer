@@ -552,7 +552,7 @@ describe("CodeVisualizer", () => {
       expect(heapObjects.length).toBe(3);
 
       // Populated string: simple String header
-      expect(heapObjects[0].querySelector(".typeLabel")?.textContent).toBe("String@1");
+      expect(heapObjects[0].querySelector(".typeLabel")?.textContent).toBe("String@1 (length 5)");
 
       // Populated array: int[] (length 3)
       expect(heapObjects[1].querySelector(".typeLabel")?.textContent).toBe("int[]@2 (length 3)");

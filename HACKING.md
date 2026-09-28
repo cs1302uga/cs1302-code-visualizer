@@ -7,7 +7,7 @@ Use the renderer in course builds or other Python applications. For command-line
 Use Python 3.13 or newer and the browser prerequisites in the [installation guide](README.md#install). Download a release wheel, then add it to your uv project, substituting its actual path:
 
 ```sh
-uv add ./cs1302_code_visualizer-0.17.0-py3-none-any.whl
+uv add ./cs1302_code_visualizer-0.18.0-py3-none-any.whl
 ```
 
 The following recipes run in order in one Python script, using `Main.java` from the instructor quickstart. Run the script with `uv run python your_script.py`.
@@ -117,13 +117,14 @@ an empty list without launching a browser. An error raises without returning a
 partial list; callers may retry the individual payloads to isolate a failure.
 All payloads in a call use the same options, including breakpoint selection and
 `theme` (`light`, `dark`, `auto`, or omitted for adaptive output). Each image gets
-its own tight crop; changing the batch order, membership, or cache-miss subset
-does not change its framing.
+its own tight crop. Declared-type columns reserve enough width for every requested
+snapshot in the call. Changing input order does not change that budget; changing
+batch membership can change column widths and framing.
 
 The API keeps one browser lease and host document for the call. Subsequent payloads
 load the unchanged renderer in fresh full-viewport frames, then discard those
 frames. This preserves the font-loading timing and heap spacing of individual
-images. It does not share a diagram's layout history between programs.
+images. Only the type-width budget is shared; diagram layout history is not.
 `generate_step_images` remains the API for chronological steps of one trace.
 Singleton inputs and the `json-pre` visualizer use the individual-image path.
 For parallel builds, submit bounded groups through the same `RenderingSession`;
@@ -176,4 +177,4 @@ Path("memory-embed.html").write_text(html, encoding="utf-8")
 
 Insert this snippet into your page and set an ancestor, such as the page's `body`, to `data-theme="light"`, `"dark"`, or `"auto"`. Omit `theme` in `render_html` to follow that attribute. Pass `theme="dark"` or `theme="auto"` to override it for that instance. Without `bundle_url`, the helper uses the installed package version's GitHub release bundle URL; that release asset must be available.
 
-See the [theme guide](docs/themes.md) for a complete static HTML recipe, a three-frame visual comparison, CSS color overrides, print behavior, and the scope of the contrast checks.
+See the [theme guide](docs/themes.md) for a complete static HTML recipe, a three-frame visual comparison, CSS color overrides, print behavior, and the scope of the contrast checks. The [accessibility guide](docs/accessibility.md) maps features to WCAG 2.2 criterion levels and explains how to preserve SVG descriptions when embedding or converting exports.

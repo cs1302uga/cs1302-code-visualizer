@@ -971,6 +971,7 @@ div.ExecutionVisualizer .stackFrameHeader {
 }
 
 div.ExecutionVisualizer .instTbl,
+div.ExecutionVisualizer .dictTbl,
 div.ExecutionVisualizer .listTbl {
   border: var(--object-border) !important;
   border-radius: var(--object-border-radius) !important;
@@ -1156,3 +1157,9 @@ div.ExecutionVisualizer .stackFrameVar {
   align-items: baseline;
   gap: 0.25rem;
 }
+
+/* Type names are atomic labels, including generic parameters. */
+.ExecutionVisualizer .typeLabel,
+.ExecutionVisualizer .fieldTypeLabel { white-space: nowrap; }
+.ExecutionVisualizer .fieldTypeLabel { flex-shrink: 0; }
+.ExecutionVisualizer .stackFrameVar .fieldTypeLabel { min-width: var(--type-label-width, 0px); }

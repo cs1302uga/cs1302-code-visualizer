@@ -40,8 +40,9 @@ require("jquery-ui-dist/jquery-ui.css");
 
 import "@fontsource/recursive";
 import { isModernTrace, convertModernTraceToOpt } from "./modernTraceAdapter";
-import { prepareStringTrace, validateStringStyle } from "./stringStyle";
+import { prepareStringTrace, validateStringStyle, stringValue } from "./stringStyle";
 import { createValueBox, layoutValueBoxes, renderCompactString } from "./valueLayout";
+import { TypeLabelLayout } from "./typeLabelLayout";
 import { resolveArrayOrientation } from "./arrayOrientation";
 import { applyTheme, paint } from "./theme";
 require("../css/pytutor");
@@ -236,6 +237,7 @@ export class ExecutionVisualizer {
   params: any = {};
   curInputCode: string;
   curTrace: any[];
+  layoutTypes: string[];
 
   // an array of objects with the following fields:
   //   'text' - the text of the line of code
@@ -342,6 +344,7 @@ export class ExecutionVisualizer {
     if (dat && dat["-1"]) {
       dat = dat["-1"];
     }
+    const layoutTypes = dat._layoutTypes;
     if (isModernTrace(dat)) {
       dat = convertModernTraceToOpt(dat);
     }
@@ -350,6 +353,7 @@ export class ExecutionVisualizer {
     this.curInputCode = dat.code.rtrim(); // kill trailing spaces
     this.params = params;
     this.curTrace = dat.trace;
+    this.layoutTypes = layoutTypes ?? [];
 
     // postprocess the trace
     if (this.curTrace.length > 0) {
@@ -1379,6 +1383,8 @@ class DataVisualizer {
 
   curTraceLayouts: any[]; // initialized in precomputeCurTraceLayouts
 
+  private typeLabelLayout: TypeLabelLayout;
+
   jsPlumbInstance: any;
   jsPlumbManager: any;
 
@@ -1404,6 +1410,8 @@ class DataVisualizer {
       // sort so that we match the longest possible prefix first in the type strip method
       this.params.stripTypePrefixes.sort().reverse();
     }
+
+    this.typeLabelLayout = new TypeLabelLayout(this.curTrace, this.owner.layoutTypes, type => this.trimTypePrefix(type));
 
     this.domRoot = domRoot;
     this.domRootD3 = domRootD3;
@@ -2339,6 +2347,7 @@ class DataVisualizer {
     var curToplevelLayout = this.curTraceLayouts[curInstr];
 
     myViz.resetJsPlumbManager(); // very important!!!
+    myViz.jsPlumbInstance.beginBatch();
 
     // for simplicity (but sacrificing some performance), delete all
     // connectors and redraw them from scratch. doing so avoids mysterious
@@ -3231,9 +3240,12 @@ class DataVisualizer {
       const type = ["INSTANCE", "CLASS", "HEAP_PRIMITIVE", "COLOR"].includes(object[0]) ? object[1] :
         typeof runtimeType === "string" ? runtimeType :
         object[0] === "LIST" ? "array" : object[0] === "JAVA_LAMBDA" ? "lambda" : object[0].toLowerCase();
-      const count = label.textContent.match(/ \((?:length|size) \d+\)$/)?.[0] || "";
+      const literal = stringValue(object);
+      const count = literal !== undefined ? ` (length ${literal.length})` : label.textContent.match(/ \((?:length|size) \d+\)$/)?.[0] || "";
       label.textContent = `${myViz.trimTypePrefix(type)}@${id}${count}`;
     });
+    myViz.jsPlumbInstance.prepareLayout();
+    myViz.typeLabelLayout.apply(myViz.domRoot[0]);
     layoutValueBoxes(myViz.domRoot[0]);
     if (!myViz.params.textualMemoryLabels) {
       // re-render existing connectors and then ...
@@ -3432,6 +3444,7 @@ class DataVisualizer {
     if (needToRedrawConnectors) {
       myViz.redrawConnectors();
     }
+    myViz.jsPlumbInstance.endBatch();
 
     myViz.owner.try_hook("end_renderDataStructures", {
       myViz: myViz.owner /* tricky! use owner to be safe */,
@@ -4327,6 +4340,8 @@ class DataVisualizer {
   }
 
   redrawConnectors() {
+    this.jsPlumbInstance.prepareLayout();
+    this.typeLabelLayout.apply(this.domRoot[0]);
     layoutValueBoxes(this.domRoot[0]);
     this.jsPlumbInstance.repaintEverything();
   }

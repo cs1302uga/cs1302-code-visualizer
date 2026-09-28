@@ -11,36 +11,10 @@ function escapeCssSelector(id: string): string {
  */
 
 import $ from "jquery";
+import { ConnectorRouting } from "./connectorRouting";
 
-export const ARROW_LENGTH = 6;
-export const SOURCE_INSET = 8;
-export const SOURCE_RADIUS = 3;
-
-/** Shared, notch-free triangle used by both local string and heap arrows. */
-export function arrowTriangle(x: number, y: number, direction = 1): string {
-  const rear = x - direction * ARROW_LENGTH;
-  return `${x},${y} ${rear},${y-3} ${rear},${y+3}`;
-}
-
-type Point = [number, number];
-
-/** Round the corners of an orthogonal route; the caller supplies the initial move. */
-function roundedSegments(points: Point[]): string {
-  const clean = points.filter((p, i) => !i || p[0] !== points[i-1][0] || p[1] !== points[i-1][1]);
-  let result = "";
-  for (let i = 1; i < clean.length - 1; i++) {
-    const [before, at, after] = [clean[i-1], clean[i], clean[i+1]];
-    const incoming = Math.hypot(at[0]-before[0], at[1]-before[1]);
-    const outgoing = Math.hypot(after[0]-at[0], after[1]-at[1]);
-    const r = Math.min(8, incoming/2, outgoing/2);
-    const entry = at.map((v, j) => v + (before[j]-v)*r/incoming);
-    const exit = at.map((v, j) => v + (after[j]-v)*r/outgoing);
-    result += ` L ${entry[0]} ${entry[1]} Q ${at[0]} ${at[1]} ${exit[0]} ${exit[1]}`;
-  }
-  const end = clean[clean.length-1];
-  return result + ` L ${end[0]} ${end[1]}`;
-}
-
+import { SOURCE_RADIUS, arrowTriangle } from "./connectorGeometry";
+export { ARROW_LENGTH, SOURCE_INSET, SOURCE_RADIUS, arrowTriangle } from "./connectorGeometry";
 
 /**
  * Visual styling configuration for SVG connector paths and endpoints.
@@ -243,7 +217,8 @@ export class SvgConnection {
     this.groupElement.appendChild(this.arrowElement);
 
     this.canvas.appendChild(this.groupElement);
-    this.update();
+    this.pathElement.setAttribute("d", "M 0 0 L 0 0");
+    this.arrowElement.setAttribute("points", arrowTriangle(0, 0));
   }
 
   /**
@@ -255,6 +230,7 @@ export class SvgConnection {
     if (!this.isHovered) {
       this.applyStyle(this.paintStyle);
     }
+    if (style.lineWidth !== undefined) this.manager.repaintEverything();
   }
 
   /**
@@ -266,6 +242,7 @@ export class SvgConnection {
     if (this.isHovered) {
       this.applyStyle(this.hoverPaintStyle);
     }
+    if (style.lineWidth !== undefined) this.manager.repaintEverything();
   }
 
   /**
@@ -297,102 +274,7 @@ export class SvgConnection {
    * Recalculates anchor coordinates, curve path, and arrowhead orientation.
    */
   public update(): void {
-    const rawSource = this.source[0];
-    const rawTarget = this.target[0];
-    if (!rawSource || !rawTarget || !this.manager.container) {
-      return;
-    }
-
-    const containerRect = this.manager.container.getBoundingClientRect();
-    const srcRect = rawSource.getBoundingClientRect();
-    const dstRect = rawTarget.getBoundingClientRect();
-
-    let x1 = 0;
-    let y1 = 0;
-    let x2 = 0;
-    let y2 = 0;
-
-    // Anchor calculation
-    if (this.anchors[0] === "LeftMiddle") {
-      x1 = srcRect.left - containerRect.left;
-      y1 = srcRect.top + srcRect.height / 2 - containerRect.top;
-    } else {
-      // Default: RightMiddle
-      x1 = srcRect.right - containerRect.left;
-      y1 = srcRect.top + srcRect.height / 2 - containerRect.top;
-    }
-
-    if (this.anchors[1] === "RightMiddle") {
-      x2 = dstRect.right - containerRect.left;
-      y2 = dstRect.top + dstRect.height / 2 - containerRect.top;
-    } else {
-      // Default: LeftMiddle
-      x2 = dstRect.left - containerRect.left;
-      y2 = dstRect.top + dstRect.height / 2 - containerRect.top;
-    }
-
-    const valueBox = rawSource.closest(".value-box");
-    const enclosure = rawSource.closest(".instTbl,.classTbl,.dictTbl,.listTbl,.tupleTbl,.stackTbl,.queueTbl,.stackFrame,.zombieStackFrame");
-    if (valueBox && this.anchors[0] !== "LeftMiddle") {
-      const box = valueBox.getBoundingClientRect();
-      x1 = box.right - containerRect.left - SOURCE_INSET;
-      y1 = box.top + box.height / 2 - containerRect.top;
-    }
-    this.dotElement.setAttribute("cx", String(x1));
-    this.dotElement.setAttribute("cy", String(y1));
-
-    // Every shaft meets the rear edge of the same filled triangular head.
-    const direction = this.anchors[1] === "RightMiddle" ? -1 : 1;
-    const end = x2 - direction * ARROW_LENGTH;
-    let d: string;
-    if (this.anchors[0] === "LeftMiddle") {
-      const c = this.curviness || 45;
-      d = `M ${x1} ${y1} C ${x1-c} ${y1} ${end-direction*c} ${y2} ${end} ${y2}`;
-    } else {
-      const exit = enclosure && valueBox
-        ? Math.max(x1, enclosure.getBoundingClientRect().right - containerRect.left - 4) : x1;
-      const sourceHeap = rawSource.closest(".heapObject");
-      const targetHeap = rawTarget.closest(".heapObject");
-      const isReturn = sourceHeap && targetHeap &&
-        targetHeap.getBoundingClientRect().left <= sourceHeap.getBoundingClientRect().left;
-      if (isReturn && enclosure) {
-        const returns = this.manager.connections.filter(c => {
-          const source = c.source[0]?.closest(".heapObject");
-          const target = c.target[0]?.closest(".heapObject");
-          return source && target && target.getBoundingClientRect().left <= source.getBoundingClientRect().left;
-        });
-        const lane = Math.max(0, returns.indexOf(this));
-        const enclosureRect = enclosure.getBoundingClientRect();
-        const objects = Array.from(this.manager.container.querySelectorAll(".heapObject"))
-          .map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
-        const bottom = Math.max(enclosureRect.bottom, dstRect.bottom, ...objects.map(r => r.bottom)) - containerRect.top + 24 + lane * 12;
-        const sourceRight = enclosureRect.right - containerRect.left + 16;
-        const targetLeft = dstRect.left - containerRect.left - 20;
-        const right = Math.max(sourceRight, ...objects.map(r => r.right - containerRect.left + 16)) + lane * 12;
-        const left = Math.min(targetLeft, ...objects.map(r => r.left - containerRect.left - 20)) - lane * 12;
-        const points: Point[] = [[exit, y1], [sourceRight, y1]];
-        // Reach the outer rails through the gap below each endpoint's row, rather
-        // than descending through unrelated arrays elsewhere in the heap.
-        if (right > sourceRight) {
-          const belowSource = sourceHeap.getBoundingClientRect().bottom - containerRect.top + 12;
-          points.push([sourceRight, belowSource], [right, belowSource]);
-        }
-        points.push([right, bottom], [left, bottom]);
-        if (left < targetLeft) {
-          const belowTarget = targetHeap.getBoundingClientRect().bottom - containerRect.top + 12;
-          points.push([left, belowTarget], [targetLeft, belowTarget]);
-        }
-        points.push([targetLeft, y2], [end, y2]);
-        d = `M ${x1} ${y1} H ${exit}` + roundedSegments(points);
-        this.pathElement.dataset.returnLane = String(lane);
-      } else {
-        const bend = end >= exit ? (end - exit) / 2 : 40;
-        d = `M ${x1} ${y1} H ${exit} C ${exit+bend} ${y1} ${end-direction*bend} ${y2} ${end} ${y2}`;
-        delete this.pathElement.dataset.returnLane;
-      }
-    }
-    this.pathElement.setAttribute("d", d);
-    this.arrowElement.setAttribute("points", arrowTriangle(x2, y2, direction));
+    this.manager.repaintEverything();
   }
 
   /**
@@ -413,6 +295,8 @@ export class SvgConnection {
  * Manages the collection and lifecycle of SVG pointer connectors in a container.
  */
 export class SvgConnectorManager {
+  private readonly routing = new ConnectorRouting();
+  private batchDepth = 0;
   public container: HTMLElement;
   public readonly svgCanvas: SVGSVGElement;
   public connections: SvgConnection[] = [];
@@ -477,6 +361,7 @@ export class SvgConnectorManager {
   public connect(options: SvgConnectOptions): SvgConnection {
     const conn = new SvgConnection(this, options);
     this.connections.push(conn);
+    this.repaintEverything();
     return conn;
   }
 
@@ -484,6 +369,7 @@ export class SvgConnectorManager {
    * Resets and clears all active connections.
    */
   public reset(): void {
+    this.routing.clearRepairs();
     for (const conn of [...this.connections]) {
       conn.detach();
     }
@@ -495,11 +381,19 @@ export class SvgConnectorManager {
   /**
    * Repaints all active connection curves and arrowheads.
    */
+  public beginBatch(): void { this.batchDepth++; }
+
+  /** Restore intrinsic geometry before measuring shared value-box widths. */
+  public prepareLayout(): void { this.routing.clearRepairs(); }
+
+  public endBatch(): void {
+    this.batchDepth = Math.max(0, this.batchDepth - 1);
+    this.repaintEverything();
+  }
+
   public repaintEverything(): void {
-    for (const conn of this.connections) conn.update();
-    const returns = this.connections.filter(c => c.pathElement.dataset.returnLane !== undefined).length;
-    this.container.style.paddingBottom = returns ? `${32 + returns * 12}px` : "";
-    this.container.style.paddingRight = returns ? `${24 + returns * 12}px` : "";
+    if (this.batchDepth) return;
+    this.routing.repaint(this.container, this.connections);
   }
 
   /**
