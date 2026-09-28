@@ -44,42 +44,70 @@ def test_string_styles_geometry_and_exports(style, orientation, theme, rendering
                 const b=c.source[0].closest('.value-box').getBoundingClientRect();
                 const o=manager.container.getBoundingClientRect();
                 const tip=c.arrowElement.getAttribute('points').split(' ').map(p=>p.split(',').map(Number));
-                const enclosure=c.source[0].closest('.instTbl,.listTbl,.stackFrame').getBoundingClientRect();
-                const path=c.pathElement.getAttribute('d');
-                return {dot:Math.abs(Number(c.dotElement.getAttribute('cx'))-(b.right-o.left-8)),
-                  height:Math.abs(Number(c.dotElement.getAttribute('cy'))-(b.top+b.height/2-o.top)),
-                  triangle:tip.length===3 && Math.abs(tip[0][0]-tip[1][0])===6 && Math.abs(tip[1][1]-tip[2][1])===6,
-                  exit:Number(path.split(' H ')[1].split(' ')[0]),
-                  expectedExit:Math.max(b.right-o.left-8,enclosure.right-o.left-4),
-                  shaftEnd:path.endsWith(`${tip[0][0]-6} ${tip[0][1]}`) || path.endsWith(`H ${tip[0][0]-6}`),
-                  width:c.pathElement.getAttribute('stroke-width'),
-                  crossesObject: c.pathElement.dataset.returnLane !== undefined &&
-                    [...root.querySelectorAll('.heapObject')].filter(e=>
-                      e!==c.source[0].closest('.heapObject') && e!==c.target[0].closest('.heapObject'))
-                    .some(e=>{
-                      const r=e.getBoundingClientRect();
-                      const length=c.pathElement.getTotalLength();
-                      for(let t=0;t<length;t+=1) {
-                        const p=c.pathElement.getPointAtLength(t), x=p.x+o.left, y=p.y+o.top;
-                        if(x>r.left && x<r.right && y>r.top && y<r.bottom) return true;
-                      }
-                      return false;
-                    })};
-              }),
-              returns:root.querySelectorAll('[data-return-lane]').length
+                const target=c.target[0].closest('.heapObject');
+                const owner=c.source[0].closest('.heapObject');
+                const path=c.pathElement;
+                const end=path.getPointAtLength(path.getTotalLength());
+                const rear=[(tip[1][0]+tip[2][0])/2,(tip[1][1]+tip[2][1])/2];
+                const head=[tip[0][0]-rear[0],tip[0][1]-rear[1]];
+                const base=[tip[1][0]-tip[2][0],tip[1][1]-tip[2][1]];
+                const texts=[];
+                const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+                const range=document.createRange();
+                while(walker.nextNode()) {
+                  const node=walker.currentNode;
+                  if(!node.textContent.trim() || node.parentElement.closest('svg,script,style')) continue;
+                  if(getComputedStyle(node.parentElement).visibility!=='visible') continue;
+                  range.selectNodeContents(node);
+                  for(const r of range.getClientRects()) if(r.width && r.height) texts.push(r);
+                }
+                const stroke=Number(path.getAttribute('stroke-width'))/2;
+                const source=[Number(c.dotElement.getAttribute('cx'))+o.left,
+                  Number(c.dotElement.getAttribute('cy'))+o.top];
+                let textHit=false,leftExit=false,reentry=false,departed=false;
+                const length=path.getTotalLength();
+                for(let t=0;t<=length;t+=.5) {
+                  const p=path.getPointAtLength(t),x=p.x+o.left,y=p.y+o.top;
+                  if(texts.some(r=>x>r.left-1-stroke && x<r.right+1+stroke &&
+                    y>r.top-1-stroke && y<r.bottom+1+stroke)) textHit=true;
+                  const inside=x>b.left && x<b.right && y>b.top && y<b.bottom;
+                  if(departed && inside) reentry=true;
+                  if(!departed && !inside) {
+                    leftExit=x<=b.left && y>b.top && y<b.bottom;
+                    departed=true;
+                  }
+                }
+                const hb=c.arrowElement.getBoundingClientRect();
+                const endpointHit=texts.some(r=> {
+                  const x=Math.max(r.left-1,Math.min(source[0],r.right+1));
+                  const y=Math.max(r.top-1,Math.min(source[1],r.bottom+1));
+                  return Math.hypot(source[0]-x,source[1]-y)<3 ||
+                    (hb.right>r.left-1 && hb.left<r.right+1 && hb.bottom>r.top-1 && hb.top<r.bottom+1);
+                });
+                return {dot:Math.abs(source[0]-(b.right-8)),
+                  height:Math.abs(source[1]-(b.top+b.height/2)),
+                  triangle:tip.length===3 && Math.abs(Math.hypot(...head)-6)<.1 &&
+                    Math.abs(Math.hypot(...base)-6)<.1 && Math.abs(head[0]*base[0]+head[1]*base[1])<.1,
+                  shaftEnd:Math.hypot(end.x-rear[0],end.y-rear[1])<.1,
+                  leftExit,reentry,departed,textHit,endpointHit,
+                  width:path.getAttribute('stroke-width'),
+                  returning:!!owner && !!target &&
+                    target.getBoundingClientRect().left<=owner.getBoundingClientRect().left};
+              })
             };
         """)
         assert result["heights"] and all(abs(h - 19) < 0.1 for h in result["heights"])
         assert all(len(set(widths)) <= 1 for widths in result["widths"])
         assert (result["pairs"] > 0) == (style == "compact")
         assert (result["strings"] > 0) == (style == "default")
-        assert result["returns"] >= 1
+        assert any(connection["returning"] for connection in result["connections"])
         for connection in result["connections"]:
             assert connection["dot"] < 0.1 and connection["height"] < 0.1
             assert connection["triangle"] and connection["shaftEnd"]
-            assert abs(connection["exit"] - connection["expectedExit"]) < 0.1
+            assert connection["departed"] and not connection["leftExit"]
+            assert not connection["reentry"]
             assert connection["width"] == "1"
-            assert not connection["crossesObject"]
+            assert not connection["textHit"] and not connection["endpointHit"]
         svg = browser_driver._capture_viz(
             driver,
             frontend["dataViz"],
@@ -126,7 +154,7 @@ def test_text_only_strings_and_hover(rendering_session):
         assert "@" in result["title"]
 
 
-def test_self_loop_and_multiple_return_lanes(rendering_session):
+def test_self_loops_have_distinct_arrivals_and_stable_routes(rendering_session):
     trace = json.loads(TRACE)
     # Give both tail nodes self-loops and keep 115 independently reachable.
     step = trace["trace"][0]
@@ -144,9 +172,14 @@ def test_self_loop_and_multiple_return_lanes(rendering_session):
         result = frontend["driver"].execute_script("""
             window.optFrontend.redrawConnectors();
             const manager=window.optFrontend.dataViz.jsPlumbInstance;
-            return manager.connections.filter(c=>c.pathElement.dataset.returnLane!==undefined)
-                .map(c=>({lane:c.pathElement.dataset.returnLane,path:c.pathElement.getAttribute('d')}));
+            const loops=manager.connections.filter(c=>
+                c.source[0].closest('.heapObject')===c.target[0].closest('.heapObject'));
+            const snapshot=()=>loops.map(c=>({head:c.arrowElement.getAttribute('points'),
+                path:c.pathElement.getAttribute('d')}));
+            const before=snapshot(); manager.repaintEverything();
+            return {loops:before,stable:JSON.stringify(before)===JSON.stringify(snapshot())};
         """)
-        assert len(result) >= 2
-        assert len({item["lane"] for item in result}) == len(result)
-        assert all(" Q " in item["path"] and "NaN" not in item["path"] for item in result)
+        assert len(result["loops"]) >= 2
+        assert len({item["head"] for item in result["loops"]}) == len(result["loops"])
+        assert all(item["path"] and "NaN" not in item["path"] for item in result["loops"])
+        assert result["stable"]

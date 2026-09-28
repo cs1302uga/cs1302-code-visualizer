@@ -1,4 +1,4 @@
-import { ARROW_LENGTH, SOURCE_INSET, SOURCE_RADIUS, arrowTriangle } from "./svgConnectors";
+import { ARROW_LENGTH, SOURCE_INSET, SOURCE_RADIUS, arrowTriangle } from "./connectorGeometry";
 import { paint } from "./theme";
 
 const valueCellSelector = 'td.instVal,td.classVal,td.dictVal,td.stackFrameValue,td.listElt,td.tupleElt,td.stackElt,td.queueElt,td.setElt';

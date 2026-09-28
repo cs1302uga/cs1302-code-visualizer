@@ -2339,6 +2339,7 @@ class DataVisualizer {
     var curToplevelLayout = this.curTraceLayouts[curInstr];
 
     myViz.resetJsPlumbManager(); // very important!!!
+    myViz.jsPlumbInstance.beginBatch();
 
     // for simplicity (but sacrificing some performance), delete all
     // connectors and redraw them from scratch. doing so avoids mysterious
@@ -3432,6 +3433,7 @@ class DataVisualizer {
     if (needToRedrawConnectors) {
       myViz.redrawConnectors();
     }
+    myViz.jsPlumbInstance.endBatch();
 
     myViz.owner.try_hook("end_renderDataStructures", {
       myViz: myViz.owner /* tricky! use owner to be safe */,

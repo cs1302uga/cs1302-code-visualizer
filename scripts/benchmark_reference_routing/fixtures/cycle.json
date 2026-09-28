@@ -1,0 +1,166 @@
+{
+  "code": "public class Main {\n    public static void main(String[] args) {\n        Node first = new Node(\"Hello\");\n        first.next = new Node(\"World\");\n        first.next.next = new Node(\"Again\");\n        first.next.next.next = first;\n        System.out.println(\"snapshot\");\n    }\n}\n\nclass Node {\n    String item;\n    Node next;\n    Node(String item) { this.item = item; }\n}\n",
+  "stdin": "",
+  "trace": [
+    {
+      "stdout": "snapshot\n",
+      "stderr": "",
+      "event": "step_line",
+      "func_name": "main",
+      "line": 7,
+      "stack_to_render": [
+        {
+          "func_name": "main:7",
+          "encoded_locals": {
+            "first": [
+              "REF",
+              70
+            ]
+          },
+          "locals_attrs": {
+            "first": {
+              "final": false,
+              "type": "Node"
+            }
+          },
+          "ordered_varnames": [
+            "first"
+          ],
+          "parent_frame_id_list": [],
+          "is_highlighted": true,
+          "is_zombie": false,
+          "is_parent": false,
+          "unique_hash": "0",
+          "frame_id": 0,
+          "file": "Main.java"
+        }
+      ],
+      "globals": {},
+      "globals_attrs": {},
+      "ordered_globals": [],
+      "heap": {
+        "96": [
+          "INSTANCE",
+          "Node",
+          [
+            "item",
+            [
+              "REF",
+              103
+            ]
+          ],
+          [
+            "next",
+            [
+              "REF",
+              104
+            ]
+          ]
+        ],
+        "68": [
+          "LIST"
+        ],
+        "70": [
+          "INSTANCE",
+          "Node",
+          [
+            "item",
+            [
+              "REF",
+              95
+            ]
+          ],
+          [
+            "next",
+            [
+              "REF",
+              96
+            ]
+          ]
+        ],
+        "103": [
+          "INSTANCE",
+          "String",
+          [
+            "___NO_LABEL!___",
+            "World"
+          ]
+        ],
+        "104": [
+          "INSTANCE",
+          "Node",
+          [
+            "item",
+            [
+              "REF",
+              106
+            ]
+          ],
+          [
+            "next",
+            [
+              "REF",
+              70
+            ]
+          ]
+        ],
+        "106": [
+          "INSTANCE",
+          "String",
+          [
+            "___NO_LABEL!___",
+            "Again"
+          ]
+        ],
+        "95": [
+          "INSTANCE",
+          "String",
+          [
+            "___NO_LABEL!___",
+            "Hello"
+          ]
+        ]
+      },
+      "heap_attrs": {
+        "96": {
+          "type": [
+            "String",
+            "Node"
+          ]
+        },
+        "68": {
+          "type": "String[]"
+        },
+        "70": {
+          "type": [
+            "String",
+            "Node"
+          ]
+        },
+        "103": {
+          "type": "String"
+        },
+        "104": {
+          "type": [
+            "String",
+            "Node"
+          ]
+        },
+        "106": {
+          "type": "String"
+        },
+        "95": {
+          "type": "String"
+        }
+      },
+      "file": "Main.java",
+      "stdinConsumed": "",
+      "stdinOffset": 0
+    }
+  ],
+  "userlog": "",
+  "sources": {
+    "Main.java": "public class Main {\n    public static void main(String[] args) {\n        Node first = new Node(\"Hello\");\n        first.next = new Node(\"World\");\n        first.next.next = new Node(\"Again\");\n        first.next.next.next = first;\n        System.out.println(\"snapshot\");\n    }\n}\n\nclass Node {\n    String item;\n    Node next;\n    Node(String item) { this.item = item; }\n}\n"
+  },
+  "entryFile": "Main.java"
+}
