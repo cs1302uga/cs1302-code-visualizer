@@ -383,6 +383,9 @@ export class SvgConnectorManager {
    */
   public beginBatch(): void { this.batchDepth++; }
 
+  /** Restore intrinsic geometry before measuring shared value-box widths. */
+  public prepareLayout(): void { this.routing.clearRepairs(); }
+
   public endBatch(): void {
     this.batchDepth = Math.max(0, this.batchDepth - 1);
     this.repaintEverything();

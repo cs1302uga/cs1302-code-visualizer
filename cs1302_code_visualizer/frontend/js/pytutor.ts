@@ -3235,6 +3235,7 @@ class DataVisualizer {
       const count = label.textContent.match(/ \((?:length|size) \d+\)$/)?.[0] || "";
       label.textContent = `${myViz.trimTypePrefix(type)}@${id}${count}`;
     });
+    myViz.jsPlumbInstance.prepareLayout();
     layoutValueBoxes(myViz.domRoot[0]);
     if (!myViz.params.textualMemoryLabels) {
       // re-render existing connectors and then ...
@@ -4329,6 +4330,7 @@ class DataVisualizer {
   }
 
   redrawConnectors() {
+    this.jsPlumbInstance.prepareLayout();
     layoutValueBoxes(this.domRoot[0]);
     this.jsPlumbInstance.repaintEverything();
   }

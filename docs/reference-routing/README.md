@@ -10,6 +10,11 @@ The complete route is checked for source-box re-entry, including rounded corners
 a rightward stub cannot reverse back through the source and leave left.
 Arrowheads and hover stroke widths participate in clearance checks.
 
+Reference-valued map keys use the same value boxes and endpoint spacing as map
+values. Primitive and inline-string keys remain labels. Temporary spacing repairs
+are cleared before measuring value widths, so repeated redraws do not alternate
+between repaired and intrinsic widths.
+
 ## Example: reference to a later node
 
 [Main.java](Main.java) creates two nodes, then assigns `n` to the second node.

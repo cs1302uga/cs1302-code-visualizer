@@ -68,6 +68,9 @@ jobs:
           uv run basedpyright --level error cs1302_code_visualizer
       - name: Run Python Tests
         run: uv run pytest -v
+      - name: Run Java example integration tests
+        if: matrix.java-version == '25'
+        run: make test-examples
       - name: Build Python Distribution
         run: uv build
       - name: Upload Frontend Build Artifact
