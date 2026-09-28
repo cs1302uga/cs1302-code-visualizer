@@ -43,6 +43,10 @@ Gallery checks supplement the required `make check`, `make test-examples`, distr
 
 ## Check selection and accessibility
 
+See [accessibility and WCAG scope](accessibility.md) for the feature/criterion
+mapping and author responsibilities. The checks below provide focused evidence;
+they do not establish whole-page WCAG conformance.
+
 The gallery embeds SVG markup directly so its text can be selected and copied. Local IDs are scoped per diagram to keep clipping and accessible labels independent. Downloads retain the standalone SVG with its summary and complete description. The gallery exposes the full description once, in a keyboard-operable **Text description** disclosure with headings and lists.
 
 Run the browser checks sequentially because they exercise the clipboard. They copy known test text and verify pasting into a controlled text area; they do not read pre-existing clipboard contents. The checks replace the clipboard with test text. Firefox and its Selenium driver are required for the second command.

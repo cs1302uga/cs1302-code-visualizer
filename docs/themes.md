@@ -119,9 +119,12 @@ These public overrides take precedence over the built-in palette, including duri
 
 ## Contrast and accessibility
 
-The default palette tests check primary, secondary, and special text against all five default surfaces in each theme at **at least 7:1**. That meets the normal-text contrast threshold in [WCAG 2.1 SC 1.4.6, Contrast (Enhanced), Level AAA](https://www.w3.org/WAI/WCAG21/Understanding/contrast-enhanced.html).
+The [accessibility guide](accessibility.md) lists every default light/dark color,
+WCAG 2.2 criterion levels, SVG text alternatives, and embedding responsibilities.
 
-The same tests check borders and both reference colors at **at least 3:1** against those surfaces. This is the threshold used for meaningful graphical objects in [WCAG 2.1 SC 1.4.11, Non-text Contrast, Level AA](https://www.w3.org/WAI/WCAG21/Understanding/non-text-contrast.html). Inactive-frame references still convey information, so the muted color is included in the checks.
+The default palette tests check primary, secondary, and special text against all five default surfaces in each theme at **at least 7:1**. That meets the normal-text contrast threshold in [WCAG 2.2 SC 1.4.6, Contrast (Enhanced), Level AAA](https://www.w3.org/WAI/WCAG22/Understanding/contrast-enhanced.html).
+
+The same tests check borders and both reference colors at **at least 3:1** against those surfaces. This is the threshold used for meaningful graphical objects in [WCAG 2.2 SC 1.4.11, Non-text Contrast, Level AA](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html). Inactive-frame references still convey information, so the muted color is included in the checks.
 
 These are palette contrast checks, not a claim that the whole visualization or embedding page conforms to WCAG AA or AAA. Transparent inline canvases expose the host's background: verify contrast again if it differs from the default white or `#131416`. Custom colors, literal program swatches, text alternatives, keyboard behavior, and screen-reader use require their own review. See the [SVG accessibility checks](svg-gallery.md#check-selection-and-accessibility) and [palette tests](../cs1302_code_visualizer/frontend/tests/theme.test.ts).
 

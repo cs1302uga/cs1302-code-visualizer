@@ -20,7 +20,7 @@ Resolution order:
 2. With alternation enabled, `arrayOrientation` specifies the 1D orientation. Every additional dimension flips that orientation: the default base produces horizontal / vertical / horizontal / vertical for ranks 1–4.
 3. Otherwise all arrays use the base orientation.
 
-Rank comes from the array object's type metadata (`int[][]`, for example), independently of which variable or parent references it. Ragged lengths do not change rank. A parent's override does not propagate to its children. Shared objects receive one consistent orientation, including across forward/backward stepping. Overrides are scoped to one visualizer and keyed by trace heap object IDs, not variable names.
+Rank comes from the array object's type metadata (`int[][]`, for example), independently of which variable or parent refers to it. Ragged lengths do not change rank. A parent's override does not propagate to its children. Shared objects receive one consistent orientation, including across forward/backward stepping. Overrides are scoped to one visualizer and keyed by trace heap object IDs, not variable names.
 
 Legacy untyped arrays use the base when rank is unavailable. A missing or invalid base orientation falls back to horizontal. Invalid per-object settings are ignored. Collections such as `ArrayList`, stacks, and queues keep their existing presentation. No interactive toggles are added. Python and CLI options are described below.
 
@@ -84,7 +84,7 @@ Array presentation does not alter execution traces or trace-cache keys. Settings
 ## Configuration gallery
 
 The dimensional fixture has a 3D array (ID `1`), two ragged 2D arrays (`2`, `3`),
-and 1D arrays (`4`, `5`). Both 2D arrays reference row `4`, which is also referenced
+and 1D arrays (`4`, `5`). Both 2D arrays refer to row `4`, which is also referred to
 by a local variable. These examples use the production renderer.
 
 | Configuration | Example |

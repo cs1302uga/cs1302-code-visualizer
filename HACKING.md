@@ -176,4 +176,4 @@ Path("memory-embed.html").write_text(html, encoding="utf-8")
 
 Insert this snippet into your page and set an ancestor, such as the page's `body`, to `data-theme="light"`, `"dark"`, or `"auto"`. Omit `theme` in `render_html` to follow that attribute. Pass `theme="dark"` or `theme="auto"` to override it for that instance. Without `bundle_url`, the helper uses the installed package version's GitHub release bundle URL; that release asset must be available.
 
-See the [theme guide](docs/themes.md) for a complete static HTML recipe, a three-frame visual comparison, CSS color overrides, print behavior, and the scope of the contrast checks.
+See the [theme guide](docs/themes.md) for a complete static HTML recipe, a three-frame visual comparison, CSS color overrides, print behavior, and the scope of the contrast checks. The [accessibility guide](docs/accessibility.md) maps features to WCAG 2.2 criterion levels and explains how to preserve SVG descriptions when embedding or converting exports.

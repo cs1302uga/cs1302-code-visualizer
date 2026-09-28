@@ -2,6 +2,9 @@
 
 Start with the [instructor quickstart](../README.md). Commands below assume an installed `code-visualizer`; in a checkout, prefix commands with `uv run`.
 
+For the meaning of frames, boxes, IDs, and arrows, see [reading diagrams](reading-diagrams.md).
+For palette contrast levels and SVG/PNG text alternatives, see [accessibility](accessibility.md).
+
 ## Single-program inputs and outputs
 
 ```sh
@@ -50,6 +53,10 @@ alone. Sequences require an additional pass to measure their shared bounds.
 PNG and SVG use the same crop. `--dpi` scales output dimensions without changing
 the layout used to measure it. These defaults intentionally change image dimensions
 from earlier releases; documents that depend on the old dimensions may need updating.
+
+Reference arrows may take outside routes, increasing image bounds while preserving
+text size. See [reference routing](reference-routing/README.md) for attachment
+rules, placement repair, and a runnable example.
 
 ## SVG exports
 
