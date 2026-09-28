@@ -15,6 +15,7 @@ export interface Attachment {
   returning: boolean;
   width: number;
   lane?: number;
+  parent?: { sourceSide: -1 | 1; targetSide: -1 | 1; curviness: number };
 }
 export const expand = (r: Rect, n: number): Rect =>
   ({ left: r.left-n, top: r.top-n, right: r.right+n, bottom: r.bottom+n });
@@ -168,6 +169,44 @@ function search(start: Point,end: Point,obstacles: Rect[],margin: number): Point
       push([ncost+Math.abs(q[0]-end[0])+Math.abs(q[1]-end[1]),next,ncost]);
     }
   }
+}
+
+/** Frame-parent links attach to frame boundaries, not reference value boxes. */
+export function routeFrameParent(a: Attachment, text: Rect[], objects: Rect[], occupiedHeads: Rect[]): Route | undefined {
+  const {sourceSide, targetSide, curviness} = a.parent!;
+  const s = a.source, t = a.target;
+  const protectedRects = [...text.map(r => expand(r, 1)), ...occupiedHeads.map(r => expand(r, 2))];
+  const frames = [a.sourceBox, t];
+  const unrelated = objects.filter((r, i) => i !== a.sourceOwner && i !== a.targetOwner && r.right > r.left);
+  const valid = (route: Route, obstacles: Rect[]) => clear(route, obstacles, a.width) &&
+    // The boundary attachment is allowed; crossing either frame's contents is not.
+    frames.every(frame => !overlaps(bounds(route.head), frame) &&
+      route.segments.every(segment => !intersects(segment, frame)));
+  for (const obstacles of [[...protectedRects, ...unrelated.map(r => expand(r, 8))], protectedRects]) {
+    for (const fraction of [.5, .75, .25, .875, .125]) {
+      const tip: Point = [targetSide < 0 ? t.left : t.right, t.top + (t.bottom - t.top) * fraction];
+      const h = head(tip, [targetSide, 0]), end = rear(h);
+      const original: Route = {kind: "parent", head: h, segments: [
+        [s, [s[0] + sourceSide * curviness, s[1]], [end[0] + targetSide * curviness, end[1]], end],
+      ]};
+      if (valid(original, obstacles)) return original;
+      const depart: Point = [s[0] + sourceSide * 12, s[1]];
+      const approach: Point = [end[0] + targetSide * 12, end[1]];
+      const searchObstacles = [...obstacles.map(r => expand(r, a.width / 2 + 2)), ...frames];
+      const extent = bounds(searchObstacles.flatMap(r => [[r.left, r.top], [r.right, r.bottom]]));
+      const exterior = Math.max(128, approach[0] - extent.left, extent.right - approach[0],
+        approach[1] - extent.top, extent.bottom - approach[1]) + 32;
+      for (const margin of [...new Set([32, 128, exterior])]) {
+        const points = search(depart, approach, searchObstacles, margin);
+        if (!points) continue;
+        for (const radius of [12, 6, 0]) {
+          const route = polyline([s, ...points, end], h, radius);
+          if (valid(route, obstacles)) return route;
+        }
+      }
+    }
+  }
+  return undefined;
 }
 
 export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupiedHeads: Rect[]): Route|undefined {

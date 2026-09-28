@@ -1,7 +1,7 @@
 /** One DOM geometry snapshot per routing pass; search itself never reads the DOM. */
 import { SOURCE_INSET, SOURCE_RADIUS } from "./connectorGeometry";
 import type { SvgConnection } from "./svgConnectors";
-import { Attachment, Rect, Route, bounds, circleIntersects, expand, intersects, pathData, routeReference } from "./referenceRouting";
+import { Attachment, Rect, Route, bounds, circleIntersects, expand, intersects, pathData, routeReference, routeFrameParent } from "./referenceRouting";
 
 const bodies=".instTbl,.classTbl,.dictTbl,.listTbl,.tupleTbl,.stackTbl,.queueTbl";
 const owners=".heapObject,.stackFrame,.zombieStackFrame";
@@ -70,6 +70,12 @@ export class ConnectorRouting {
         target:rect(target.querySelector(bodies)??target),legacyTarget:rect(target),sourceOwner:so,targetOwner:to,
         returning:so>=0&&to>=0&&!!source.closest(".heapObject")&&objects[to].left<=objects[so].left,
         width:Math.max(c.paintStyle.lineWidth??1,c.hoverPaintStyle.lineWidth??1)};
+      if (c.scope === "frameParentPointer") {
+        a.parent = {sourceSide: c.anchors[0] === "LeftMiddle" ? -1 : 1,
+          targetSide: c.anchors[1] === "RightMiddle" ? 1 : -1, curviness: c.curviness ?? 45};
+        a.source = [a.parent.sourceSide < 0 ? sb.left : sb.right, (sb.top + sb.bottom) / 2];
+        a.target = rect(target);
+      }
       return {c,a};
     }).sort((a,b)=>Number(!a.c.source[0].closest(".heapObject"))-Number(!b.c.source[0].closest(".heapObject"))||
       a.a.source[1]-b.a.source[1]||a.a.source[0]-b.a.source[0]||a.a.target.left-b.a.target.left||a.a.target.top-b.a.target.top||
@@ -86,8 +92,9 @@ export class ConnectorRouting {
           right:e.a.source[0]+SOURCE_RADIUS+1,bottom:e.a.source[1]+SOURCE_RADIUS+1}));
         const dotHits=text.map((r,i)=>({r,i})).filter(({r})=>
           circleIntersects(a.source,SOURCE_RADIUS,expand(r,1)));
-        const route=dotHits.length?undefined:routeReference(a,[...text,...dots,...localEndpoints],objects,heads);
+        const route=dotHits.length?undefined:(a.parent ? routeFrameParent : routeReference)(a,[...text,...dots,...localEndpoints],objects,heads);
         if(!route) {
+          if (a.parent) throw new Error("Cannot route a frame-parent reference; inspect overlapping or constrained content");
           // Fixed-position candidates are exhausted. Repair the smallest local
           // obstruction and remeasure every reference, rather than hiding a link.
           const blocker=dotHits.map(h=>textOwners[h.i]).find(e=>e&&e!==elements[a.sourceOwner]) as HTMLElement|undefined;
@@ -134,6 +141,16 @@ export class ConnectorRouting {
     const paint=this.routes.flatMap(r=>[...r.segments.flat(),...r.head]);
     if(paint.length) {
       const ext=bounds(paint);
+      // Left/top detours need real canvas space: raster capture cannot recover
+      // paint outside the document origin by merely enlarging export bounds.
+      if ((ext.left < 8 || ext.top < 8) && attempt < connections.length + 6) {
+        const oldLeft=container.style.paddingLeft,oldTop=container.style.paddingTop;
+        const style=getComputedStyle(container);
+        container.style.paddingLeft=`${(parseFloat(style.paddingLeft)||0)+Math.max(0,Math.ceil(8-ext.left))}px`;
+        container.style.paddingTop=`${(parseFloat(style.paddingTop)||0)+Math.max(0,Math.ceil(8-ext.top))}px`;
+        this.repairs.push(()=>{container.style.paddingLeft=oldLeft;container.style.paddingTop=oldTop;});
+        return this.repaint(container,connections,attempt+1);
+      }
       container.style.paddingBottom=`${Math.max(0,Math.ceil(ext.bottom-content.bottom+8))}px`;
       container.style.paddingRight=`${Math.max(0,Math.ceil(ext.right-content.right+8))}px`;
     } else {

@@ -15,6 +15,13 @@ values. Primitive and inline-string keys remain labels. Temporary spacing repair
 are cleared before measuring value widths, so repeated redraws do not alternate
 between repaired and intrinsic widths.
 
+Optional environment-frame parent pointers are distinct from value references:
+they retain their configured frame-boundary anchors and curve shape when clear.
+Obstructed parent pointers detour around text and frame contents while retaining
+the requested attachment sides. The forbidden-left-exit rule applies to reference
+boxes, not these frame-boundary links. Left and top detours receive canvas padding
+so PNG capture can include paint that would otherwise lie outside the document.
+
 ## Example: reference to a later node
 
 [Main.java](Main.java) creates two nodes, then assigns `n` to the second node.

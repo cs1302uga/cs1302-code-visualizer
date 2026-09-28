@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { replay, textHits, pathPoints } from "./routingFixture";
-import { intersects, routeReference, clear, expand, clearsSource, type Attachment } from "../js/referenceRouting";
+import { intersects, routeReference, routeFrameParent, bounds, clear, expand, clearsSource, type Attachment } from "../js/referenceRouting";
 import {
   SvgConnectorManager,
   SvgConnection,
@@ -339,5 +339,47 @@ describe("source attachment corridor", () => {
     expect(clearsSource({kind:"visibility",head:[[75,180],[69,177],[69,183]],
       segments:[[[302,100],[312,100]],[[312,100],[322,100],[312,100]],
         [[312,100],[69,100]],[[69,100],[69,180]]]}, attachment.sourceBox,1)).toBe(false);
+  });
+});
+
+describe("frame-parent attachments", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each([["LeftMiddle", "LeftMiddle", 100, 100], ["RightMiddle", "RightMiddle", 200, 200]] as const)(
+    "retains clear %s/%s frame anchors and configured curviness", (sourceAnchor, targetAnchor, x, tipX) => {
+      document.body.innerHTML='<div id="scene"><div id="child" class="stackFrame"></div><div id="parent" class="stackFrame"></div></div>';
+      const scene=document.getElementById("scene")!, child=document.getElementById("child")!, parent=document.getElementById("parent")!;
+      vi.spyOn(scene,"getBoundingClientRect").mockReturnValue(new DOMRect(0,0,400,300));
+      vi.spyOn(child,"getBoundingClientRect").mockReturnValue(new DOMRect(100,160,100,40));
+      vi.spyOn(parent,"getBoundingClientRect").mockReturnValue(new DOMRect(100,40,100,40));
+      const manager=new SvgConnectorManager({Container:scene});
+      const connection=manager.connect({source:child,target:parent,scope:"frameParentPointer",
+        anchors:[sourceAnchor,targetAnchor],connector:["Bezier",{curviness:60}]});
+      const sign=sourceAnchor==="LeftMiddle"?-1:1;
+      expect(connection.dotElement.getAttribute("cx")).toBe(String(x));
+      expect(connection.pathElement.getAttribute("d")).toBe(`M ${x} 180 C ${x+sign*60} 180 ${tipX+sign*66} 60 ${tipX+sign*6} 60`);
+      expect(connection.arrowElement.getAttribute("points")!.split(" ")[0]).toBe(`${tipX},60`);
+      const before=connection.pathElement.getAttribute("d");
+      manager.repaintEverything();expect(connection.pathElement.getAttribute("d")).toBe(before);
+    });
+
+  it("detours around protected content while preserving frame sides and distinct arrivals", () => {
+    const a:Attachment={source:[100,180],sourceBox:{left:100,right:200,top:160,bottom:200},
+      enclosure:{left:100,right:200,top:160,bottom:200},target:{left:100,right:200,top:40,bottom:80},
+      sourceOwner:0,targetOwner:1,returning:false,width:3,
+      parent:{sourceSide:-1,targetSide:-1,curviness:45}};
+    const text=[{left:40,right:90,top:105,bottom:135}];
+    const frames=[a.sourceBox,a.target];
+    const first=routeFrameParent(a,text,frames,[])!;
+    expect(first).toBeDefined();
+    expect(clear(first,text.map(r=>expand(r,1)),3)).toBe(true);
+    expect(first.segments[0][1][0]).toBeLessThan(100);
+    expect(first.head[0][0]).toBe(100);
+    for(const frame of frames)expect(first.segments.some(s=>intersects(s,frame))).toBe(false);
+    const second=routeFrameParent(a,text,frames,[bounds(first.head)])!;
+    expect(second).toBeDefined();
+    expect(second.head[0]).not.toEqual(first.head[0]);
+    expect(second.head[0][0]).toBe(100);
+    expect(clear(second,text.map(r=>expand(r,1)),3)).toBe(true);
   });
 });
