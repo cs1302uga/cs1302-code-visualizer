@@ -63,6 +63,13 @@ refers to the String `"Alice"`.
 See [reading memory diagrams](docs/reading-diagrams.md) for the visual key,
 string styles, and how presentation options change what is visible.
 
+Type labels stay on one line, with declared-type space reserved across supplied
+states or requested snapshots. Maps have an enclosing object border. Separate
+String objects show `(length N)` using Java’s UTF-16 length. Arrows stop at target
+boundaries and avoid arrowheads for different targets. Parallel shafts to different
+targets stay separated. Aliases also use separate horizontal lanes away from their
+target. Departures prefer clearance from box borders. Readable shaft crossings may remain.
+
 ## Accessibility
 
 Both default palettes are tested for **at least 7:1 text contrast** (the WCAG 2.2

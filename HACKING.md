@@ -117,13 +117,14 @@ an empty list without launching a browser. An error raises without returning a
 partial list; callers may retry the individual payloads to isolate a failure.
 All payloads in a call use the same options, including breakpoint selection and
 `theme` (`light`, `dark`, `auto`, or omitted for adaptive output). Each image gets
-its own tight crop; changing the batch order, membership, or cache-miss subset
-does not change its framing.
+its own tight crop. Declared-type columns reserve enough width for every requested
+snapshot in the call. Changing input order does not change that budget; changing
+batch membership can change column widths and framing.
 
 The API keeps one browser lease and host document for the call. Subsequent payloads
 load the unchanged renderer in fresh full-viewport frames, then discard those
 frames. This preserves the font-loading timing and heap spacing of individual
-images. It does not share a diagram's layout history between programs.
+images. Only the type-width budget is shared; diagram layout history is not.
 `generate_step_images` remains the API for chronological steps of one trace.
 Singleton inputs and the `json-pre` visualizer use the individual-image path.
 For parallel builds, submit bounded groups through the same `RenderingSession`;

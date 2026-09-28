@@ -39,6 +39,7 @@ and text size remain unchanged. See [reference routing](reference-routing/README
 ## Strings and presentation options
 
 - `default`: a reference points to a separate String object containing the literal.
+  Its label ends with `(length N)`, using Java’s UTF-16 code-unit count.
 - `compact`: the reference ID and a short arrow appear beside the literal. A shared
   literal may be repeated visually while retaining the same reference ID.
 - `inline`: the literal appears in the value box. This presentation emphasizes
@@ -57,3 +58,9 @@ See [execution-step selection](../README.md#choose-execution-steps) and
 
 For text alternatives, light/dark colors, and the scope of WCAG claims, see
 [accessibility](accessibility.md).
+
+Type names, including generic parameters, stay on one line. Interactive diagrams
+reserve declared-type column space across all supplied execution states; snapshot
+and breakpoint batches reserve it across the requested states. This can widen a
+diagram without changing the text size. Compact and inline string labels keep
+their existing presentation. ArrayList capacity is not displayed.

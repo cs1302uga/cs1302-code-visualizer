@@ -157,20 +157,24 @@ def test_real_snapshot_output_matches_individual_payloads(rendering_session, opt
         for number in (0, 1, 2)
     ]
     resolved = [json.dumps(browser_driver.resolve_trace_payload(trace)) for trace in traces]
-    expected = [
-        image_content(
-            browser_driver.generate_image(trace, session=rendering_session, **options),
-            options["format"],
-        )
-        for trace in resolved
-    ]
     for order in ([0, 1, 2], [2, 0, 2], [0, 2], [1]):
+        selected = [json.loads(resolved[index]) for index in order]
+        types = sorted(browser_driver._layout_types(selected))
+        expected = [
+            image_content(
+                browser_driver.generate_image(
+                    json.dumps(dict(payload, _layoutTypes=types)),
+                    session=rendering_session,
+                    **options,
+                ),
+                options["format"],
+            )
+            for payload in selected
+        ]
         actual = generate_snapshot_images(
             [resolved[index] for index in order], session=rendering_session, **options
         )
-        assert [image_content(data, options["format"]) for data in actual] == [
-            expected[index] for index in order
-        ]
+        assert [image_content(data, options["format"]) for data in actual] == expected
 
 
 @pytest.mark.parametrize("format", ["SVG", "PNG"])
@@ -179,9 +183,16 @@ def test_real_snapshot_without_session_matches_fresh_browser_images(format):
         next(Path(f"small-trace-examples/example{number}").glob("*.json")).read_text()
         for number in (1, 2)
     ]
+    types = sorted(
+        browser_driver._layout_types([browser_driver.resolve_trace_payload(t) for t in traces])
+    )
+    individual = [
+        json.dumps(dict(browser_driver.resolve_trace_payload(t), _layoutTypes=types))
+        for t in traces
+    ]
     expected = [
         image_content(browser_driver.generate_image(trace, format=format, dpi=2), format)
-        for trace in traces
+        for trace in individual
     ]
     actual = generate_snapshot_images(traces, format=format, dpi=2)
     assert [image_content(image, format) for image in actual] == expected
@@ -212,3 +223,31 @@ def test_snapshot_frame_failure_restores_context_and_removes_temporary_payload(s
         "arguments[0].remove();",
         driver.execute_script.return_value,
     )
+
+
+def test_shared_type_metadata_supports_legacy_and_modern_selected_states():
+    payload = [
+        {
+            "trace": [
+                {
+                    "stack_to_render": [
+                        {
+                            "locals_attrs": {
+                                "m": {"type": "Map<String, Integer>"},
+                                "unknown": {"type": None},
+                            }
+                        }
+                    ],
+                    "heap_attrs": {"1": {"type": ["int", "String"]}},
+                    "stdout": "ignored",
+                }
+            ]
+        },
+        {"steps": [{"callStack": [{"locals": [{"name": "x", "type": "long"}]}]}]},
+    ]
+    assert browser_driver._layout_types(payload) == {
+        "Map<String, Integer>",
+        "int",
+        "String",
+        "long",
+    }

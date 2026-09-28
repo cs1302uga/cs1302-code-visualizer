@@ -880,6 +880,28 @@ def _snapshot_frame(
             driver.execute_script("arguments[0].remove();", frame)
 
 
+def _layout_types(value: Any) -> set[str]:
+    """Collect declared types from selected legacy or modern trace metadata."""
+    result: set[str] = set()
+    if isinstance(value, list):
+        for item in value:
+            result.update(_layout_types(item))
+    elif isinstance(value, dict):
+        if "name" in value and isinstance(value.get("type"), str):
+            result.add(value["type"])
+        for key, item in value.items():
+            if key in {"globals_attrs", "locals_attrs", "heap_attrs"}:
+                for attrs in item.values():
+                    declared = attrs.get("type")
+                    if isinstance(declared, list):
+                        result.update(t for t in declared if isinstance(t, str))
+                    elif key != "heap_attrs" and isinstance(declared, str):
+                        result.add(declared)
+            elif key not in {"code", "stdout", "stderr", "stdin"}:
+                result.update(_layout_types(item))
+    return result
+
+
 def generate_snapshot_images(
     traces: Sequence[str],
     *,
@@ -947,6 +969,11 @@ def generate_snapshot_images(
             )
             for trace in traces
         ]
+    # A shared semantic budget keeps type columns stable across requested snapshots.
+    # Measure it in the frontend so prefix stripping and the actual font still apply.
+    layout_types = sorted(_layout_types(payloads))
+    if layout_types:
+        payloads = [dict(payload, _layoutTypes=layout_types) for payload in payloads]
     images: list[bytes] = []
     with online_python_tutor_frontend(
         trace=json.dumps(payloads[0]),

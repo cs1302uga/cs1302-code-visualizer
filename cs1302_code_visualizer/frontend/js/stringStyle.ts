@@ -8,7 +8,7 @@ export function validateStringStyle(style: unknown = "default"): StringStyle {
   return style;
 }
 
-function stringValue(object: any): string | undefined {
+export function stringValue(object: any): string | undefined {
   if (object?.[0] === "INSTANCE" && /^(java\.lang\.)?String$/.test(object[1]) &&
       object[2]?.[0] === "___NO_LABEL!___" && typeof object[2][1] === "string") {
     return object[2][1];

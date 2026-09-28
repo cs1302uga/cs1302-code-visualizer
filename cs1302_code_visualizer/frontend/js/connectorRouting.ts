@@ -1,4 +1,5 @@
 /** One DOM geometry snapshot per routing pass; search itself never reads the DOM. */
+import { SHAFT_CLEARANCE } from "./shaftClearance";
 import { SOURCE_INSET, SOURCE_RADIUS } from "./connectorGeometry";
 import type { SvgConnection } from "./svgConnectors";
 import { Attachment, Rect, Route, bounds, circleIntersects, expand, intersects, pathData, routeReference, routeFrameParent } from "./referenceRouting";
@@ -17,7 +18,7 @@ export class ConnectorRouting {
     this.repairs=[];
   }
 
-  public repaint(container: HTMLElement, connections: SvgConnection[], attempt=0): void {
+  public repaint(container: HTMLElement, connections: SvgConnection[], attempt=0, reserveTurns=false): void {
     if(!attempt)this.clearRepairs();
     const origin=container.getBoundingClientRect(),cache=new Map<Element,Rect>();
     cache.set(container,{left:0,top:0,right:origin.width,bottom:origin.height});
@@ -54,8 +55,8 @@ export class ConnectorRouting {
         textOwners.push(parent.closest(owners));
       }
     }
-    const localEndpoints=Array.from(root.querySelectorAll(".compact-string-arrow circle,.compact-string-arrow polygon"))
-      .filter(visible).map(rect);
+    const localEndpoints=Array.from(root.querySelectorAll(".compact-string-arrow circle,.compact-string-arrow polygon,.compact-string-arrow path"))
+      .filter(visible).map(el=>expand(rect(el),.5));
     const edges=connections.filter(c=>{
       if(!c.source[0]||!c.target[0])return false;
       const s=rect(c.source[0].closest(".value-box")??c.source[0]),t=rect(c.target[0]);
@@ -67,7 +68,7 @@ export class ConnectorRouting {
       const sb=rect(box??source),enclosure=rect(source.closest(`${bodies},.stackFrame,.zombieStackFrame`)??source);
       const so=elements.indexOf(source.closest(owners)!),to=elements.indexOf(target.closest(owners)!);
       const a:Attachment={source:[sb.right-(box?SOURCE_INSET:0),(sb.top+sb.bottom)/2],sourceBox:sb,enclosure,
-        target:rect(target.querySelector(bodies)??target),legacyTarget:rect(target),sourceOwner:so,targetOwner:to,
+        target:rect(target.querySelector(bodies)??target),targetKey:c.targetId,legacyTarget:rect(target),sourceOwner:so,targetOwner:to,
         returning:so>=0&&to>=0&&!!source.closest(".heapObject")&&objects[to].left<=objects[so].left,
         width:Math.max(c.paintStyle.lineWidth??1,c.hoverPaintStyle.lineWidth??1)};
       if (c.scope === "frameParentPointer") {
@@ -77,23 +78,45 @@ export class ConnectorRouting {
         a.target = rect(target);
       }
       return {c,a};
-    }).sort((a,b)=>Number(!a.c.source[0].closest(".heapObject"))-Number(!b.c.source[0].closest(".heapObject"))||
+    }).sort((a,b)=>Number(!!a.c.source[0].closest(".heapObject"))-Number(!!b.c.source[0].closest(".heapObject"))||
       a.a.source[1]-b.a.source[1]||a.a.source[0]-b.a.source[0]||a.a.target.left-b.a.target.left||a.a.target.top-b.a.target.top||
       a.c.sourceId.replace(/^v\d+__/,"").localeCompare(b.c.sourceId.replace(/^v\d+__/,"")));
+    // Reserve turns up front when aligned stack sources need more distinct
+    // lanes than fit between their boxes and the heap. Smaller scenes first
+    // try their simpler routes, then retry coordination only if necessary.
+    const stack=edges.filter(e=>!e.c.source[0].closest(".heapObject"));
+    const heapLeft=Math.min(...objects.filter((_,i)=>elements[i].matches(".heapObject")).map(r=>r.left));
+    reserveTurns ||= stack.some(({a})=>new Set(stack.filter(e=>e.a.source[0]===a.source[0])
+      .map(e=>e.a.targetKey)).size*(SHAFT_CLEARANCE+a.width)>heapLeft-a.sourceBox.right);
     const key=JSON.stringify([objects,text,localEndpoints,edges.map(e=>e.a)]);
     if(key!==this.fingerprint) {
       const heads:Rect[]=[],routes:Route[]=[];
       const arrivals=new Map<number,number>();
       this.searchTimings=[];
-      for(const {a,c} of edges) {
+      // Reserve a usable departure for references routed later. Otherwise an
+      // earlier parallel shaft can trap their only text-clear exit.
+      const reservations=edges.map(({a})=>{
+        const ends:[number,number][] = a.parent ? [[a.source[0]+a.parent.sourceSide*12,a.source[1]]] :
+          [[a.sourceBox.right+12,a.source[1]],[a.source[0],a.sourceBox.bottom+12],[a.source[0],a.sourceBox.top-12]];
+        const obstacles=[...text,...localEndpoints,...edges.filter(e=>e.a!==a).map(e=>
+          ({left:e.a.source[0]-4,right:e.a.source[0]+4,top:e.a.source[1]-4,bottom:e.a.source[1]+4}))];
+        const end=ends.find(p=>!obstacles.some(r=>intersects([a.source,p],expand(r,1+a.width/2))));
+        return end ? {segments:[[a.source,end]],head:[],kind:"departure",width:a.width,target:a.target,targetKey:a.targetKey,guard:expand(bounds([end]),SHAFT_CLEARANCE+a.width/2)} as Route : undefined;
+      });
+      for(const [index,{a,c}] of edges.entries()) {
         const started=performance.now();
         a.lane=arrivals.get(a.targetOwner)??0;
         const dots=edges.filter(e=>e.a!==a).map(e=>({left:e.a.source[0]-SOURCE_RADIUS-1,top:e.a.source[1]-SOURCE_RADIUS-1,
           right:e.a.source[0]+SOURCE_RADIUS+1,bottom:e.a.source[1]+SOURCE_RADIUS+1}));
         const dotHits=text.map((r,i)=>({r,i})).filter(({r})=>
           circleIntersects(a.source,SOURCE_RADIUS,expand(r,1)));
-        const route=dotHits.length?undefined:(a.parent ? routeFrameParent : routeReference)(a,[...text,...dots,...localEndpoints],objects,heads);
+        const future=reservations.slice(index+1).filter((r):r is Route=>!!r);
+        const turns=reserveTurns?future.filter(r=>r.targetKey!==a.targetKey).map(r=>r.guard!):[];
+        const route=dotHits.length?undefined:(a.parent ? routeFrameParent : routeReference)(a,[...text,...dots,...localEndpoints,...turns],objects,heads,[...routes,...future]);
         if(!route) {
+          // Retry coordination before changing any layout. Ordinary diagrams
+          // retain their simpler routes; crowded ones reserve room to turn.
+          if(!dotHits.length&&!reserveTurns)return this.repaint(container,connections,attempt,true);
           if (a.parent) throw new Error("Cannot route a frame-parent reference; inspect overlapping or constrained content");
           // Fixed-position candidates are exhausted. Repair the smallest local
           // obstruction and remeasure every reference, rather than hiding a link.
@@ -124,6 +147,7 @@ export class ConnectorRouting {
           }
           throw new Error("Cannot route a reference after local layout repair; inspect overlapping or constrained content");
         }
+        route.width=a.width;route.target=a.target;route.targetKey=a.targetKey;
         routes.push(route);heads.push(bounds(route.head));
         arrivals.set(a.targetOwner,a.lane+1);
         this.searchTimings.push({kind:route.kind,ms:performance.now()-started});

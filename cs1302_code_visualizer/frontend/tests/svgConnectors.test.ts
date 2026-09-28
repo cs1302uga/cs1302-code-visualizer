@@ -346,7 +346,7 @@ describe("frame-parent attachments", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it.each([["LeftMiddle", "LeftMiddle", 100, 100], ["RightMiddle", "RightMiddle", 200, 200]] as const)(
-    "retains clear %s/%s frame anchors and configured curviness", (sourceAnchor, targetAnchor, x, tipX) => {
+    "retains clear %s/%s frame anchors with a simple exterior route", (sourceAnchor, targetAnchor, x, tipX) => {
       document.body.innerHTML='<div id="scene"><div id="child" class="stackFrame"></div><div id="parent" class="stackFrame"></div></div>';
       const scene=document.getElementById("scene")!, child=document.getElementById("child")!, parent=document.getElementById("parent")!;
       vi.spyOn(scene,"getBoundingClientRect").mockReturnValue(new DOMRect(0,0,400,300));
@@ -357,7 +357,9 @@ describe("frame-parent attachments", () => {
         anchors:[sourceAnchor,targetAnchor],connector:["Bezier",{curviness:60}]});
       const sign=sourceAnchor==="LeftMiddle"?-1:1;
       expect(connection.dotElement.getAttribute("cx")).toBe(String(x));
-      expect(connection.pathElement.getAttribute("d")).toBe(`M ${x} 180 C ${x+sign*60} 180 ${tipX+sign*66} 60 ${tipX+sign*6} 60`);
+      const points=pathPoints(connection.pathElement.getAttribute("d")!);
+      expect(points[0]).toEqual([x,180]);
+      expect(points.every(p=>sign*(p[0]-x)>=0)).toBe(true);
       expect(connection.arrowElement.getAttribute("points")!.split(" ")[0]).toBe(`${tipX},60`);
       const before=connection.pathElement.getAttribute("d");
       manager.repaintEverything();expect(connection.pathElement.getAttribute("d")).toBe(before);
@@ -381,5 +383,39 @@ describe("frame-parent attachments", () => {
     expect(second.head[0]).not.toEqual(first.head[0]);
     expect(second.head[0][0]).toBe(100);
     expect(clear(second,text.map(r=>expand(r,1)),3)).toBe(true);
+  });
+});
+
+describe("annotated route readability", () => {
+  const attachment = (): Attachment => ({
+    source: [92,150], sourceBox: {left:50,top:140,right:100,bottom:160},
+    enclosure: {left:40,top:130,right:110,bottom:170},
+    target: {left:180,top:40,right:250,bottom:90},
+    sourceOwner:0,targetOwner:1,returning:false,width:2,
+  });
+  it("uses one rounded bend for a clear upward link and never crosses the target", () => {
+    const a=attachment(), route=routeReference(a,[],[a.enclosure,a.target],[])!;
+    expect(route).toBeDefined();
+    expect(route.kind).toBe("visibility");
+    expect(route.segments.filter(s=>s.length===3)).toHaveLength(1);
+    expect(route.segments.some(s=>intersects(s,a.target))).toBe(false);
+    expect(route.head[0][0]).toBe(a.target.left);
+  });
+  it("protects a newly chosen head from a shaft routed earlier", () => {
+    const a=attachment();
+    const earlier={kind:"test",head:[[300,20],[294,17],[294,23]] as [number,number][],
+      segments:[[[170,99],[260,99]]] as [number,number][][]};
+    const route=routeReference(a,[],[a.enclosure,a.target],[],[earlier])!;
+    expect(route).toBeDefined();
+    expect(earlier.segments.some(s=>intersects(s,expand(bounds(route.head),3)))).toBe(false);
+    expect(route.segments.some(s=>intersects(s,a.target))).toBe(false);
+  });
+  it("does not reuse a legacy curve through its own target body", () => {
+    const a=attachment();
+    a.source=[292,65];a.sourceBox={left:270,top:55,right:300,bottom:75};a.enclosure=a.sourceBox;
+    a.legacyTarget={left:180,top:20,right:250,bottom:100};
+    const route=routeReference(a,[],[a.enclosure,a.target],[])!;
+    expect(route).toBeDefined();
+    expect(route.segments.some(s=>intersects(s,a.target))).toBe(false);
   });
 });
