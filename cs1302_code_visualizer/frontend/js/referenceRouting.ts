@@ -296,7 +296,9 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
   // A shallow enclosure has room for a useful exterior departure. In tall
   // containers, a trip around the whole container obscures ordinary field links.
   let preferRoom=box.bottom-box.top<=2*(a.sourceBox.bottom-a.sourceBox.top)+16;
-  const valid=(r:Route,obs=protectedRects)=>{
+  // Candidate selection is stateful: retain the first safe narrow departure
+  // as a fallback while continuing to look for a roomier route.
+  const acceptCandidate=(r:Route,obs=protectedRects)=>{
     const roomy=!preferRoom||(clearsSource(r,expand(a.sourceBox,6),a.width)&&borders.clear(r));
     if(!roomy&&closeDeparture)return false;
     if(!clear(r,obs,a.width)||!clearsSource(r,a.sourceBox,a.width)||
@@ -327,13 +329,13 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
     if ((previous[0]-e[0])*normal[0]+(previous[1]-e[1])*normal[1] < 0) continue;
     for (const radius of [12,0]) {
       const route=polyline([s,corner,e],h,radius);
-      if(valid(route,strict))return route;
+      if(acceptCandidate(route,strict))return route;
     }
   }
   const legacy=a.legacyTarget??t;
   const h=head([legacy.left,(legacy.top+legacy.bottom)/2],[-1,0]),end=rear(h),bend=end[0]>=exit[0]?(end[0]-exit[0])/2:40;
   const original:Route={segments:[[s,exit],[exit,[exit[0]+bend,exit[1]],[end[0]-bend,end[1]],end]],head:h,kind:"original"};
-  if(!a.returning&&valid(original,strict))return original;
+  if(!a.returning&&acceptCandidate(original,strict))return original;
   const outerRight=Math.max(...objects.map(r=>r.right),...text.map(r=>r.right),...shafts.channels.map(r=>r.right))+16;
   // A clear lower exit and exterior lane often solve a border-hugging alias
   // immediately. Try every arrival before spending the dogleg search budget.
@@ -343,7 +345,7 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
       const h=head(tip,normal),e=rear(h),approach:Point=[e[0]+normal[0]*12,e[1]+normal[1]*12];
       for(const radius of [12,0]) {
         const r=polyline([s,below,[outerRight,below[1]],[outerRight,approach[1]],approach,e],h,radius);
-        if(valid(r,obs))return r;
+        if(acceptCandidate(r,obs))return r;
       }
     }
   }
@@ -352,9 +354,9 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
   // Fixed-position search first avoids bodies, then permits readable empty-body crossings.
   const deferred:{depart:Point;approach:Point;h:Point[];e:Point;obs:Rect[]}[]=[];
   let cheapAttempts=0;
-  const cheap=(r:Route,obs:Rect[])=>++cheapAttempts<=512&&valid(r,obs);
+  const cheap=(r:Route,obs:Rect[])=>++cheapAttempts<=512&&acceptCandidate(r,obs);
   for(const obs of [strict,protectedRects]) {
-    if(!a.returning&&valid(original,obs))return original;
+    if(!a.returning&&acceptCandidate(original,obs))return original;
     for(const {tip,normal} of tips) {
       const h=head(tip,normal),e=rear(h);
       if(occupiedHeads.some(r=>overlaps(expand(bounds(h),2),r))||!headClearsRoutes(h,occupiedRoutes,a.width))continue;
@@ -376,7 +378,7 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
         for(const corner of [[depart[0],approach[1]],[approach[0],depart[1]]] as Point[]) {
           for(const radius of [12,0]) {
             const r=polyline([s,depart,corner,approach,e],h,radius);
-            if(valid(r,obs))return r;
+            if(acceptCandidate(r,obs))return r;
           }
         }
         if(cheapAttempts>=512){deferred.push({depart,approach,h,e,obs});continue;}
@@ -415,13 +417,13 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
       ...(!down?[[s,lead]]:[]),
       [lead,down?[lead[0],lane]:[lead[0]+20,lead[1]],[j[0]-sign*handle,j[1]],j],
       [j,[j[0]+sign*handle,j[1]],[tip[0],lane],e]]};
-    if(valid(route,strict))return route;
+    if(acceptCandidate(route,strict))return route;
     if(!down) {
       const channel=a.enclosure.right+12+(a.lane??0)*8,turn:Point=[channel+12,lane];
       const compact:Route={head:h,kind:"sweep",segments:[[s,[channel,s[1]]],
         [[channel,s[1]],[channel+12,s[1]],[channel,lane],turn],
         [turn,[tip[0],lane],[tip[0],lane],e]]};
-      if(valid(compact,strict))return compact;
+      if(acceptCandidate(compact,strict))return compact;
     }
   }
   // Search all viable departures and arrivals together. Rebuilding the same
@@ -444,7 +446,7 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
       const {h,e}=candidates.find(c=>c.approach[0]===end[0]&&c.approach[1]===end[1])!;
       const all=[s,...points,e],simple=all.filter((p,i)=>!i||i===all.length-1||
         (p[0]-all[i-1][0])*(all[i+1][1]-p[1])!==(p[1]-all[i-1][1])*(all[i+1][0]-p[0]));
-      for(const radius of [12,6,0]) {const r=polyline(simple,h,radius);if(valid(r,obs))return r;}
+      for(const radius of [12,6,0]) {const r=polyline(simple,h,radius);if(acceptCandidate(r,obs))return r;}
     }
   }
   // Preserve distinct alias arrivals whenever a route is available. Only

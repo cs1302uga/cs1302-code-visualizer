@@ -2,10 +2,22 @@
 import { SHAFT_CLEARANCE } from "./shaftClearance";
 import { SOURCE_INSET, SOURCE_RADIUS } from "./connectorGeometry";
 import type { SvgConnection } from "./svgConnectors";
-import { Attachment, Rect, Route, bounds, circleIntersects, expand, intersects, pathData, routeReference, routeFrameParent } from "./referenceRouting";
+import { Attachment, Point, Rect, Route, bounds, circleIntersects, expand, intersects, pathData, routeReference, routeFrameParent } from "./referenceRouting";
 
 const bodies=".instTbl,.classTbl,.dictTbl,.listTbl,.tupleTbl,.stackTbl,.queueTbl";
 const owners=".heapObject,.stackFrame,.zombieStackFrame";
+
+/** Attachment exits used by both reservations and constrained-layout repair. */
+function departureCandidates(a: Attachment): Point[] {
+  return a.parent ? [[a.source[0]+a.parent.sourceSide*12,a.source[1]]] :
+    [[a.sourceBox.right+12,a.source[1]],[a.source[0],a.sourceBox.bottom+12],[a.source[0],a.sourceBox.top-12]];
+}
+
+function sourceDotBounds(source: Point): Rect {
+  const padding=SOURCE_RADIUS+1;
+  return {left:source[0]-padding,top:source[1]-padding,
+    right:source[0]+padding,bottom:source[1]+padding};
+}
 
 export class ConnectorRouting {
   public searchTimings: {kind:string; ms:number}[]=[];
@@ -96,18 +108,15 @@ export class ConnectorRouting {
       // Reserve a usable departure for references routed later. Otherwise an
       // earlier parallel shaft can trap their only text-clear exit.
       const reservations=edges.map(({a})=>{
-        const ends:[number,number][] = a.parent ? [[a.source[0]+a.parent.sourceSide*12,a.source[1]]] :
-          [[a.sourceBox.right+12,a.source[1]],[a.source[0],a.sourceBox.bottom+12],[a.source[0],a.sourceBox.top-12]];
-        const obstacles=[...text,...localEndpoints,...edges.filter(e=>e.a!==a).map(e=>
-          ({left:e.a.source[0]-4,right:e.a.source[0]+4,top:e.a.source[1]-4,bottom:e.a.source[1]+4}))];
+        const ends=departureCandidates(a);
+        const obstacles=[...text,...localEndpoints,...edges.filter(e=>e.a!==a).map(e=>sourceDotBounds(e.a.source))];
         const end=ends.find(p=>!obstacles.some(r=>intersects([a.source,p],expand(r,1+a.width/2))));
         return end ? {segments:[[a.source,end]],head:[],kind:"departure",width:a.width,target:a.target,targetKey:a.targetKey,guard:expand(bounds([end]),SHAFT_CLEARANCE+a.width/2)} as Route : undefined;
       });
       for(const [index,{a,c}] of edges.entries()) {
         const started=performance.now();
         a.lane=arrivals.get(a.targetOwner)??0;
-        const dots=edges.filter(e=>e.a!==a).map(e=>({left:e.a.source[0]-SOURCE_RADIUS-1,top:e.a.source[1]-SOURCE_RADIUS-1,
-          right:e.a.source[0]+SOURCE_RADIUS+1,bottom:e.a.source[1]+SOURCE_RADIUS+1}));
+        const dots=edges.filter(e=>e.a!==a).map(e=>sourceDotBounds(e.a.source));
         const dotHits=text.map((r,i)=>({r,i})).filter(({r})=>
           circleIntersects(a.source,SOURCE_RADIUS,expand(r,1)));
         const future=reservations.slice(index+1).filter((r):r is Route=>!!r);
@@ -127,8 +136,7 @@ export class ConnectorRouting {
             this.repairs.push(()=>{blocker.style.translate=old;});
             return this.repaint(container,connections,attempt+1);
           }
-          const departures:[number,number][]=[[a.sourceBox.right+12,a.source[1]],
-            [a.source[0],a.sourceBox.bottom+12],[a.source[0],a.sourceBox.top-12]];
+          const departures=departureCandidates(a);
           const sourceCanExit=departures.some(p=>![...text,...dots,...localEndpoints].some(r=>
             intersects([a.source,p],expand(r,1+a.width/2))));
           if(!dotHits.length&&sourceCanExit&&attempt<connections.length+4) {
