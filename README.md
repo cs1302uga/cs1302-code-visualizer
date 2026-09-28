@@ -11,7 +11,7 @@ Install [uv](https://docs.astral.sh/uv/) and Google Chrome. Python 3.13 or newer
 Download the `.whl` file from the project's [GitHub releases](https://github.com/cs1302uga/cs1302-code-visualizer/releases). In the directory containing that file, install it with uv (replace the filename with the version you downloaded):
 
 ```sh
-uv tool install ./cs1302_code_visualizer-0.18.0-py3-none-any.whl
+uv tool install ./cs1302_code_visualizer-0.18.1-py3-none-any.whl
 code-visualizer --help
 ```
 
@@ -63,8 +63,12 @@ refers to the String `"Alice"`.
 See [reading memory diagrams](docs/reading-diagrams.md) for the visual key,
 string styles, and how presentation options change what is visible.
 
-Type labels stay on one line, with declared-type space reserved across supplied
-states or requested snapshots. Maps have an enclosing object border. Separate
+Stack types share a left-aligned column, with variable names right-aligned beside
+their value boxes. Type labels stay on one line, with stack/global declared-type
+space reserved across supplied states or requested snapshots; heap-field types
+do not widen that column. Variable-name space is reserved across a trace so longer
+names appearing during playback do not move existing name and value columns.
+Maps have an enclosing object border. Separate
 String objects show `(length N)` using Java’s UTF-16 length. Arrows stop at target
 boundaries and avoid arrowheads for different targets. Parallel shafts to different
 targets stay separated. Aliases also use separate horizontal lanes away from their

@@ -881,7 +881,7 @@ def _snapshot_frame(
 
 
 def _layout_types(value: Any) -> set[str]:
-    """Collect declared types from selected legacy or modern trace metadata."""
+    """Collect stack/global declared types from selected legacy or modern traces."""
     result: set[str] = set()
     if isinstance(value, list):
         for item in value:
@@ -890,14 +890,14 @@ def _layout_types(value: Any) -> set[str]:
         if "name" in value and isinstance(value.get("type"), str):
             result.add(value["type"])
         for key, item in value.items():
-            if key in {"globals_attrs", "locals_attrs", "heap_attrs"}:
+            if key in {"globals_attrs", "locals_attrs"}:
                 for attrs in item.values():
                     declared = attrs.get("type")
                     if isinstance(declared, list):
                         result.update(t for t in declared if isinstance(t, str))
-                    elif key != "heap_attrs" and isinstance(declared, str):
+                    elif isinstance(declared, str):
                         result.add(declared)
-            elif key not in {"code", "stdout", "stderr", "stdin"}:
+            elif key not in {"code", "stdout", "stderr", "stdin", "heap", "heap_attrs"}:
                 result.update(_layout_types(item))
     return result
 
