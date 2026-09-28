@@ -25,8 +25,35 @@ jobs:
       - run: npm --prefix cs1302_code_visualizer/frontend ci
       - run: make lint-docs
 
+  prepare:
+    name: Prepare Environment & Lint Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: cs1302_code_visualizer/frontend/package-lock.json
+      - name: Install Frontend Dependencies
+        run: npm --prefix cs1302_code_visualizer/frontend ci
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          enable-cache: true
+          python-version: '3.13'
+          save-cache: true
+      - name: Install Python Dependencies
+        run: uv sync --all-extras --dev --python 3.13
+      - name: Run Linters & Type Checks
+        run: |
+          uv run ruff check cs1302_code_visualizer tests scripts
+          uv run basedpyright --level error cs1302_code_visualizer
+
   test:
     name: test (${{ matrix.os }}, py${{ matrix.python-version }}, jdk${{ matrix.java-version }})
+    needs: [prepare]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -46,8 +73,8 @@ jobs:
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           enable-cache: true
-      - name: Set up Python
-        run: uv python install ${{ matrix.python-version }}
+          python-version: ${{ matrix.python-version }}
+          save-cache: false
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
@@ -62,10 +89,6 @@ jobs:
         run: |
           npm --prefix cs1302_code_visualizer/frontend test -- --run
           npm --prefix cs1302_code_visualizer/frontend run build
-      - name: Run Linters & Type Checks
-        run: |
-          uv run ruff check cs1302_code_visualizer tests scripts
-          uv run basedpyright --level error cs1302_code_visualizer
       - name: Run Python Tests
         run: uv run pytest -v
       - name: Run Java example integration tests
