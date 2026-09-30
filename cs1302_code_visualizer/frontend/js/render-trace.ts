@@ -8,6 +8,7 @@ import { arrayOrientationOptionsFromParams } from "./arrayOrientation";
 import { exportSvg } from "./svgExport";
 import { measureExportBounds, settleExport } from "./exportBounds";
 import { applyTheme, Theme } from "./theme";
+import { traceFileUrl } from "./traceFileUrl";
 
 (window as any).exportVisualizationSvg = exportSvg;
 (window as any).prepareVisualizationExport = async (root: HTMLElement) => {
@@ -37,7 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // stripTypePrefixes URL parameter is optional or may not be valid JSON
   }
 
-  fetch("file://" + tracePath)
+  Promise.resolve().then(() => fetch(traceFileUrl(tracePath)))
     .then((r) => r.json())
     .then((trace) => {
       const vizTarget = document.getElementById("visualizerDiv")!;

@@ -11,6 +11,12 @@ not a record of completed work or a substitute for fresh validation.
   writes selected paths. The renderer is not a Java sandbox. Reassess these
   capabilities before accepting untrusted remote jobs or running with elevated
   privileges.
+- **Local trace loading:** the screenshot entry point intentionally fetches the
+  operator-selected `tracePath`. `traceFileUrl` requires an absolute local path,
+  rejects network authorities and URL inputs, and encodes filenames into a
+  hostless `file:` URL. This restricts the URL scheme and host; it does not limit
+  access to a particular directory. Revisit before exposing screenshot jobs to
+  remote callers or changing the browser's filesystem permissions.
 - **HTML findings:** CodeQL can flag assignment to an inert template before
   DOMPurify sanitizes it, and a checked `HTMLElement` or `null` passed to jQuery.
   Neither path inserts an unsanitized string into the live document. Revisit if
@@ -18,6 +24,14 @@ not a record of completed work or a substitute for fresh validation.
 - **Property writes:** trace names and heap IDs intentionally permit names such as
   `__proto__`; their dictionaries and cloned objects have null prototypes.
   Revisit if ordinary objects are introduced at those boundaries.
+- **External-library data flow:** the experimental external-API query reports
+  trace data passed to local jQuery, D3, and DOMPurify operations; these calls do
+  not themselves send data to a remote service. Reviewed uses include collection
+  iteration, map membership, data binding, text and fixed non-executable
+  attributes, checked DOM nodes, and sanitization. Multidimensional-array ranges
+  require positive safe-integer dimensions whose product matches the supplied
+  values before allocation. Revisit each call if its API, arguments, validation,
+  or downstream HTML handling changes; do not suppress the query wholesale.
 - **Archive findings:** experimental queries can flag TAR extraction despite its
   explicit `data` filter and ZIP extraction despite shared path and symlink
   validation. Keep rejection tests and JDK extraction errors enforced. Revisit

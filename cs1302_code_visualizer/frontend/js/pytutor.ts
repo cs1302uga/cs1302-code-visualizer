@@ -4257,7 +4257,22 @@ class DataVisualizer {
       // more than 2 dimensions at once on screen
       assert(obj.length >= 3);
       var dimensions = obj[2];
-      assert(dimensions.length > 1); // make sure we're really multidimensional!
+      // Validate before d3.range/cartesian-product allocation. Tiny malformed
+      // traces must not allocate arrays proportional to attacker-supplied sizes.
+      if (!Array.isArray(dimensions) || dimensions.length < 2 ||
+          dimensions.some(size => !Number.isSafeInteger(size) || size <= 0)) {
+        throw new Error("Invalid multidimensional array dimensions");
+      }
+      let cellCount = 1;
+      for (const size of dimensions) {
+        if (size > (obj.length - 3) / cellCount) {
+          throw new Error("Multidimensional array dimensions exceed supplied values");
+        }
+        cellCount *= size;
+      }
+      if (cellCount !== obj.length - 3) {
+        throw new Error("Multidimensional array dimensions do not match supplied values");
+      }
 
       var leader = "";
       d3DomElement.append(safeMarkup('<div class="typeLabel">' + leader + "array</div>"));

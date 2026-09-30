@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { replay, textHits, pathPoints } from "./routingFixture";
-import { intersects, routeReference, routeFrameParent, bounds, clear, expand, clearsSource, type Attachment } from "../js/referenceRouting";
+import { intersects, routeReference, routeFrameParent, bounds, clear, expand, clearsSource, pathData, type Attachment } from "../js/referenceRouting";
 import {
   SvgConnectorManager,
   SvgConnection,
@@ -393,11 +393,15 @@ describe("annotated route readability", () => {
     target: {left:180,top:40,right:250,bottom:90},
     sourceOwner:0,targetOwner:1,returning:false,width:2,
   });
-  it("uses one rounded bend for a clear upward link and never crosses the target", () => {
+  it("prefers a compact right exit over a one-bend upward link", () => {
     const a=attachment(), route=routeReference(a,[],[a.enclosure,a.target],[])!;
     expect(route).toBeDefined();
     expect(route.kind).toBe("visibility");
-    expect(route.segments.filter(s=>s.length===3)).toHaveLength(1);
+    expect(route.segments.filter(s=>s.length===3)).toHaveLength(2);
+    const outside=pathPoints(pathData(route)).find(([x,y])=>
+      x>a.sourceBox.right||y<a.sourceBox.top||y>a.sourceBox.bottom)!;
+    expect(outside[0]).toBeGreaterThan(a.sourceBox.right);
+    expect(outside[1]).toBe(a.source[1]);
     expect(route.segments.some(s=>intersects(s,a.target))).toBe(false);
     expect(route.head[0][0]).toBe(a.target.left);
   });
@@ -409,6 +413,67 @@ describe("annotated route readability", () => {
     expect(route).toBeDefined();
     expect(earlier.segments.some(s=>intersects(s,expand(bounds(route.head),3)))).toBe(false);
     expect(route.segments.some(s=>intersects(s,a.target))).toBe(false);
+  });
+  it.each([25,90])("leaves the Variables reference box rightward for target y=%s", top => {
+    const a:Attachment={source:[168,63.5],sourceBox:{left:136,top:54,right:176,bottom:73},
+      enclosure:{left:5,top:4,right:185,bottom:79},
+      target:{left:231,top,right:300,bottom:top+25},
+      sourceOwner:0,targetOwner:1,returning:false,width:3};
+    const text=[{left:143,top:56,right:161,bottom:70},
+      {left:143,top:35,right:155,bottom:49},
+      {left:241,top:top+3,right:282,bottom:top+19}];
+    const route=routeReference(a,text,[a.enclosure,a.target],[])!;
+    expect(route).toBeDefined();
+    const outside=pathPoints(pathData(route)).find(([x,y])=>
+      x>a.sourceBox.right||y<a.sourceBox.top||y>a.sourceBox.bottom)!;
+    expect(outside[0]).toBeGreaterThan(a.sourceBox.right);
+    expect(outside[1]).toBe(a.source[1]);
+    expect(clear(route,text.map(r=>expand(r,1)),a.width)).toBe(true);
+    expect(clearsSource(route,a.sourceBox,a.width)).toBe(true);
+    expect(routeReference(a,text,[a.enclosure,a.target],[])).toEqual(route);
+  });
+  it("keeps a top exit when text blocks the right corridor", () => {
+    const a=attachment(),text=[{left:102,top:135,right:165,bottom:175}];
+    const route=routeReference(a,text,[a.enclosure,a.target],[])!;
+    expect(route).toBeDefined();
+    expect(clear(route,text.map(r=>expand(r,1)),a.width)).toBe(true);
+    const outside=pathPoints(pathData(route)).find(([x,y])=>
+      x>a.sourceBox.right||y<a.sourceBox.top||y>a.sourceBox.bottom)!;
+    expect(outside[0]).toBe(a.source[0]);
+    expect(outside[1]).toBeLessThan(a.sourceBox.top);
+  });
+  it("keeps a direct vertical exit when the target is entirely left of the right edge", () => {
+    const a=attachment();
+    a.source=[85,150];
+    a.target={left:50,top:40,right:98,bottom:90};
+    const route=routeReference(a,[],[a.enclosure,a.target],[])!;
+    expect(route).toBeDefined();
+    for(const [x] of pathPoints(pathData(route)))expect(x).toBeCloseTo(a.source[0],8);
+  });
+  it.each([500,1000,5000].flatMap(right=>[[right,40,90],[right,210,260]]))(
+    "avoids a substantial rightward detour for target x=%s, y=%s..%s", (right,top,bottom) => {
+    const a=attachment();
+    a.target={left:50,top,right,bottom};
+    const route=routeReference(a,[],[a.enclosure,a.target],[])!;
+    expect(route).toBeDefined();
+    const points=pathPoints(pathData(route));
+    const length=points.slice(1).reduce((sum,p,i)=>
+      sum+Math.hypot(p[0]-points[i][0],p[1]-points[i][1]),0);
+    // A clear 54px vertical shaft must not become a hundreds-of-pixels detour.
+    expect(length).toBeLessThan(80);
+    expect(Math.max(...points.map(p=>p[0]))-a.source[0]).toBeLessThan(25);
+    expect(route.segments.some(s=>intersects(s,a.target))).toBe(false);
+  });
+  it("uses a clear right exit when the shorter vertical corridor is blocked", () => {
+    const a=attachment(),text=[{left:80,top:95,right:140,bottom:132}];
+    a.target={left:50,top:40,right:500,bottom:90};
+    const route=routeReference(a,text,[a.enclosure,a.target],[])!;
+    expect(route).toBeDefined();
+    const outside=pathPoints(pathData(route)).find(([x,y])=>
+      x>a.sourceBox.right||y<a.sourceBox.top||y>a.sourceBox.bottom)!;
+    expect(outside[0]).toBeGreaterThan(a.sourceBox.right);
+    expect(outside[1]).toBe(a.source[1]);
+    expect(clear(route,text.map(r=>expand(r,1)),a.width)).toBe(true);
   });
   it("does not reuse a legacy curve through its own target body", () => {
     const a=attachment();

@@ -7,7 +7,13 @@ An arrow stops at its target boundary without crossing the target first.
 Self-references have a controlled initial departure through their own container. Arrows
 retain their source and target identities in every string style.
 
-Sources may leave through the top, right, or bottom of their reference box.
+Sources prefer to leave through the right edge of their reference box when a
+clear route fits between the source and arrival with at most two bends and no
+backtracking. This preference can add a bend, but never bypasses text, arrow,
+or border clearance checks. A preferred right exit may add at most 24 CSS pixels
+over the shortest clear direct or one-bend alternative, comparing lengths before
+rounding and including the arrowhead. Top and bottom exits remain available when
+a rightward route would be crowded or exceed that allowance.
 The complete route is checked for source-box re-entry, including rounded corners;
 a rightward stub cannot reverse back through the source and leave left.
 Arrowheads and hover stroke widths participate in clearance checks. Every shaft
@@ -76,8 +82,10 @@ not a guarantee about every graph. Reference IDs can differ between tracer runs.
 
 `frontend/js/connectorRouting.ts` measures DOM geometry once per routing pass
 and caches routes by geometry and maximum paint width. `referenceRouting.ts`
-first tries direct and one-bend routes, retains suitable curves when needed,
-tries broad sweeps and orthogonal detours, then searches
+first measures clear direct and one-bend alternatives, then prefers a compact
+right exit with up to two bends within the extra-length allowance. If none fits,
+it uses the shortest clear simple alternative. When simple candidates fail, it
+retains suitable curves, tries broad sweeps and orthogonal detours, then searches
 an expanding visibility grid. `connectorGeometry.ts` supplies shared source-dot
 and arrowhead dimensions to both the routing checks and the painted connectors.
 

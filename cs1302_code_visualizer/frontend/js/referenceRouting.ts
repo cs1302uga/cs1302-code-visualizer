@@ -321,17 +321,44 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
     {tip:[x,t.bottom],normal:[0,1]},{tip:[x,t.top],normal:[0,-1]});
   for(let y=t.top+10;y<t.bottom-5;y+=10) tips.push(
     {tip:[t.left,y],normal:[-1,0]},{tip:[t.right,y],normal:[1,0]});
-  // Prefer a direct route or a single generous bend over a long curved detour.
+  // Compare against the shortest clear direct/one-bend route across arrivals.
+  // These orthogonal candidates are monotone, so Manhattan distance to the tip
+  // is their length before rounding (including the arrowhead).
+  const arrivalLength=(tip:Point)=>Math.abs(tip[0]-s[0])+Math.abs(tip[1]-s[1]);
+  let simpleRoute:Route|undefined,simpleLength=Infinity;
   for (const {tip,normal} of tips) {
-    const h=head(tip,normal), e=rear(h);
+    const length=arrivalLength(tip);
+    if(length>=simpleLength)continue;
+    const h=head(tip,normal),e=rear(h);
     const corner:Point=normal[0] ? [s[0],e[1]] : [e[0],s[1]];
-    const previous = corner[0]===e[0] && corner[1]===e[1] ? s : corner;
-    if ((previous[0]-e[0])*normal[0]+(previous[1]-e[1])*normal[1] < 0) continue;
-    for (const radius of [12,0]) {
+    const previous=corner[0]===e[0]&&corner[1]===e[1] ? s : corner;
+    if((previous[0]-e[0])*normal[0]+(previous[1]-e[1])*normal[1]<0)continue;
+    for(const radius of [12,0]) {
       const route=polyline([s,corner,e],h,radius);
+      if(acceptCandidate(route,strict)) {simpleRoute=route;simpleLength=length;break;}
+    }
+  }
+  // Keep the existing right-first ordering for narrow departure fallbacks.
+  const simpleCloseDeparture=closeDeparture;
+  closeDeparture=undefined;
+  // Prefer a right exit with at most two bends and no backtracking, allowing
+  // at most 24 extra CSS pixels over a clear simple alternative. Merely staying
+  // between the source and a chosen arrival would not bound wide-target detours.
+  for (const {tip,normal} of tips) {
+    if(arrivalLength(tip)>simpleLength+24)continue;
+    const h=head(tip,normal),e=rear(h);
+    if(e[0]<=a.sourceBox.right || normal[0]>0 || (s[1]-e[1])*normal[1]<0)continue;
+    const x=normal[0] ? (a.sourceBox.right+e[0])/2 : e[0];
+    const points:Point[]=normal[0] ? [s,[x,s[1]],[x,e[1]],e] : [s,[x,s[1]],e];
+    for(const radius of [12,0]) {
+      const route=polyline(points,h,radius),first=route.segments[0];
+      // Rounding must not turn upward/downward before crossing the right edge.
+      if(first[1][0]<a.sourceBox.right+a.width/2 || first[1][1]!==s[1])continue;
       if(acceptCandidate(route,strict))return route;
     }
   }
+  if(simpleRoute)return simpleRoute;
+  closeDeparture??=simpleCloseDeparture;
   const legacy=a.legacyTarget??t;
   const h=head([legacy.left,(legacy.top+legacy.bottom)/2],[-1,0]),end=rear(h),bend=end[0]>=exit[0]?(end[0]-exit[0])/2:40;
   const original:Route={segments:[[s,exit],[exit,[exit[0]+bend,exit[1]],[end[0]-bend,end[1]],end]],head:h,kind:"original"};

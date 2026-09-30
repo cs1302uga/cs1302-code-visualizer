@@ -59,4 +59,47 @@ describe("untrusted trace rendering", () => {
     }
     expect(Object.getPrototypeOf({})).toBe(Object.prototype);
   });
+
+  it("preserves prototype-named statics and heap IDs without changing dictionary prototypes", () => {
+    const heap = Object.create(null);
+    for (const id of ["__proto__", "constructor", "toString"]) {
+      heap[id] = {kind: "string", value: id};
+    }
+    const trace: any = convertModernTraceToOpt({code: "", format: "modern", steps: [{line: 1,
+      statics: [{className: "", fields: [{name: "__proto__", value: 3}, {name: "constructor", value: 4}]}], heap}]});
+    for (const candidate of [trace, prepareStringTrace(trace, "default"), prepareStringTrace(trace, "compact")]) {
+      const step = candidate.trace[0];
+      for (const map of [step.globals, step.globals_attrs, step.heap, step.heap_attrs]) {
+        expect(Object.getPrototypeOf(map)).toBeNull();
+      }
+      expect(step.globals.__proto__).toBe(3);
+      expect(step.globals.constructor).toBe(4);
+    }
+    expect(Object.keys(trace.trace[0].heap)).toEqual(["__proto__", "constructor", "toString"]);
+    expect(Object.getPrototypeOf({})).toBe(Object.prototype);
+  });
+
+  const renderArray = (dimensions: unknown, values: unknown[]) => new ExecutionVisualizer("viz", {
+    code: "", trace: [{event: "step_line", line: 1, globals: {array: ["REF", "1"]},
+      ordered_globals: ["array"], heap: {"1": ["C_MULTIDIMENSIONAL_ARRAY", "1", dimensions, ...values]},
+      stack_to_render: [], stdout: ""}],
+  }, {lang: "c", hideCode: true});
+
+  it.each([[2, 1e9], [2, -1], [2, 1.5], [2, Infinity], [2], "2,3", [0, 1e9]]
+    .map(dimensions => ({dimensions})))(
+    "rejects malformed multidimensional sizes before allocation: $dimensions", ({dimensions}) => {
+      expect(() => renderArray(dimensions, [])).toThrow(/multidimensional array/i);
+    });
+
+  it("requires one value for every multidimensional array cell", () => {
+    expect(() => renderArray([1, 1], [1, 2])).toThrow(/do not match/);
+  });
+
+  it("renders valid multidimensional array coordinates and values", () => {
+    renderArray([2, 2], [1, 2, 3, 4]);
+    expect(Array.from(document.querySelectorAll(".cMultidimArrayHeader"), e => e.textContent))
+      .toEqual(["0,0", "0,1", "1,0", "1,1"]);
+    expect(Array.from(document.querySelectorAll(".cMultidimArrayElt"), e => e.textContent))
+      .toEqual(["1", "2", "3", "4"]);
+  });
 });
