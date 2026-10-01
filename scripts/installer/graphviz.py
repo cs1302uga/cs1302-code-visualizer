@@ -773,6 +773,9 @@ def remove_man_page_symlinks(
 
     Returns:
         List of removed man page symlinks.
+
+    Raises:
+        OSError: A selected path could not be deleted; removal is not reported as successful.
     """
     removed: list[Path] = []
     if not cfg.man_dir.is_dir():
@@ -805,10 +808,7 @@ def remove_man_page_symlinks(
                     if is_gv_man:
                         removed.append(item)
                         if not cfg.dry_run:
-                            try:
-                                item.unlink()
-                            except OSError:  # pragma: no cover
-                                pass
+                            item.unlink()
             if not cfg.dry_run and section_dir.is_dir():
                 try:
                     if not any(section_dir.iterdir()):
@@ -932,6 +932,9 @@ def uninstall_graphviz(
 
     Returns:
         A tuple of (removed_shims, removed_symlink, removed_cache_items, removed_man_pages).
+
+    Raises:
+        OSError: A selected path could not be deleted; removal is not reported as successful.
     """
     removed_shims: list[Path] = []
     removed_link: Path | None = None
@@ -954,31 +957,22 @@ def uninstall_graphviz(
                 if is_shim:
                     removed_shims.append(item)
                     if not cfg.dry_run:
-                        try:
-                            item.unlink()
-                        except OSError:  # pragma: no cover
-                            pass
+                        item.unlink()
 
     if cfg.current_link.is_symlink() or cfg.current_link.exists():
         removed_link = cfg.current_link
         if not cfg.dry_run:
-            try:
-                cfg.current_link.unlink()
-            except OSError:  # pragma: no cover
-                pass
+            cfg.current_link.unlink()
 
     if purge and cfg.cache_dir.is_dir():
         for item in cfg.cache_dir.iterdir():
             if not item.name.startswith("."):
                 removed_cache.append(item)
                 if not cfg.dry_run:
-                    try:
-                        if item.is_dir() and not item.is_symlink():
-                            shutil.rmtree(item)
-                        else:
-                            item.unlink()
-                    except OSError:  # pragma: no cover
-                        pass
+                    if item.is_dir() and not item.is_symlink():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink()
 
     return removed_shims, removed_link, removed_cache, removed_man
 

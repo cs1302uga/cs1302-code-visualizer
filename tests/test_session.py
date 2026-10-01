@@ -621,3 +621,27 @@ def test_closed_session_cannot_bind_batch_client():
     session.close()
     with pytest.raises(RuntimeError, match="closed"):
         session._batch_tracer_for_home(Path("/jdk"))
+
+
+def test_prune_trace_cache_does_not_count_failed_deletions(tmp_path, monkeypatch):
+    import os
+
+    from cs1302_code_visualizer.session import prune_trace_cache
+
+    blocked = tmp_path / "blocked.json"
+    removable = tmp_path / "removable.json"
+    for path in (blocked, removable):
+        path.write_text("{}")
+        os.utime(path, (1, 1))
+    unlink = Path.unlink
+
+    def selective_unlink(path, *args, **kwargs):
+        if path == blocked:
+            raise PermissionError("cannot delete")
+        return unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", selective_unlink)
+    assert prune_trace_cache(tmp_path, dry_run=True) == (2, 4)
+    assert prune_trace_cache(tmp_path) == (1, 2)
+    assert blocked.exists()
+    assert not removable.exists()

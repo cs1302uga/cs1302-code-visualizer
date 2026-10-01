@@ -92,7 +92,7 @@ preview = prune_trace_cache(Path(".cache/traces"), max_age_days=30, dry_run=True
 print(preview)
 ```
 
-Set `dry_run=False` to remove entries unused for the selected period, or delete the cache directory to force retracing.
+Set `dry_run=False` to remove entries unused for the selected period, or delete the cache directory to force retracing. Counts include only successful removals (or candidates in dry-run mode); inaccessible entries are skipped.
 
 ## Render independent snapshots together
 
