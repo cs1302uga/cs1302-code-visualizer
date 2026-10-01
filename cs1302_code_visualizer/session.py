@@ -340,11 +340,11 @@ def prune_trace_cache(
         try:
             stat = path.stat()
             if stat.st_mtime < threshold:
-                count += 1
-                size += stat.st_size
                 if not dry_run:
                     path.unlink()
+                count += 1
+                size += stat.st_size
         except OSError:
-            # An inaccessible or invalid cache entry is disposable; continue without it.
+            # Unreadable or undeletable entries are skipped and are not counted as removed.
             pass
     return count, size

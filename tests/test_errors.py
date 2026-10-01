@@ -32,6 +32,8 @@ def test_code_vis_trace_generator_error():
     assert err.stdout == "out"
     assert err.stderr == "err"
     assert err.exit_status == 1
+    assert err.batch_result is None
+    assert err.partial_trace is None
 
 
 def test_code_vis_trace_generator_error_null_streams():
@@ -54,6 +56,8 @@ def test_code_vis_trace_generator_error_from_cpe():
     assert err.stdout == "out"
     assert err.stderr == "err"
     assert err.exit_status == 1
+    assert err.batch_result is None
+    assert err.partial_trace is None
 
 
 def test_tracer_download_error():
@@ -84,4 +88,3 @@ def test_breakpoint_resolution_error():
     assert str(jdk_err) == "JDK failure"
     assert isinstance(jdk_err, CodeVisError)
     assert JDKError is JDKInstallationError
-

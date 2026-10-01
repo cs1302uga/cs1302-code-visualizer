@@ -7,7 +7,7 @@ Use the renderer in course builds or other Python applications. For command-line
 Use Python 3.13 or newer and the browser prerequisites in the [installation guide](README.md#install). Download a release wheel, then add it to your uv project, substituting its actual path:
 
 ```sh
-uv add ./cs1302_code_visualizer-0.18.2-py3-none-any.whl
+uv add ./cs1302_code_visualizer-0.18.3-py3-none-any.whl
 ```
 
 The following recipes run in order in one Python script, using `Main.java` from the instructor quickstart. Run the script with `uv run python your_script.py`.
@@ -92,7 +92,7 @@ preview = prune_trace_cache(Path(".cache/traces"), max_age_days=30, dry_run=True
 print(preview)
 ```
 
-Set `dry_run=False` to remove entries unused for the selected period, or delete the cache directory to force retracing.
+Set `dry_run=False` to remove entries unused for the selected period, or delete the cache directory to force retracing. Counts include only successful removals (or candidates in dry-run mode); inaccessible entries are skipped.
 
 ## Render independent snapshots together
 
@@ -178,3 +178,44 @@ Path("memory-embed.html").write_text(html, encoding="utf-8")
 Insert this snippet into your page and set an ancestor, such as the page's `body`, to `data-theme="light"`, `"dark"`, or `"auto"`. Omit `theme` in `render_html` to follow that attribute. Pass `theme="dark"` or `theme="auto"` to override it for that instance. Without `bundle_url`, the helper uses the installed package version's GitHub release bundle URL; that release asset must be available.
 
 See the [theme guide](docs/themes.md) for a complete static HTML recipe, a three-frame visual comparison, CSS color overrides, print behavior, and the scope of the contrast checks. The [accessibility guide](docs/accessibility.md) maps features to WCAG 2.2 criterion levels and explains how to preserve SVG descriptions when embedding or converting exports.
+
+## Recover partial batch traces
+
+`BatchTracerClient.execute` and futures returned by `submit` continue to raise
+`CodeVisTraceGeneratorError` for every non-completed job. A guest exception is
+still a failure; callers must explicitly choose whether to display its partial trace.
+
+```python
+from cs1302_code_visualizer.batch_tracer import BatchTraceJob, BatchTracerClient
+from cs1302_code_visualizer.errors import CodeVisTraceGeneratorError
+
+with BatchTracerClient(workers=1) as client:
+    try:
+        trace = client.execute(BatchTraceJob(source=java_source))
+    except CodeVisTraceGeneratorError as error:
+        result = error.batch_result
+        if result is None or result.get("stopReason") != "guest_exception":
+            raise
+        trace = error.partial_trace
+        if trace is None:
+            raise
+        print(error.stderr)
+        print(result.get("diagnostics", []))
+        # Render trace while also displaying the failure metadata.
+```
+
+`batch_result` preserves all result fields, including `status`, `stopReason`,
+`phase`, `complete`, `diagnostics`, `counters`, and `limits`. Its trace receives the
+same heap normalization and enum filtering as successful traces. `partial_trace`
+is that trace dictionary, or `None` when no trace object was returned. Non-batch
+errors have neither a batch result nor a partial trace. Trace payloads are not
+included in automatic exception notes.
+
+For batch response errors, `stdout` and `stderr` are the captured guest streams.
+Compiler and tracer diagnostics are retained in `batch_result` and exception notes;
+they are no longer substituted for `stderr`. A diagnostic naming an exception
+class is not a captured stack trace. The pinned tracer v3.2.1 captures uncaught
+guest exceptions in stderr and attaches the final output to the terminal
+`step_line` snapshot. That snapshot may repeat the preceding source location
+while adding the exception output. Older tracers such as v3.1.2 may return empty
+guest stderr even when `stopReason` is `guest_exception`.

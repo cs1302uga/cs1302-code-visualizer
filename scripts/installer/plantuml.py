@@ -537,6 +537,9 @@ def uninstall_plantuml(
 
     Returns:
         A tuple of (removed_wrapper, removed_symlink, removed_cache_items).
+
+    Raises:
+        OSError: A selected path could not be deleted; removal is not reported as successful.
     """
     removed_wrapper: Path | None = None
     removed_link: Path | None = None
@@ -545,31 +548,22 @@ def uninstall_plantuml(
     if cfg.wrapper_path.is_file() or cfg.wrapper_path.is_symlink():
         removed_wrapper = cfg.wrapper_path
         if not cfg.dry_run:
-            try:
-                cfg.wrapper_path.unlink()
-            except OSError:  # pragma: no cover
-                pass
+            cfg.wrapper_path.unlink()
 
     if cfg.jar_symlink.is_symlink() or cfg.jar_symlink.exists():
         removed_link = cfg.jar_symlink
         if not cfg.dry_run:
-            try:
-                cfg.jar_symlink.unlink()
-            except OSError:  # pragma: no cover
-                pass
+            cfg.jar_symlink.unlink()
 
     if purge and cfg.cache_dir.is_dir():
         for item in cfg.cache_dir.iterdir():
             if not item.name.startswith("."):
                 removed_cache.append(item)
                 if not cfg.dry_run:
-                    try:
-                        if item.is_dir() and not item.is_symlink():
-                            shutil.rmtree(item)
-                        else:
-                            item.unlink()
-                    except OSError:  # pragma: no cover
-                        pass
+                    if item.is_dir() and not item.is_symlink():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink()
 
     return removed_wrapper, removed_link, removed_cache
 

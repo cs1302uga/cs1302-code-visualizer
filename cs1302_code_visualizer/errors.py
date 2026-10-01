@@ -11,7 +11,7 @@ from __future__ import annotations
 import inspect
 import textwrap
 from subprocess import CalledProcessError
-from typing import cast
+from typing import Any, cast
 
 
 class CodeVisError(Exception):
@@ -32,6 +32,8 @@ class CodeVisTraceGeneratorError(CodeVisError):
         stdout: str | None = None,
         stderr: str | None = None,
         exit_status: int = 1,
+        *,
+        batch_result: dict[str, Any] | None = None,
     ) -> None:
         """Initialize a CodeVisTraceGeneratorError."""
         super().__init__("Unable to generate code execution trace.")
@@ -40,6 +42,7 @@ class CodeVisTraceGeneratorError(CodeVisError):
         self._stdout: str = stdout if stdout is not None else ""
         self._stderr: str = stderr if stderr is not None else ""
         self._exit_status: int = exit_status
+        self._batch_result = batch_result
 
     @property
     def source_code(self) -> str:
@@ -66,6 +69,17 @@ class CodeVisTraceGeneratorError(CodeVisError):
         """The exit status of trace generator."""
         return self._exit_status
 
+    @property
+    def batch_result(self) -> dict[str, Any] | None:
+        """The batch result envelope, including diagnostics, limits, and counters, if available."""
+        return self._batch_result
+
+    @property
+    def partial_trace(self) -> dict[str, Any] | None:
+        """The normalized partial batch trace, if the result contains a trace object."""
+        trace = self._batch_result.get("trace") if self._batch_result is not None else None
+        return trace if isinstance(trace, dict) else None
+
     def with_property_notes(self: CodeVisTraceGeneratorError) -> CodeVisTraceGeneratorError:
         """Return this CodeVisTraceGeneratorError with property notes added."""
 
@@ -78,6 +92,8 @@ class CodeVisTraceGeneratorError(CodeVisError):
         )
 
         for name, member in members:
+            if name in {"batch_result", "partial_trace"}:
+                continue
             if doc := inspect.getdoc(member):
                 note_heading: str = doc.strip().rstrip(".")
                 note_body: str = textwrap.indent(

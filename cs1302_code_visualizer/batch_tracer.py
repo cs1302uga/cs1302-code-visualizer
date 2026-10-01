@@ -322,6 +322,22 @@ class BatchTracerClient:
         result = resp.get("result", {})
         status = result.get("status")
 
+        trace_obj = result.get("trace")
+        if isinstance(trace_obj, dict):
+            # Normalize heap primitives
+            if "trace" in trace_obj and isinstance(trace_obj["trace"], list):
+                normalize_heap_primitives(trace_obj)
+
+            # Cleanup enum globals if requested
+            if (
+                not job.include_enum_static_fields
+                and "trace" in trace_obj
+                and isinstance(trace_obj["trace"], list)
+            ):
+                enum_types = get_enum_types(trace_obj)
+                enum_globals = get_enum_globals(trace_obj, enum_types)
+                delete_globals(trace_obj, enum_globals)
+
         if status != "completed":
             diagnostics = result.get("diagnostics", [])
             phase = result.get("phase", "unknown")
@@ -334,32 +350,19 @@ class BatchTracerClient:
                 source_code=job.source,
                 cli_args=["batch-trace"],
                 stdout=result.get("stdout", ""),
-                stderr=diag_text,
+                stderr=result.get("stderr", ""),
                 exit_status=1,
+                batch_result=result,
             ).with_property_notes()
+            err.add_note(diag_text)
             future.set_exception(err)
             return
 
-        trace_obj = result.get("trace")
         if not isinstance(trace_obj, dict):
             future.set_exception(
                 TypeError(f"Batch tracer returned unexpected trace shape: {type(trace_obj)}")
             )
             return
-
-        # Normalize heap primitives
-        if "trace" in trace_obj and isinstance(trace_obj["trace"], list):
-            normalize_heap_primitives(trace_obj)
-
-        # Cleanup enum globals if requested
-        if (
-            not job.include_enum_static_fields
-            and "trace" in trace_obj
-            and isinstance(trace_obj["trace"], list)
-        ):
-            enum_types = get_enum_types(trace_obj)
-            enum_globals = get_enum_globals(trace_obj, enum_types)
-            delete_globals(trace_obj, enum_globals)
 
         future.set_result(trace_obj)
 
