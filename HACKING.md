@@ -178,3 +178,42 @@ Path("memory-embed.html").write_text(html, encoding="utf-8")
 Insert this snippet into your page and set an ancestor, such as the page's `body`, to `data-theme="light"`, `"dark"`, or `"auto"`. Omit `theme` in `render_html` to follow that attribute. Pass `theme="dark"` or `theme="auto"` to override it for that instance. Without `bundle_url`, the helper uses the installed package version's GitHub release bundle URL; that release asset must be available.
 
 See the [theme guide](docs/themes.md) for a complete static HTML recipe, a three-frame visual comparison, CSS color overrides, print behavior, and the scope of the contrast checks. The [accessibility guide](docs/accessibility.md) maps features to WCAG 2.2 criterion levels and explains how to preserve SVG descriptions when embedding or converting exports.
+
+## Recover partial batch traces
+
+`BatchTracerClient.execute` and futures returned by `submit` continue to raise
+`CodeVisTraceGeneratorError` for every non-completed job. A guest exception is
+still a failure; callers must explicitly choose whether to display its partial trace.
+
+```python
+from cs1302_code_visualizer.batch_tracer import BatchTraceJob, BatchTracerClient
+from cs1302_code_visualizer.errors import CodeVisTraceGeneratorError
+
+with BatchTracerClient(workers=1) as client:
+    try:
+        trace = client.execute(BatchTraceJob(source=java_source))
+    except CodeVisTraceGeneratorError as error:
+        result = error.batch_result
+        if result is None or result.get("stopReason") != "guest_exception":
+            raise
+        trace = error.partial_trace
+        if trace is None:
+            raise
+        print(error.stderr)
+        print(result.get("diagnostics", []))
+        # Render trace while also displaying the failure metadata.
+```
+
+`batch_result` preserves all result fields, including `status`, `stopReason`,
+`phase`, `complete`, `diagnostics`, `counters`, and `limits`. Its trace receives the
+same heap normalization and enum filtering as successful traces. `partial_trace`
+is that trace dictionary, or `None` when no trace object was returned. Non-batch
+errors have neither a batch result nor a partial trace. Trace payloads are not
+included in automatic exception notes.
+
+For batch response errors, `stdout` and `stderr` are the captured guest streams.
+Compiler and tracer diagnostics are retained in `batch_result` and exception notes;
+they are no longer substituted for `stderr`. A diagnostic naming an exception
+class is not a captured stack trace. Older tracers, including the current v3.1.2
+pin, may return empty guest stderr even when `stopReason` is `guest_exception`.
+Updating the tracer is required to recover the original exception output.

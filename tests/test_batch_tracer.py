@@ -213,7 +213,10 @@ def test_batch_tracer_client_failed_trace(mock_tracer_env, monkeypatch):
 
     with pytest.raises(CodeVisTraceGeneratorError) as exc_info:
         client.execute(job, timeout_secs=2.0)
-    assert "Syntax error on token Foo" in exc_info.value.stderr
+    assert exc_info.value.stderr == ""
+    assert "Syntax error on token Foo" in exc_info.value.__notes__
+    assert exc_info.value.batch_result == mock_resp["result"]
+    assert exc_info.value.partial_trace is None
     client.close()
 
 
@@ -441,9 +444,11 @@ def test_batch_tracer_close_with_pending_and_exceptions(mock_tracer_env):
     # Test submit without job id hits line 314 auto-uuid
     job_no_id = BatchTraceJob(source="class NoId {}")
     # Popen mock for submit
-    with patch("subprocess.Popen", return_value=mock_proc), patch.object(
-        client, "_reader_loop", return_value=None
-    ), patch.object(client, "_drain_stderr", return_value=None):
+    with (
+        patch("subprocess.Popen", return_value=mock_proc),
+        patch.object(client, "_reader_loop", return_value=None),
+        patch.object(client, "_drain_stderr", return_value=None),
+    ):
         fut_no_id = client.submit(job_no_id)
 
     # Make terminate fail, kill succeed, wait fail
@@ -604,3 +609,53 @@ def test_batch_tracer_serialization_failure_does_not_register_request():
             client.submit(BatchTraceJob(id="retry", source="class A {}"))
         assert client._pending == {}
         start.assert_not_called()
+
+
+@pytest.mark.parametrize("trace", [None, [], {"trace": []}])
+def test_failed_result_preserves_metadata_and_guest_stderr(mock_tracer_env, trace):
+    client = BatchTracerClient()
+    future = concurrent.futures.Future()
+    result = {
+        "status": "failed",
+        "stopReason": "guest_exception",
+        "phase": "serialize",
+        "complete": False,
+        "diagnostics": ["java.lang.NullPointerException"],
+        "stdout": "before\n",
+        "stderr": "warning\njava.lang.NullPointerException: detail\n",
+        "trace": trace,
+        "counters": {"stderrBytes": 54},
+        "limits": {"snapshots": 100},
+    }
+    client._handle_response(future, BatchTraceJob(source="class Driver {}"), {"result": result})
+    with pytest.raises(CodeVisTraceGeneratorError) as caught:
+        future.result()
+    error = caught.value
+    assert error.stdout == result["stdout"]
+    assert error.stderr == result["stderr"]
+    assert error.batch_result == result
+    assert error.partial_trace == (trace if isinstance(trace, dict) else None)
+    assert not any("stderrBytes" in note for note in error.__notes__)
+    client.close()
+
+
+def test_failed_partial_trace_uses_success_normalization():
+    client = BatchTracerClient()
+    future = concurrent.futures.Future()
+    trace = {"trace": [{"heap": {"1": 42}}]}
+    client._handle_response(
+        future,
+        BatchTraceJob(source=""),
+        {
+            "result": {
+                "status": "failed",
+                "trace": trace,
+            }
+        },
+    )
+    with pytest.raises(CodeVisTraceGeneratorError) as caught:
+        future.result()
+    assert caught.value.partial_trace is trace
+    assert trace["trace"][0]["heap"]["1"] == ["INSTANCE", "Integer", ["value", 42]]
+    assert "Batch trace job failed during phase: unknown" in caught.value.__notes__
+    client.close()
