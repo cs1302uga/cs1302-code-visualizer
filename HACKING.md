@@ -7,7 +7,7 @@ Use the renderer in course builds or other Python applications. For command-line
 Use Python 3.13 or newer and the browser prerequisites in the [installation guide](README.md#install). Download a release wheel, then add it to your uv project, substituting its actual path:
 
 ```sh
-uv add ./cs1302_code_visualizer-0.18.2-py3-none-any.whl
+uv add ./cs1302_code_visualizer-0.18.3-py3-none-any.whl
 ```
 
 The following recipes run in order in one Python script, using `Main.java` from the instructor quickstart. Run the script with `uv run python your_script.py`.
@@ -214,6 +214,8 @@ included in automatic exception notes.
 For batch response errors, `stdout` and `stderr` are the captured guest streams.
 Compiler and tracer diagnostics are retained in `batch_result` and exception notes;
 they are no longer substituted for `stderr`. A diagnostic naming an exception
-class is not a captured stack trace. Older tracers, including the current v3.1.2
-pin, may return empty guest stderr even when `stopReason` is `guest_exception`.
-Updating the tracer is required to recover the original exception output.
+class is not a captured stack trace. The pinned tracer v3.2.1 captures uncaught
+guest exceptions in stderr and attaches the final output to the terminal
+`step_line` snapshot. That snapshot may repeat the preceding source location
+while adding the exception output. Older tracers such as v3.1.2 may return empty
+guest stderr even when `stopReason` is `guest_exception`.
