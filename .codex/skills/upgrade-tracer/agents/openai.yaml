@@ -1,0 +1,4 @@
+interface:
+  display_name: "Upgrade Tracer"
+  short_description: "Upgrade the tracer and resolve PR review findings"
+  default_prompt: "Use $upgrade-tracer to upgrade the tracer, bump the application patch version, close coverage gaps, and create a fully reviewed PR, then grill me on the result."
