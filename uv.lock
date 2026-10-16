@@ -292,7 +292,7 @@ wheels = [
 
 [[package]]
 name = "cs1302-code-visualizer"
-version = "0.18.6"
+version = "0.18.7"
 source = { editable = "." }
 dependencies = [
     { name = "certifi" },
