@@ -1,4 +1,4 @@
-"""Real-JAR compatibility checks for tracer source metadata introduced in 3.1.1."""
+"""Real-JAR compatibility checks for source metadata and default trace output."""
 
 import json
 
@@ -40,6 +40,14 @@ def assert_metadata(trace):
     assert trace["code"] == SOURCE
     assert trace["entryFile"] == "demo/Main.java"
     assert trace["sources"] == {"demo/Main.java": MAIN, "demo/Helper.java": HELPER}
+    pending = [trace]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            assert {"binary", "elementBinary", "fieldBinary"}.isdisjoint(value)
+            pending.extend(value.values())
+        elif isinstance(value, list):
+            pending.extend(value)
     return trace
 
 
