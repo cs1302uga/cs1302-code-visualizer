@@ -1,4 +1,5 @@
 import io
+import os
 import runpy
 import subprocess
 import sys
@@ -32,10 +33,13 @@ def test_list_breakpoints_none_java_home():
 
 def test_list_breakpoints_tracer_error():
     java_home = ensure_jdk_installed()
-    with patch(
-        "cs1302_code_visualizer.trace_generator.ensure_code_tracer_installed",
-        side_effect=Exception("Tracer fail"),
-    ), pytest.raises(Exception, match="Unable to ensure code tracer is installed!"):
+    with (
+        patch(
+            "cs1302_code_visualizer.trace_generator.ensure_code_tracer_installed",
+            side_effect=Exception("Tracer fail"),
+        ),
+        pytest.raises(Exception, match="Unable to ensure code tracer is installed!"),
+    ):
         list_breakpoints(SAMPLE_JAVA, java_home=java_home)
 
 
@@ -59,6 +63,25 @@ def test_list_breakpoints_command_arguments():
         assert "--enable-native-access=ALL-UNNAMED" in cmd
         assert mock_run.call_args[1]["capture_output"] is True
         assert "JAVA_TOOL_OPTIONS" not in mock_run.call_args[1]["env"]
+
+
+def test_list_breakpoints_aligns_selected_jdk_environment(tmp_path, monkeypatch):
+    selected = tmp_path / "selected jdk"
+    monkeypatch.setenv("JAVA_HOME", "/different/jdk")
+    monkeypatch.setenv("PATH", "/ambient/bin")
+    result = subprocess.CompletedProcess([], 0, stdout="breakpoints", stderr="")
+    with (
+        patch("cs1302_code_visualizer.trace_generator.jdk_exists", return_value=True),
+        patch("cs1302_code_visualizer.trace_generator.ensure_code_tracer_installed"),
+        patch("subprocess.run", return_value=result) as run,
+    ):
+        assert list_breakpoints(SAMPLE_JAVA, java_home=selected) == "breakpoints"
+    assert run.call_args.args[0][0] == str(selected / "bin/java")
+    child = run.call_args.kwargs["env"]
+    assert child["JAVA_HOME"] == str(selected.resolve())
+    assert child["PATH"] == str(selected.resolve() / "bin") + os.pathsep + "/ambient/bin"
+    assert os.environ["JAVA_HOME"] == "/different/jdk"
+    assert os.environ["PATH"] == "/ambient/bin"
 
 
 def test_list_breakpoints_suppresses_java_tool_options_banner(monkeypatch, capsys):

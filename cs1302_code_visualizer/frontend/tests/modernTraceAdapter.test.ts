@@ -172,7 +172,7 @@ describe("modernTraceAdapter", () => {
 
       // Verify heap conversion
       expect(step.heap["200"]).toEqual(["INSTANCE", "Test", ["value", 100]]);
-      expect(step.heap_attrs["200"]).toEqual({ type: "Test" });
+      expect(step.heap_attrs["200"]).toEqual({ type: ["int"], final: [false] });
 
       expect(step.heap["300"]).toEqual(["LIST", 10, 20, 30]);
       expect(step.heap_attrs["300"]).toEqual({ type: "int[]" });
@@ -192,6 +192,50 @@ describe("modernTraceAdapter", () => {
       ]);
       expect(step.heap_attrs["700"]).toEqual({ type: "lambda" });
     });
+
+    it.each(["object", "custom", undefined])(
+      "preserves ordered field metadata for %s instances with omitted null values",
+      (kind) => {
+        const modernTrace: ModernTrace = {
+          code: "",
+          steps: [{
+            line: 1,
+            heap: {
+              "77": {
+                id: 77,
+                type: "dependency.Leaf<java.lang.String>",
+                kind,
+                fields: [
+                  { name: "item", type: "java.lang.String" },
+                  { name: "untyped", value: 7, final: true },
+                  { name: "next", type: "dependency.Box<java.lang.String>", value: null },
+                  { name: "comparator", type: "java.util.Comparator<java.lang.String>", value: { ref: 82 }, final: true },
+                ],
+              },
+            },
+          }],
+        };
+
+        const step = (convertModernTraceToOpt(modernTrace).trace as any[])[0];
+        expect(step.heap["77"]).toEqual([
+          "INSTANCE",
+          "dependency.Leaf<java.lang.String>",
+          ["item", null],
+          ["untyped", 7],
+          ["next", null],
+          ["comparator", ["REF", 82]],
+        ]);
+        expect(step.heap_attrs["77"]).toEqual({
+          type: [
+            "java.lang.String",
+            undefined,
+            "dependency.Box<java.lang.String>",
+            "java.util.Comparator<java.lang.String>",
+          ],
+          final: [false, true, false, true],
+        });
+      },
+    );
 
     it("converts breakpoints-based modern traces", () => {
       const modernTrace: ModernTrace = {

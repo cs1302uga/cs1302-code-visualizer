@@ -113,16 +113,24 @@ BOXED_PRIMITIVE_TYPES: Final[dict[str, str]] = {
 }
 
 
-def get_sanitized_java_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
+def get_sanitized_java_env(
+    env: Mapping[str, str] | None = None,
+    *,
+    selected_java_home: Path | None = None,
+) -> dict[str, str]:
     """Return an environment dictionary sanitized of JVM options that emit startup banners.
 
     If ``JAVA_TOOL_OPTIONS`` or ``_JAVA_OPTIONS`` contains ``-Djava.awt.headless=true``,
     that property is stripped since it is supplied explicitly on the JVM command line.
     If the variable becomes empty, it is removed entirely to prevent the JVM from emitting
     ``Picked up JAVA_TOOL_OPTIONS`` to standard error.
+    When a JDK is selected, align the child environment with that installation so
+    the tracer's environment preflight observes the same JDK that runs its JAR.
 
     Args:
         env: Base environment mapping to sanitize, or None to use ``os.environ``.
+        selected_java_home: JDK selected for this child process, or None to preserve
+            the inherited JDK selection.
 
     Returns:
         A sanitized dictionary copy of the environment.
@@ -140,6 +148,22 @@ def get_sanitized_java_env(env: Mapping[str, str] | None = None) -> dict[str, st
                 clean_env[var] = cleaned_val
             else:
                 del clean_env[var]
+    if selected_java_home is not None:
+        if platform.system() == "Windows":
+            path_key = next((key for key in clean_env if key.upper() == "PATH"), "PATH")
+            inherited_path = clean_env.get(path_key, "")
+            clean_env = {
+                key: value
+                for key, value in clean_env.items()
+                if key.upper() not in ("JAVA_HOME", "PATH")
+            }
+        else:
+            inherited_path = clean_env.get("PATH", "")
+        selected_home = selected_java_home.resolve()
+        clean_env["JAVA_HOME"] = str(selected_home)
+        clean_env["PATH"] = str(selected_home / "bin") + (
+            os.pathsep + inherited_path if inherited_path else ""
+        )
     return clean_env
 
 
@@ -314,7 +338,7 @@ def generate_trace(
             text=True,
             capture_output=True,
             check=True,
-            env=get_sanitized_java_env(),
+            env=get_sanitized_java_env(selected_java_home=java_home),
         )
 
         trace = process.stdout
