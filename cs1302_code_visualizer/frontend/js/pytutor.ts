@@ -43,6 +43,7 @@ import { isModernTrace, convertModernTraceToOpt } from "./modernTraceAdapter";
 import { prepareStringTrace, validateStringStyle, stringValue } from "./stringStyle";
 import { createValueBox, layoutValueBoxes, renderCompactString } from "./valueLayout";
 import { StackLabelLayout } from "./stackLabelLayout";
+import { formatLambdaSignature } from "./lambdaSignature";
 import { resolveArrayOrientation } from "./arrayOrientation";
 import { applyTheme, paint } from "./theme";
 require("../css/pytutor");
@@ -4103,14 +4104,7 @@ class DataVisualizer {
       d3DomElement.append(
         safeMarkup('<div class="typeLabel">' + typeLabelPrefix + "lambda" + "</div>"),
       );
-      let lambdaCode = obj[1];
-      // this is a little bit hacky but I think it's safe? you're not going to
-      // see something like java.lang. outside of the context of an FQN,
-      // or at least not often. this could do with a better implementation
-      // but I think this'll do for now.
-      this.params.stripTypePrefixes?.forEach(
-        (p) => (lambdaCode = lambdaCode.replaceAll(p, "")),
-      );
+      const lambdaCode = formatLambdaSignature(obj[1], type => myViz.trimTypePrefix(type));
       d3DomElement.append(
         safeMarkup('<table class="lambdaObjTbl"><tr><td class="lambdaObjElt">' +
           '<pre class="funcCode"><code class="language-java">' +
