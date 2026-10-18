@@ -41,6 +41,10 @@ code-visualizer Main.java -o main.png
 For editable vector artwork, use `code-visualizer Main.java --format SVG -o main.svg`.
 SVG also supports all steps and batch rendering; see [SVG exports](docs/cli.md#svg-exports).
 
+For compiled dependencies, add `--class-path build/classes` or
+`--class-path 'lib/*.jar'`; repeat the option as needed. See
+[binary dependencies](docs/cli.md#binary-dependencies) for path lists and batch use.
+
 Open `main.png` and insert it into your teaching material. Use `--dpi 2` for a larger image. Single-file mode replaces existing output files; choose a new filename to retain an earlier image.
 
 ## Read the diagram
