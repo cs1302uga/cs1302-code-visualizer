@@ -46,8 +46,13 @@ and text size remain unchanged. See [reference routing](reference-routing/README
   the value; use default or compact when teaching String reference identity.
 
 See [string styles](string-style/README.md) for examples. `--no-types` hides declared
-types, while heap class labels remain. `--text-memory-labels` replaces persistent
-arrows and dots with textual reference IDs; match those IDs to object labels.
+types, while heap class labels and complete typed lambda signatures remain.
+Configured type-prefix stripping also applies to lambda return and parameter
+types, including generic arguments and arrays. Lambda body text keeps its
+qualified names, literals, and comments.
+
+`--text-memory-labels` replaces persistent arrows and dots with textual reference
+IDs; match those IDs to object labels.
 Interactive hover behavior may still reveal arrows to visible heap objects.
 
 A snapshot can omit fields, variables, or objects because of filtering and
