@@ -3,6 +3,7 @@
 import concurrent.futures
 import io
 import json
+import os
 import subprocess
 import threading
 from pathlib import Path
@@ -530,17 +531,25 @@ def test_batch_tracer_ensure_process_reaps_dead_process(mock_tracer_env, monkeyp
     client.close()
 
 
-def test_batch_tracer_custom_java_home(tmp_path):
+def test_batch_tracer_custom_java_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("JAVA_HOME", "/different/jdk")
+    monkeypatch.setenv("PATH", "/ambient/bin")
     mock_proc = MockProcess()
     mock_proc.stdout.close()
     with (
-        patch("subprocess.Popen", return_value=mock_proc),
+        patch("subprocess.Popen", return_value=mock_proc) as popen,
         patch("cs1302_code_visualizer.batch_tracer.ensure_code_tracer_installed"),
     ):
         custom_java = tmp_path / "custom_java"
         client = BatchTracerClient(java_home=custom_java)
         proc = client._ensure_process()
         assert proc is mock_proc
+        assert popen.call_args.args[0][0] == str(custom_java / "bin/java")
+        child = popen.call_args.kwargs["env"]
+        assert child["JAVA_HOME"] == str(custom_java.resolve())
+        assert child["PATH"] == str(custom_java.resolve() / "bin") + os.pathsep + "/ambient/bin"
+        assert os.environ["JAVA_HOME"] == "/different/jdk"
+        assert os.environ["PATH"] == "/ambient/bin"
         client.close()
 
 

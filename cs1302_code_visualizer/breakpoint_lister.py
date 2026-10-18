@@ -68,7 +68,7 @@ def list_breakpoints(
         text=True,
         capture_output=True,
         check=True,
-        env=trace_generator.get_sanitized_java_env(),
+        env=trace_generator.get_sanitized_java_env(selected_java_home=java_home),
     )
     return proc.stdout
 

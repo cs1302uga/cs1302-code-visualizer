@@ -29,7 +29,7 @@ export interface ModernFrame {
 export interface ModernField {
   name: string;
   type?: string;
-  value: unknown;
+  value?: unknown;
   final?: boolean;
 }
 
@@ -254,7 +254,10 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): Record<string
             encodeValue(f.value, f.type),
           ]);
           optStep["heap"][idStr] = ["INSTANCE", objType, ...fieldEntries];
-          optStep["heap_attrs"][idStr] = { type: objType };
+          optStep["heap_attrs"][idStr] = {
+            type: heapObj.fields.map((f) => f.type),
+            final: heapObj.fields.map((f) => f.final ?? false),
+          };
         } else if (kind === "primitive") {
           optStep["heap"][idStr] = [
             "INSTANCE",
@@ -281,11 +284,13 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): Record<string
         } else if (Array.isArray(heapObj as unknown)) {
           optStep["heap"][idStr] = heapObj;
         } else {
-          const fields = heapObj.fields
-            ? heapObj.fields.map((f) => [f.name, encodeValue(f.value, f.type)])
-            : [];
+          const sourceFields = heapObj.fields ?? [];
+          const fields = sourceFields.map((f) => [f.name, encodeValue(f.value, f.type)]);
           optStep["heap"][idStr] = ["INSTANCE", objType, ...fields];
-          optStep["heap_attrs"][idStr] = { type: objType };
+          optStep["heap_attrs"][idStr] = {
+            type: sourceFields.map((f) => f.type),
+            final: sourceFields.map((f) => f.final ?? false),
+          };
         }
       });
     }

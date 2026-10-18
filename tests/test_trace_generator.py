@@ -5,6 +5,7 @@ import io
 import json
 import os
 import runpy
+import subprocess
 import sys
 import threading
 import uuid
@@ -872,6 +873,54 @@ def test_get_sanitized_java_env(monkeypatch):
     assert "JAVA_TOOL_OPTIONS" not in sanitized_os
 
 
+@pytest.mark.parametrize("system", ["Linux", "Windows"])
+@pytest.mark.parametrize("inherited_path", [None, "", "/ambient/bin"])
+def test_selected_java_env_preserves_input_and_options(
+    tmp_path, monkeypatch, system, inherited_path
+):
+    monkeypatch.setattr(trace_generator.platform, "system", lambda: system)
+    path_key = "Path" if system == "Windows" else "PATH"
+    home_key = "Java_Home" if system == "Windows" else "JAVA_HOME"
+    original = {
+        home_key: "/ambient/jdk",
+        "JAVA_TOOL_OPTIONS": "-Djava.awt.headless=true -Xmx512m",
+        "_JAVA_OPTIONS": "-Djava.awt.headless=false",
+        "KEEP": "unchanged",
+    }
+    if inherited_path is not None:
+        original[path_key] = inherited_path
+    before = dict(original)
+    selected = tmp_path / "selected jdk"
+    sanitized = get_sanitized_java_env(original, selected_java_home=selected)
+    assert original == before
+    assert sanitized["JAVA_HOME"] == str(selected.resolve())
+    expected_path = str(selected.resolve() / "bin")
+    if inherited_path:
+        expected_path += os.pathsep + inherited_path
+    assert sanitized["PATH"] == expected_path
+    assert sanitized["JAVA_TOOL_OPTIONS"] == "-Xmx512m"
+    assert "_JAVA_OPTIONS" not in sanitized
+    assert sanitized["KEEP"] == "unchanged"
+    if system == "Windows":
+        assert "Path" not in sanitized
+        assert "Java_Home" not in sanitized
+
+
+def test_generate_trace_aligns_selected_jdk_environment(tmp_path, monkeypatch):
+    selected = tmp_path / "selected jdk"
+    monkeypatch.setenv("JAVA_HOME", "/different/jdk")
+    monkeypatch.setenv("PATH", "/ambient/bin")
+    result = subprocess.CompletedProcess([], 0, stdout='{"trace": []}', stderr="")
+    with patch("subprocess.run", return_value=result) as run:
+        generate_trace(selected, SAMPLE_ENUM_JAVA)
+    assert run.call_args.args[0][0] == str(selected / "bin/java")
+    child = run.call_args.kwargs["env"]
+    assert child["JAVA_HOME"] == str(selected.resolve())
+    assert child["PATH"] == str(selected.resolve() / "bin") + os.pathsep + "/ambient/bin"
+    assert os.environ["JAVA_HOME"] == "/different/jdk"
+    assert os.environ["PATH"] == "/ambient/bin"
+
+
 def test_generate_trace_passes_headless_and_sanitized_env(java_home):
     mock_run = MagicMock()
     mock_run.return_value.stdout = '{"trace": []}'
@@ -973,8 +1022,6 @@ def test_trace_generator_main_stdin_file(tmp_path, monkeypatch):
 
 
 def test_generate_traces_with_custom_client():
-    import concurrent.futures
-
     from cs1302_code_visualizer.batch_tracer import BatchTraceJob
     from cs1302_code_visualizer.trace_generator import generate_traces
 
@@ -995,8 +1042,6 @@ def test_generate_traces_with_custom_client():
 
 
 def test_generate_traces_creates_client():
-    import concurrent.futures
-
     from cs1302_code_visualizer.batch_tracer import BatchTraceJob
     from cs1302_code_visualizer.trace_generator import generate_traces
 

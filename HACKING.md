@@ -7,7 +7,7 @@ Use the renderer in course builds or other Python applications. For command-line
 Use Python 3.13 or newer and the browser prerequisites in the [installation guide](README.md#install). Download a release wheel, then add it to your uv project, substituting its actual path:
 
 ```sh
-uv add ./cs1302_code_visualizer-0.18.9-py3-none-any.whl
+uv add ./cs1302_code_visualizer-0.18.10-py3-none-any.whl
 ```
 
 The following recipes run in order in one Python script, using `Main.java` from the instructor quickstart. Run the script with `uv run python your_script.py`.
@@ -151,6 +151,8 @@ Use `stdin` or `stdin_file` to supply input to the Java program. Set a trace tim
 - `generate_trace`: produce a trace for a selected JDK and source.
 - `generate_image`, `generate_step_images`, and `generate_snapshot_images`: render existing trace JSON, optionally with a session.
 - `render_html`: produce an HTML embed from a trace.
+
+Tracing and breakpoint listing align each child process's `JAVA_HOME` and leading `PATH` entry with the selected JDK, including reusable batch tracers. An explicit JDK selection therefore takes precedence over a different inherited `JAVA_HOME`. These child settings leave the calling Python process's environment unchanged.
 
 See the exported APIs and docstrings in [the package](cs1302_code_visualizer/__init__.py), [browser driver](cs1302_code_visualizer/browser_driver.py), and [session module](cs1302_code_visualizer/session.py) for signatures and return types. For example, `help(render_images)` shows the installed version's parameter documentation.
 

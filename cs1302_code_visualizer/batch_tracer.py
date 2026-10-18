@@ -226,7 +226,7 @@ class BatchTracerClient:
                 stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
-                env=get_sanitized_java_env(),
+                env=get_sanitized_java_env(selected_java_home=resolved_java_home),
                 start_new_session=True,
             )
             self._process = proc
