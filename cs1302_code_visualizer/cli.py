@@ -194,6 +194,7 @@ def _process_batch_job(
     session: RenderingSession,
     java_home: Path | None,
     array_options: dict[str, Any] | None = None,
+    class_path: Sequence[str] | None = None,
 ) -> list[Path]:
     """Execute trace generation, rendering, and atomic file emission for a single batch job."""
     writer = AtomicJobWriter(force=force)
@@ -205,6 +206,7 @@ def _process_batch_job(
             breakpoints=breakpoints or {-1},
             accumulate_breakpoints=all_steps,
             all_breakpoints=all_steps or not bool(breakpoints),
+            extra_tracer_args=[f"--class-path={entry}" for entry in class_path or ()],
         )
 
         # Stage trace file if requested
@@ -429,6 +431,7 @@ def run_batch_cli(args: argparse.Namespace) -> int:
                     session=session,
                     java_home=java_home,
                     array_options=array_options,
+                    class_path=getattr(args, "class_path", None),
                 )
                 success_count += 1
             except (
@@ -482,6 +485,9 @@ def run_single_cli(args: argparse.Namespace) -> int:
         breakpoints=bps or {-1},
         accumulate_breakpoints=args.all_steps,
         all_breakpoints=args.all_steps or not bool(bps),
+        extra_tracer_args=[
+            f"--class-path={entry}" for entry in getattr(args, "class_path", None) or ()
+        ],
     )
 
     with RenderingSession(max_browsers=1) as session:
@@ -553,6 +559,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--input-dir",
         help="Directory to recursively scan for Java source files.",
+    )
+    parser.add_argument(
+        "--class-path",
+        action="append",
+        metavar="PATHS",
+        help="Binary dependency directory/JAR or native class-path list; repeat as needed.",
     )
 
     # Outputs

@@ -18,6 +18,37 @@ Use one source per single-program invocation. Without an input path, source is r
 
 Single-program mode creates parent directories and replaces existing files. Batch overwrite protection, output templates, and rollback apply only to batch mode.
 
+## Binary dependencies
+
+Use `--class-path PATHS` to make compiled classes and JAR dependencies available
+during both compilation and execution of the Java program:
+
+```sh
+code-visualizer Main.java --class-path build/classes --class-path 'lib/*' -o main.png
+code-visualizer --batch --input-dir sources --class-path build/classes --out-dir diagrams
+code-visualizer --batch -i manifest.ndjson --class-path 'lib/*.jar' \
+  --out-dir diagrams --output-pattern '{id}.png'
+```
+
+Repeat the option to add entries in order, or supply a native class-path list
+(`:` on macOS/Linux, `;` on Windows). Quote values containing spaces or wildcards
+so the tracer receives them unchanged. The tracer expands wildcards and validates
+the selected directories/JARs; missing entries or unmatched patterns fail tracing.
+Empty path-list components select the current directory, following Java class-path
+conventions. Relative dependency paths use the directory where you invoke the
+command, including when the source or manifest is in another directory.
+
+The option applies to every job in a batch command, including directory scans and
+manifests. It is a command-level setting; manifest jobs do not add or override
+class-path entries. Batch commands with this option reuse rendering browsers but
+start a one-shot tracer for each job; `--workers` does not pool these tracer jobs.
+Omitting the option retains the existing persistent batch tracing behavior.
+
+Annotation processors do not run during guest compilation. Supply generated
+declarations as source; adding processor JARs to the class path does not enable
+annotation processing. Neighboring source directories support source discovery
+but do not implicitly supply compiled dependencies.
+
 ## Select and format images
 
 | Option | Behavior |

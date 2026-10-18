@@ -88,6 +88,15 @@ not a record of completed work or a substitute for fresh validation.
 - **Tracer source metadata:** metadata does not imply source-file navigation in
   the visualizer, and library frame paths may be absent from the submitted source
   map. Revisit when adding navigation or changing tracer versions.
+- **Tracer compilation:** tracer 4.1 disables annotation processing; supply generated
+  declarations as source. Neighboring source folders support source discovery but
+  no longer supply implicit binary dependencies. Use the visualizer CLI's repeatable
+  [`--class-path` option](cli.md#binary-dependencies) for precompiled classes or JARs,
+  or pass it through the Python API's `extra_tracer_args`. Class-path batch jobs
+  reuse browsers but use one-shot tracing. See the
+  [upstream compatibility notes](https://github.com/cs1302uga/cs1302-tracer/blob/main/CHANGELOG.md#410--2026-10-17).
+  Revisit when adding native batch-protocol class-path configuration or annotation
+  processing support.
 - **Array metadata:** untyped arrays use the configured base orientation when rank
   is unavailable; collections retain their existing layout. Keep the documented
   [resolution rules](array-orientation/README.md) until introducing an explicit
