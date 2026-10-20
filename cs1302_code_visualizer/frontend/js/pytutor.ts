@@ -2783,7 +2783,14 @@ class DataVisualizer {
 
     sfdEnter
       .append("div")
-      .attr("class", "stackFrameHeader")
+      .attr("class", "stackFrameHeader");
+
+    sfdEnter.append("table").attr("class", "stackFrameVarTable");
+
+    var stackFrameDivMerged = sfdEnter.merge(stackFrameDiv as any);
+
+    stackFrameDivMerged
+      .select(".stackFrameHeader")
       .html(safeHtml(function (frame, i) {
         // pretty-print lambdas and display other weird characters
         // (might contain '<' or '>' for weird names like <genexpr>)
@@ -2809,10 +2816,6 @@ class DataVisualizer {
 
         return headerLabel;
       }));
-
-    sfdEnter.append("table").attr("class", "stackFrameVarTable");
-
-    var stackFrameDivMerged = sfdEnter.merge(stackFrameDiv as any);
 
     var stackVarTable = stackFrameDivMerged
       .order() // VERY IMPORTANT to put in the order corresponding to data elements

@@ -100,4 +100,11 @@ The wheel includes this configuration as `_tracer.toml`. The installer executes 
 
 Update the package version in `pyproject.toml`, verify the tracer pin, and run `make check` and `make build`. Check that the wheel contains the frontend build and tracer configuration, then exercise the installed wheel's quickstart outside the checkout.
 
+Run `make check-wheel WHEEL=dist/<built-wheel>.whl` to verify the installer commands
+in a temporary environment outside the checkout. This checks all six entry points,
+their version output, packaged dependency defaults, and caller configuration
+without installing system tools. Installed commands read the caller project's
+configuration when present and otherwise use the configuration shipped in the wheel.
+The release workflow runs the same wheel check after building the distributions.
+
 The [release workflow](.github/workflows/release.yml) runs on main-branch pushes, pull requests targeting main, and tag pushes. A tag push triggers publication after validation; it uploads the frontend bundles and Python distributions to a GitHub release. Follow the project's existing tag naming convention. The workflow does not publish to PyPI.

@@ -1,6 +1,6 @@
 [project]
 name = "cs1302-code-visualizer"
-version = "0.18.10"
+version = "0.18.11"
 description = "Visualize Java program memory state and output a screenshot."
 authors = [
     {name = "Gabe Livengood", email = "timothy.livengood@uga.edu"},
@@ -123,7 +123,19 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["cs1302_code_visualizer"]
+packages = ["cs1302_code_visualizer", "scripts"]
+only-include = [
+    "cs1302_code_visualizer",
+    "scripts/install_deps.py",
+    "scripts/installer/__init__.py",
+    "scripts/installer/archives.py",
+    "scripts/installer/common.py",
+    "scripts/installer/enchant.py",
+    "scripts/installer/graphviz.py",
+    "scripts/installer/jdk.py",
+    "scripts/installer/plantuml.py",
+    "scripts/installer/uv.py",
+]
 exclude = [
     "cs1302_code_visualizer/frontend/node_modules",
     "cs1302_code_visualizer/frontend/tests",
