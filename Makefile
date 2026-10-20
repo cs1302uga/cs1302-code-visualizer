@@ -7,7 +7,7 @@
         build build-frontend build-py watch-frontend \
         test test-py test-frontend test-frontend-watch test-examples test-all \
         lint lint-py deptry format format-py typecheck check \
-        clean clean-py clean-frontend update-tracer all
+        clean clean-py clean-frontend update-tracer check-wheel all
 
 # --- Configuration & Commands ---
 PYTHON ?= uv run python
@@ -43,6 +43,9 @@ build-frontend: ## Compile frontend Webpack production bundles
 
 build-py: ## Build Python package distributables (sdist and wheel)
 	$(UV) build
+
+check-wheel: ## Smoke-test installer commands in an isolated installed wheel (set WHEEL=path)
+	$(PYTHON) scripts/check_wheel.py "$(WHEEL)"
 
 watch-frontend: ## Run frontend Webpack watcher in development mode
 	$(NPM) --prefix $(FRONTEND_DIR) run watch

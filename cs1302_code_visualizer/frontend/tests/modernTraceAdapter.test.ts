@@ -9,6 +9,7 @@ import {
   convertModernTraceToOpt,
   ModernTrace,
 } from "../js/modernTraceAdapter";
+import { prepareStringTrace } from "../js/stringStyle";
 
 describe("modernTraceAdapter", () => {
   describe("isModernTrace", () => {
@@ -66,6 +67,115 @@ describe("modernTraceAdapter", () => {
   });
 
   describe("convertModernTraceToOpt", () => {
+    it.each([0, "receiver"])("preserves the dedicated receiver reference %s and its alias", (id) => {
+      const modernTrace = {
+        code: "class Node { void visit() {} }",
+        steps: [{
+          line: 1,
+          callStack: [{
+            methodName: "visit",
+            line: 1,
+            this: { ref: id },
+            locals: [{ name: "other", type: "Node", value: { ref: id } }],
+          }],
+          heap: { [id]: { id, type: "Node", kind: "object", fields: [] } },
+        }],
+      };
+      const original = structuredClone(modernTrace);
+      const step = (convertModernTraceToOpt(modernTrace).trace as any[])[0];
+      const frame = step.stack_to_render[0];
+
+      expect(frame.ordered_varnames).toEqual(["this", "other"]);
+      expect(frame.encoded_locals.this).toEqual(["REF", id]);
+      expect(frame.encoded_locals.other).toEqual(["REF", id]);
+      expect(frame.locals_attrs.this).toEqual({ type: "Node", final: false });
+      expect(Object.keys(step.heap)).toEqual([String(id)]);
+      expect(modernTrace).toEqual(original);
+    });
+
+    it("keeps this once when both receiver metadata and a local are present", () => {
+      const modernTrace = { code: "", steps: [{ line: 1, callStack: [{
+        methodName: "visit", line: 1, this: { ref: 12 }, locals: [
+          { name: "this", type: "Node", value: { ref: 12 } },
+          { name: "x", type: "int", value: 0 },
+        ],
+      }] }] };
+      const frame = (convertModernTraceToOpt(modernTrace).trace as any[])[0].stack_to_render[0];
+      expect(frame.ordered_varnames).toEqual(["this", "x"]);
+      expect(frame.encoded_locals.this).toEqual(["REF", 12]);
+      expect(frame.locals_attrs.this.type).toBe("Node");
+    });
+
+    it.each([undefined, null, { ref: null }])("does not invent this for an absent receiver %s", (receiver) => {
+      const modernTrace = { code: "", steps: [{ line: 1, callStack: [{
+        methodName: "main", line: 1, this: receiver,
+        locals: [{ name: "v", type: "java.lang.Void", value: null }],
+      }] }] };
+      const frame = (convertModernTraceToOpt(modernTrace).trace as any[])[0].stack_to_render[0];
+      expect(frame.ordered_varnames).toEqual(["v"]);
+      expect(frame.encoded_locals).not.toHaveProperty("this");
+      expect(frame.encoded_locals.v).toBeNull();
+    });
+
+    const wrapperCases = [
+      ["Boolean", false, false],
+      ["Byte", 0, 0],
+      ["Short", -2, -2],
+      ["Character", "\n", ["CHAR-LITERAL", "\n"]],
+      ["Integer", 42, 42],
+      ["Long", 1234567890123, 1234567890123],
+      ["Float", 1.5, 1.5],
+      ["Double", 2.25, 2.25],
+      ["Float", "NaN", ["NUMBER-LITERAL", "NaN"]],
+      ["Float", "Infinity", ["NUMBER-LITERAL", "Infinity"]],
+      ["Float", "-Infinity", ["NUMBER-LITERAL", "-Infinity"]],
+      ["Double", "NaN", ["NUMBER-LITERAL", "NaN"]],
+      ["Double", "Infinity", ["NUMBER-LITERAL", "Infinity"]],
+      ["Double", "-Infinity", ["NUMBER-LITERAL", "-Infinity"]],
+    ] as const;
+
+    describe.each(["", "java.lang."])("boxed scalar types with prefix '%s'", (prefix) => {
+      it.each(wrapperCases)("preserves %s payload %s and all aliases", (name, value, expected) => {
+        const type = `${prefix}${name}`;
+        const modernTrace: ModernTrace = { code: "", steps: [{
+          line: 1,
+          callStack: [{ methodName: "main", line: 1, locals: [
+            { name: "box", type, value: { ref: 10 } },
+            { name: "alias", type, value: { ref: 10 } },
+          ] }],
+          statics: [{ className: "Demo", fields: [{ name: "saved", type, value: { ref: 10 } }] }],
+          heap: {
+            10: { id: 10, type, kind: "box", value },
+            11: { id: 11, type: "Object[]", kind: "array", elements: [{ ref: 10 }, { ref: 10 }] },
+            12: { id: 12, type: "Holder", kind: "object", fields: [{ name: "value", type, value: { ref: 10 } }] },
+          },
+        }] };
+        const original = structuredClone(modernTrace);
+        const converted = convertModernTraceToOpt(modernTrace);
+        const step = (converted.trace as any[])[0];
+
+        expect(step.heap[10]).toEqual(["INSTANCE", type, ["___NO_LABEL!___", expected]]);
+        expect(step.heap_attrs[10]).toEqual({ type });
+        expect(step.stack_to_render[0].encoded_locals).toEqual({ box: ["REF", 10], alias: ["REF", 10] });
+        expect(step.globals["Demo.saved"]).toEqual(["REF", 10]);
+        expect(step.heap[11]).toEqual(["LIST", ["REF", 10], ["REF", 10]]);
+        expect(step.heap[12][2]).toEqual(["value", ["REF", 10]]);
+        for (const style of ["default", "compact", "inline"] as const) {
+          const prepared = prepareStringTrace(converted, style);
+          expect(prepared.trace[0].heap[10]).toEqual(step.heap[10]);
+          expect(prepared.trace[0].stack_to_render[0].encoded_locals.alias).toEqual(["REF", 10]);
+        }
+        expect(modernTrace).toEqual(original);
+      });
+    });
+
+    it("retains the labeled value representation for legacy primitive heap objects", () => {
+      const converted = convertModernTraceToOpt({ code: "", steps: [{ line: 1, heap: {
+        10: { id: 10, type: "Integer", kind: "primitive", value: 0 },
+      } }] });
+      expect((converted.trace as any[])[0].heap[10]).toEqual(["INSTANCE", "Integer", ["value", 0]]);
+    });
+
     it("converts modern trace with stack frames, statics, and heap objects", () => {
       const modernTrace: ModernTrace = {
         code: "public class Test { static int count = 1; public static void main(String[] args) { int x = 5; } }",

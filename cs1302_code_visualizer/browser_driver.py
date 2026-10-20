@@ -774,15 +774,7 @@ def generate_step_images(
         List of raw image bytes, one for each execution step in chronological order.
     """
     trace_json = resolve_trace_payload(trace, breakpoint=breakpoint)
-    num_steps = 1
-    if (
-        isinstance(trace_json, dict)
-        and "trace" in trace_json
-        and isinstance(trace_json["trace"], list)
-    ):
-        num_steps = len(trace_json["trace"])
-
-    if num_steps <= 1 or visualizer == "json-pre":
+    if visualizer == "json-pre":
         return [
             generate_image(
                 trace,
@@ -820,6 +812,21 @@ def generate_step_images(
     ) as frontend:
         driver = frontend["driver"]
         viz = frontend["dataViz"]
+
+        # The frontend owns format conversion and removes non-rendered terminal
+        # events. Count its selected sequence rather than the raw legacy array.
+        num_steps = driver.execute_script("return window.optFrontend.curTrace.length;")
+        if num_steps <= 1:
+            return [
+                _capture_viz(
+                    driver,
+                    viz,
+                    dpi=dpi,
+                    format=format,
+                    visualizer=visualizer,
+                    session=session,
+                )
+            ]
 
         _fit_capture_viewport(driver, viz, session)
         step_bounds = []

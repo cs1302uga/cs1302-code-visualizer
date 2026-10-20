@@ -265,7 +265,9 @@ def test_image_apis_forward_options_to_browser(steps, monkeypatch):
     trace = json.loads(FIXTURE.read_text())
     trace["trace"] = trace["trace"][:steps]
     frontend = MagicMock()
-    frontend.__enter__.return_value = {"driver": MagicMock(), "dataViz": MagicMock()}
+    driver = MagicMock()
+    driver.execute_script.return_value = steps
+    frontend.__enter__.return_value = {"driver": driver, "dataViz": MagicMock()}
     factory = MagicMock(return_value=frontend)
     monkeypatch.setattr(browser_driver, "online_python_tutor_frontend", factory)
     monkeypatch.setattr(browser_driver, "_capture_viz", lambda *a, **kw: b"image")

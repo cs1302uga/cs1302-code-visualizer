@@ -29,12 +29,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
+# Ensure standalone execution can find the shared installer modules.
+_project_root = Path(__file__).resolve().parent
+while _project_root != _project_root.parent:  # pragma: no cover
+    if (_project_root / "pyproject.toml").is_file():
+        if str(_project_root) not in sys.path:
+            sys.path.insert(0, str(_project_root))
+        break
+    _project_root = _project_root.parent
+
 import requests
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from cs1302_code_visualizer.util.archives import extract_zip
+from scripts.installer.archives import extract_zip
 from scripts.installer.common import (
     OptBinDir,
     OptCacheDir,

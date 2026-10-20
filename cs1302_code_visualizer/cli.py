@@ -287,8 +287,40 @@ def _image_lines(trace_text: str, count: int) -> list[int]:
     """
     payload = browser_driver.resolve_trace_payload(trace_text)
     frames = payload.get("trace") if isinstance(payload, dict) else None
+    if isinstance(payload, dict) and (payload.get("format") == "modern" or "trace" not in payload):
+        frames = payload.get("steps")
+        if not isinstance(frames, list) and isinstance(payload.get("breakpoints"), dict):
+            breakpoints = payload["breakpoints"]
+
+            def key_order(key: str) -> tuple[int, int]:
+                # Match Object.values() in the modern adapter: array-index
+                # properties first, then other keys in their insertion order.
+                if (
+                    key.isascii()
+                    and key.isdecimal()
+                    and len(key) <= 10
+                    and (key == "0" or not key.startswith("0"))
+                    and int(key) < 2**32 - 1
+                ):
+                    return (0, int(key))
+                return (1, 0)
+
+            frames = []
+            for key in sorted(breakpoints, key=key_order):
+                value = breakpoints[key]
+                if isinstance(value, list):
+                    frames.extend(value)
+                elif isinstance(value, dict):
+                    frames.append(value)
     if not isinstance(frames, list) or not frames:
         raise ValueError("Output pattern '{line}' requires source line metadata.")
+    # ExecutionVisualizer omits a final input prompt or instruction-limit event.
+    if isinstance(frames[-1], dict) and frames[-1].get("event") in {
+        "raw_input",
+        "mouse_input",
+        "instruction_limit_reached",
+    }:
+        frames = frames[:-1]
     selected = frames[-1:] if count == 1 else frames
     if len(selected) != count or any(
         not isinstance(frame, dict) or type(frame.get("line")) is not int for frame in selected

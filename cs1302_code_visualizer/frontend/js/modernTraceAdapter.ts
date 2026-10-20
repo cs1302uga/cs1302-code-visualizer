@@ -20,6 +20,7 @@ export interface ModernFrame {
   methodName: string;
   line: number;
   isHighlighted?: boolean;
+  this?: { ref: number | string | null } | null;
   locals?: ModernLocal[];
 }
 
@@ -39,7 +40,7 @@ export interface ModernField {
 export interface ModernHeapObject {
   id: number | string;
   type?: string;
-  kind?: "object" | "array" | "string" | "primitive" | "color" | "lambda" | string;
+  kind?: "object" | "array" | "string" | "box" | "primitive" | "color" | "lambda" | string;
   fields?: ModernField[];
   elements?: unknown[];
   value?: unknown;
@@ -130,6 +131,18 @@ export function encodeValue(val: unknown, type?: string): unknown {
   return val;
 }
 
+/** Preserve the primitive type of scalar payloads represented as JSON strings. */
+function encodeBoxedValue(value: unknown, type: string): unknown {
+  if (/^(java\.lang\.)?Character$/.test(type)) {
+    return encodeValue(value, "char");
+  }
+  if (/^(java\.lang\.)?(Float|Double)$/.test(type) &&
+      (value === "NaN" || value === "Infinity" || value === "-Infinity")) {
+    return ["NUMBER-LITERAL", value];
+  }
+  return encodeValue(value);
+}
+
 /**
  * Converts a modern trace payload into an OPT trace payload.
  * @param modernTrace Modern trace payload.
@@ -179,8 +192,21 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): Record<string
         const localsAttrs: Record<string, unknown> = Object.create(null);
         const orderedVarnames: string[] = [];
 
+        const receiverId = frame.this?.ref;
+        const hasReceiver = receiverId !== null && receiverId !== undefined;
+        if (hasReceiver) {
+          orderedVarnames.push("this");
+          encodedLocals.this = encodeValue(frame.this);
+          localsAttrs.this = {
+            type: step.heap?.[receiverId]?.type ??
+              frame.locals?.find((local) => local.name === "this")?.type,
+            final: false,
+          };
+        }
+
         if (Array.isArray(frame.locals)) {
           frame.locals.forEach((loc) => {
+            if (loc.name === "this" && hasReceiver) return;
             orderedVarnames.push(loc.name);
             encodedLocals[loc.name] = encodeValue(loc.value, loc.type);
             localsAttrs[loc.name] = {
@@ -258,11 +284,11 @@ export function convertModernTraceToOpt(modernTrace: ModernTrace): Record<string
             type: heapObj.fields.map((f) => f.type),
             final: heapObj.fields.map((f) => f.final ?? false),
           };
-        } else if (kind === "primitive") {
+        } else if (kind === "box" || kind === "primitive") {
           optStep["heap"][idStr] = [
             "INSTANCE",
             objType,
-            ["value", encodeValue(heapObj.value)],
+            [kind === "box" ? "___NO_LABEL!___" : "value", encodeBoxedValue(heapObj.value, objType)],
           ];
           optStep["heap_attrs"][idStr] = { type: objType };
         } else if (kind === "color") {

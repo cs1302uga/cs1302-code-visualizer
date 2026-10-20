@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Iterator
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Annotated
 
@@ -26,123 +28,123 @@ console = Console()
 err_console = Console(stderr=True)
 
 
+def _default_config_path() -> Path:
+    """Locate packaged configuration without importing the application package."""
+    package_root = Path(__file__).resolve().parents[2]
+    packaged_config = package_root / "cs1302_code_visualizer" / "_tracer.toml"
+    if packaged_config.is_file():
+        return packaged_config
+    return package_root / "pyproject.toml"
+
+
+def _configuration_documents(root_dir: Path) -> Iterator[dict]:
+    """Read caller configuration first, then the installed or source defaults."""
+    paths = dict.fromkeys((root_dir / "pyproject.toml", _default_config_path()))
+    for path in paths:
+        try:
+            with path.open("rb") as stream:
+                yield tomllib.load(stream)
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+
+
+def _dependency_requirements(root_dir: Path) -> Iterator[Requirement]:
+    """Read the first configured dependency list, including an explicit empty one."""
+    for data in _configuration_documents(root_dir):
+        dependencies = (
+            data
+            .get("tool", {})
+            .get("cs1302book", {})
+            .get("system-dependencies", {})
+            .get("system-dependencies")
+        )
+        if dependencies is None:
+            continue
+        for requirement in dependencies:
+            try:
+                yield Requirement(requirement)
+            except InvalidRequirement:
+                continue
+        return
+
+
 def find_project_root(start_dir: Path | None = None) -> Path:
-    """Locate the project root directory containing pyproject.toml.
+    """Locate the caller's project, or the source checkout for standalone scripts.
 
     Args:
-        start_dir: Optional starting directory. Defaults to this file's directory.
+        start_dir: Optional starting directory. Defaults to the current working directory.
 
     Returns:
-        The Path to the directory containing pyproject.toml, or the current
-        working directory if not found.
+        The nearest directory containing pyproject.toml, the source checkout root
+        when available, or the current working directory for installed commands.
     """
-    current = (start_dir or Path(__file__).resolve().parent).resolve()
-    while current != current.parent:
-        if (current / "pyproject.toml").is_file():
-            return current
-        current = current.parent
+    current = (start_dir or Path.cwd()).resolve()
+    for directory in (current, *current.parents):
+        if (directory / "pyproject.toml").is_file():
+            return directory
+    default_config = _default_config_path()
+    if default_config.name == "pyproject.toml" and default_config.is_file():
+        return default_config.parent
     return Path.cwd()
 
 
 def get_project_version(root_dir: Path) -> str:
-    """Read the project version from pyproject.toml if present.
+    """Read the caller version, falling back to packaged configuration or metadata.
 
     Args:
-        root_dir: Root directory of the project.
+        root_dir: Root directory of the caller's project.
 
     Returns:
-        Version string from pyproject.toml, or '0.2.0' as fallback.
+        The configured or installed version, or 'unknown' for an unconfigured copy.
     """
-    toml_path = root_dir / "pyproject.toml"
-    if toml_path.is_file():
-        try:
-            with open(toml_path, "rb") as f:
-                data = tomllib.load(f)
-                return str(data.get("project", {}).get("version", "0.2.0"))
-        except (OSError, tomllib.TOMLDecodeError):  # pragma: no cover
-            return "0.2.0"
-    return "0.2.0"
+    for data in _configuration_documents(root_dir):
+        configured_version = data.get("project", {}).get("version")
+        if configured_version is not None:
+            return str(configured_version)
+    try:
+        return version("cs1302-code-visualizer")
+    except PackageNotFoundError:
+        return "unknown"
 
 
 def get_min_system_dependency_version(root_dir: Path, dep_name: str) -> str | None:
-    """Read minimum version for a dependency from tool.cs1302book.system-dependencies.
+    """Read a dependency minimum from caller configuration or package defaults.
 
     Args:
-        root_dir: Root directory of the project.
+        root_dir: Root directory of the caller's project.
         dep_name: Name of system dependency (e.g. 'graphviz', 'plantuml').
 
     Returns:
-        Version string, or None if not found.
+        The configured minimum version, or None when no minimum is configured.
     """
-    toml_path = root_dir / "pyproject.toml"
-    if not toml_path.is_file():
-        return None
-
-    try:
-        with open(toml_path, "rb") as f:
-            data = tomllib.load(f)
-            deps = (
-                data
-                .get("tool", {})
-                .get("cs1302book", {})
-                .get("system-dependencies", {})
-                .get("system-dependencies", [])
-            )
-            for req_str in deps:
-                try:
-                    req = Requirement(req_str)
-                    if req.name == dep_name:
-                        for spec in req.specifier:
-                            if spec.operator in (">=", "=="):
-                                return spec.version
-                except InvalidRequirement:
-                    continue
-    except (OSError, tomllib.TOMLDecodeError):  # pragma: no cover
-        return None
+    for requirement in _dependency_requirements(root_dir):
+        if requirement.name == dep_name:
+            for specifier in requirement.specifier:
+                if specifier.operator in (">=", "=="):
+                    return specifier.version
     return None
 
 
 def get_configured_dependencies(root_dir: Path) -> dict[str, str]:
-    """Read all system dependencies from tool.cs1302book.system-dependencies.
+    """Read system dependencies from caller configuration or package defaults.
 
     Args:
-        root_dir: Root directory of the project.
+        root_dir: Root directory of the caller's project.
 
     Returns:
-        Dictionary mapping dependency name to required minimum version.
+        Dependency names mapped to their minimum version, or 'latest' if unbounded.
     """
-    toml_path = root_dir / "pyproject.toml"
-    if not toml_path.is_file():
-        return {"graphviz": "15.1.0", "plantuml": "1.2026.1", "jdk": "25"}
-
-    deps_map: dict[str, str] = {}
-    try:
-        with open(toml_path, "rb") as f:
-            data = tomllib.load(f)
-            deps = (
-                data
-                .get("tool", {})
-                .get("cs1302book", {})
-                .get("system-dependencies", {})
-                .get("system-dependencies", [])
-            )
-            for req_str in deps:
-                try:
-                    req = Requirement(req_str)
-                    for spec in req.specifier:
-                        if spec.operator in (">=", "=="):
-                            deps_map[req.name] = spec.version
-                            break
-                    if req.name not in deps_map:
-                        deps_map[req.name] = "latest"
-                except InvalidRequirement:
-                    continue
-    except (OSError, tomllib.TOMLDecodeError):  # pragma: no cover
-        return {"graphviz": "15.1.0", "plantuml": "1.2026.1", "jdk": "25"}
-
-    if not deps_map:
-        deps_map = {"graphviz": "15.1.0", "plantuml": "1.2026.1", "jdk": "25"}
-    return deps_map
+    dependencies: dict[str, str] = {}
+    for requirement in _dependency_requirements(root_dir):
+        dependencies[requirement.name] = next(
+            (
+                specifier.version
+                for specifier in requirement.specifier
+                if specifier.operator in (">=", "==")
+            ),
+            "latest",
+        )
+    return dependencies
 
 
 def resolve_default_bin_dir(root: Path) -> Path:
