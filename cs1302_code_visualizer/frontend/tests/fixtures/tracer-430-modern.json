@@ -1,0 +1,299 @@
+{
+  "code": "import java.time.Duration;\nimport java.time.LocalDate;\nimport java.time.LocalDateTime;\nimport java.time.LocalTime;\nimport java.util.Collections;\nimport java.util.LinkedHashSet;\nimport java.util.Set;\n\n/** Demonstrates stored time components and live set views in tracer 4.3.0. */\npublic class Main {\n    static class Item {\n        int value = 1;\n    }\n\n    public static void main(String[] args) {\n        LocalDate date = LocalDate.of(2024, 2, 29);\n        LocalTime time = LocalTime.of(12, 30, 0, 123456789);\n        LocalDateTime meeting = LocalDateTime.of(date, time);\n        Duration elapsed = Duration.ofNanos(-1);\n        Duration original = elapsed;\n        elapsed = elapsed.plusSeconds(2);\n        Item item = new Item();\n        Set<Object> backing = new LinkedHashSet<>();\n        backing.add(item);\n        backing.add(null);\n        Set<Object> view = Collections.unmodifiableSet(backing);\n        Set<Object> second = Collections.unmodifiableSet(backing);\n        Set<Object> alias = view;\n        System.out.println(\"before\");\n        backing.add(\"last\");\n        item.value = 2;\n        System.out.println(\"after\");\n        System.out.println(original);\n        System.out.println(elapsed);\n    }\n}\n",
+  "format": "modern",
+  "stdin": "",
+  "steps": [
+    {
+      "step": 22,
+      "line": 35,
+      "file": "Main.java",
+      "event": "step_line",
+      "method": "main",
+      "callStack": [
+        {
+          "methodName": "main",
+          "line": 35,
+          "file": "Main.java",
+          "isHighlighted": true,
+          "locals": [
+            {
+              "name": "date",
+              "type": "LocalDate",
+              "value": {
+                "ref": 268
+              },
+              "final": false
+            },
+            {
+              "name": "time",
+              "type": "LocalTime",
+              "value": {
+                "ref": 274
+              },
+              "final": false
+            },
+            {
+              "name": "meeting",
+              "type": "LocalDateTime",
+              "value": {
+                "ref": 278
+              },
+              "final": false
+            },
+            {
+              "name": "elapsed",
+              "type": "Duration",
+              "value": {
+                "ref": 280
+              },
+              "final": false
+            },
+            {
+              "name": "original",
+              "type": "Duration",
+              "value": {
+                "ref": 279
+              },
+              "final": false
+            },
+            {
+              "name": "item",
+              "type": "Item",
+              "value": {
+                "ref": 282
+              },
+              "final": false
+            },
+            {
+              "name": "backing",
+              "type": "Set<Object>",
+              "value": {
+                "ref": 284
+              },
+              "final": false
+            },
+            {
+              "name": "view",
+              "type": "Set<Object>",
+              "value": {
+                "ref": 297
+              },
+              "final": false
+            },
+            {
+              "name": "second",
+              "type": "Set<Object>",
+              "value": {
+                "ref": 301
+              },
+              "final": false
+            },
+            {
+              "name": "alias",
+              "type": "Set<Object>",
+              "value": {
+                "ref": 297
+              },
+              "final": false
+            }
+          ]
+        }
+      ],
+      "statics": [],
+      "heap": {
+        "49": {
+          "id": 49,
+          "type": "String[]",
+          "kind": "array",
+          "elements": []
+        },
+        "274": {
+          "id": 274,
+          "type": "LocalTime",
+          "kind": "object",
+          "fields": [
+            {
+              "name": "hour",
+              "type": "byte",
+              "value": 12,
+              "final": true
+            },
+            {
+              "name": "minute",
+              "type": "byte",
+              "value": 30,
+              "final": true
+            },
+            {
+              "name": "second",
+              "type": "byte",
+              "value": 0,
+              "final": true
+            },
+            {
+              "name": "nano",
+              "type": "int",
+              "value": 123456789,
+              "final": true
+            }
+          ]
+        },
+        "278": {
+          "id": 278,
+          "type": "LocalDateTime",
+          "kind": "object",
+          "fields": [
+            {
+              "name": "date",
+              "type": "LocalDate",
+              "value": {
+                "ref": 268
+              },
+              "final": true
+            },
+            {
+              "name": "time",
+              "type": "LocalTime",
+              "value": {
+                "ref": 274
+              },
+              "final": true
+            }
+          ]
+        },
+        "279": {
+          "id": 279,
+          "type": "Duration",
+          "kind": "object",
+          "fields": [
+            {
+              "name": "seconds",
+              "type": "long",
+              "value": -1,
+              "final": true
+            },
+            {
+              "name": "nanos",
+              "type": "int",
+              "value": 999999999,
+              "final": true
+            }
+          ]
+        },
+        "280": {
+          "id": 280,
+          "type": "Duration",
+          "kind": "object",
+          "fields": [
+            {
+              "name": "seconds",
+              "type": "long",
+              "value": 1,
+              "final": true
+            },
+            {
+              "name": "nanos",
+              "type": "int",
+              "value": 999999999,
+              "final": true
+            }
+          ]
+        },
+        "297": {
+          "id": 297,
+          "type": "Collections$UnmodifiableSet<Object>",
+          "kind": "array",
+          "elements": [
+            {
+              "ref": 282
+            },
+            null,
+            {
+              "ref": 317
+            }
+          ]
+        },
+        "282": {
+          "id": 282,
+          "type": "Main$Item",
+          "kind": "object",
+          "fields": [
+            {
+              "name": "value",
+              "type": "int",
+              "value": 2,
+              "final": false
+            }
+          ]
+        },
+        "268": {
+          "id": 268,
+          "type": "LocalDate",
+          "kind": "object",
+          "fields": [
+            {
+              "name": "year",
+              "type": "int",
+              "value": 2024,
+              "final": true
+            },
+            {
+              "name": "month",
+              "type": "short",
+              "value": 2,
+              "final": true
+            },
+            {
+              "name": "day",
+              "type": "short",
+              "value": 29,
+              "final": true
+            }
+          ]
+        },
+        "284": {
+          "id": 284,
+          "type": "LinkedHashSet<Object>",
+          "kind": "array",
+          "elements": [
+            {
+              "ref": 282
+            },
+            null,
+            {
+              "ref": 317
+            }
+          ]
+        },
+        "301": {
+          "id": 301,
+          "type": "Collections$UnmodifiableSet<Object>",
+          "kind": "array",
+          "elements": [
+            {
+              "ref": 282
+            },
+            null,
+            {
+              "ref": 317
+            }
+          ]
+        },
+        "317": {
+          "id": 317,
+          "type": "String",
+          "kind": "string",
+          "value": "last"
+        }
+      },
+      "stdout": "before\nafter\nPT-0.000000001S\nPT1.999999999S\n",
+      "stderr": "",
+      "stdinConsumed": "",
+      "stdinOffset": 0
+    }
+  ],
+  "sources": {
+    "Main.java": "import java.time.Duration;\nimport java.time.LocalDate;\nimport java.time.LocalDateTime;\nimport java.time.LocalTime;\nimport java.util.Collections;\nimport java.util.LinkedHashSet;\nimport java.util.Set;\n\n/** Demonstrates stored time components and live set views in tracer 4.3.0. */\npublic class Main {\n    static class Item {\n        int value = 1;\n    }\n\n    public static void main(String[] args) {\n        LocalDate date = LocalDate.of(2024, 2, 29);\n        LocalTime time = LocalTime.of(12, 30, 0, 123456789);\n        LocalDateTime meeting = LocalDateTime.of(date, time);\n        Duration elapsed = Duration.ofNanos(-1);\n        Duration original = elapsed;\n        elapsed = elapsed.plusSeconds(2);\n        Item item = new Item();\n        Set<Object> backing = new LinkedHashSet<>();\n        backing.add(item);\n        backing.add(null);\n        Set<Object> view = Collections.unmodifiableSet(backing);\n        Set<Object> second = Collections.unmodifiableSet(backing);\n        Set<Object> alias = view;\n        System.out.println(\"before\");\n        backing.add(\"last\");\n        item.value = 2;\n        System.out.println(\"after\");\n        System.out.println(original);\n        System.out.println(elapsed);\n    }\n}\n"
+  },
+  "entryFile": "Main.java"
+}
