@@ -88,6 +88,14 @@ not a record of completed work or a substitute for fresh validation.
 - **Tracer source metadata:** metadata does not imply source-file navigation in
   the visualizer, and library frame paths may be absent from the submitted source
   map. Revisit when adding navigation or changing tracer versions.
+- **Tracer collection accessors:** trusted collection inspection can invoke guest
+  accessors such as `toArray()`. Tracer 4.3.0 pauses input observation during those
+  calls to prevent debugger-event deadlocks, so input consumed there can be absent
+  from the reported cursor even after later reads. The visualizer preserves that
+  cursor; it cannot reconstruct unobserved consumption. Use the tracer's `FIELDS`
+  inspection policy when raw fields are preferable to accessor calls. Revisit if
+  upstream observation changes; see the
+  [compatibility example](tracer-compatibility/README.md).
 - **Tracer compilation:** tracer 4.1 disables annotation processing; supply generated
   declarations as source. Neighboring source folders support source discovery but
   no longer supply implicit binary dependencies. Use the visualizer CLI's repeatable
