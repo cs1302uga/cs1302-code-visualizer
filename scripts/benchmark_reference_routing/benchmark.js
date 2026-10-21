@@ -4,6 +4,7 @@ async function runRoutingBenchmark({caseNames, routingPolicy = 'historical',
   onProgress} = {}, initializationMode = 'policy-switch') {
   if (!['historical','independent','shared'].includes(routingPolicy)) throw new Error(`Unknown routing policy: ${routingPolicy}`);
   if (window.routingBenchmarkActive) throw new Error('A routing benchmark is already running on this page');
+  const startedAt = new Date().toISOString();
   window.routingBenchmarkActive = true;
   let restoreInitialization = () => {};
   try {
@@ -175,6 +176,8 @@ async function runRoutingBenchmark({caseNames, routingPolicy = 'historical',
     results.push({name,objects:document.querySelectorAll('.heapObject').length,
       references:manager.connections.length,layout:summarize(layout),repaint:summarize(repaint),
       redrawWithValueLayout:summarize(stepping),boundingRectReads:reads,
+      samples:{layout,repaint,redrawWithValueLayout:stepping},
+      routeGeometry:signature(manager),
       baselineOrdering:manager.routing?.baselineOrdering??null,
       sharing:planSummary(manager)});
     progress(name,'complete');
@@ -209,7 +212,7 @@ async function runRoutingBenchmark({caseNames, routingPolicy = 'historical',
         visit(from);
         const start=performance.now();visit(to);values.push(performance.now()-start);
       }
-      transitions.push({name,latency:summarize(values),baselineOrdering:managerOf().routing?.baselineOrdering??null,
+      transitions.push({name,latency:summarize(values),samples:values,baselineOrdering:managerOf().routing?.baselineOrdering??null,
         sharing:planSummary(managerOf())});
       progress(name,'complete');
     }
@@ -226,7 +229,7 @@ async function runRoutingBenchmark({caseNames, routingPolicy = 'historical',
       connection.setPaintStyle(previous);
       styles.push(performance.now()-start);
     }
-    transitions.push({name:'persistent-color-change-and-restore',latency:summarize(styles),
+    transitions.push({name:'persistent-color-change-and-restore',latency:summarize(styles),samples:styles,
       restoredPaths:signature(managerOf())===original,baselineOrdering:managerOf().routing?.baselineOrdering??null,
       sharing:planSummary(managerOf())});
     } catch(error) {
@@ -235,7 +238,7 @@ async function runRoutingBenchmark({caseNames, routingPolicy = 'historical',
     }
   }
   progress(null,'complete',{status:'complete'});
-  return {browser:navigator.userAgent,viewport:[innerWidth,innerHeight],
+  return {startedAt,completedAt:new Date().toISOString(),browser:navigator.userAgent,viewport:[innerWidth,innerHeight],
     hardware,assetRevision,routingPolicy,initialization,
     assets:[...document.scripts].map(script=>script.src).filter(Boolean),
     method:initializationMode === 'initial-policy'

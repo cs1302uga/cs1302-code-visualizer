@@ -174,6 +174,16 @@ highlighting sibling branches. Persistent style changes can change eligibility;
 transient emphasis does not change membership. Identical states and settings
 must restore equivalent routes without navigation-history-dependent behavior.
 
+Repeated collision queries use immutable rectangle indexes as a conservative
+broad phase. Full-precision obstacle, rounded-curve, shaft, and head checks still
+decide whether a candidate is valid. Indexes for repeated candidate queries are
+built lazily so ordinary simple routes avoid that construction cost. Exact head
+clearance decisions are reused only within one search against its fixed occupied
+routes; they are not shared between visualizers or rendered states.
+Value-box sizing resets intrinsic widths in one batch, measures the text, then
+applies each table's common width and compact-string arrow dimensions. This
+preserves the sizing rule while avoiding a forced table layout for each cell.
+
 Inspect `manager.referenceSharingPlan` when investigating the controlled policy.
 It reports complete logical routes, groups, baseline validity, accepted proposals,
 `profilesTried`, and diagnostic reasons for declined proposals. A valid independent arrival is a
@@ -192,6 +202,23 @@ native and reduced size, including monochrome, and check source-to-target tracin
 alias recognition, reference-value versus object counts, and assignment versus
 object mutation. These are engineering acceptance tasks, not evidence of improved
 student learning or universal readability.
+
+Generate a portable native review package after building the frontend:
+
+```sh
+uv run python -m scripts.review_shared_references
+```
+
+Open `.scratch/reference-sharing-review/index.html` for native/50% and monochrome
+comparisons. The package contains 31 native SVG/PNG pairs, standalone SVG reopening,
+state restoration checks, and a manifest binding source, built assets, and exports
+by SHA-256. The HTML embeds its PNGs for portability; keep the adjacent SVGs and
+manifest when sharing the complete package. Captures include historical context
+as well as controlled-independent/shared comparisons. Judge optional sharing
+against the controlled baseline. The JDK 25 pull-request CI job publishes this
+package as the `reference-sharing-review` artifact for maintainer review. Record
+approval or specific objections in the issue; generating the package does not
+supply that approval.
 
 ## Validation and performance
 

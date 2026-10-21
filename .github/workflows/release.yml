@@ -94,6 +94,17 @@ jobs:
       - name: Run Java example integration tests
         if: matrix.java-version == '25'
         run: make test-examples
+      - name: Generate native reference-sharing review package
+        if: matrix.java-version == '25' && github.event_name == 'pull_request'
+        run: uv run python -m scripts.review_shared_references
+      - name: Upload native reference-sharing review package
+        if: matrix.java-version == '25' && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: reference-sharing-review
+          path: .scratch/reference-sharing-review/
+          include-hidden-files: true
+          if-no-files-found: error
       - name: Build Python Distribution
         run: uv build
       - name: Check installed wheel installer commands

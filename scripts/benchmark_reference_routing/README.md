@@ -74,6 +74,14 @@ repaint. Full redraw includes value-box layout; neither measurement represents
 cold loading or a complete execution-step transition. The reported maximum fresh
 layout is the maximum of six samples, not a population percentile.
 
+Reports retain the raw layout, repaint, redraw, and state/style samples alongside
+their summaries. Each completed case also includes a normalized logical-route
+geometry signature for comparison with another run. Compare signatures only for
+the same state, settings, and policy; a timing improvement does not authorize a
+geometry change. Preserve failed or interrupted runs separately from complete
+acceptance reports. When rebuilding during investigation, load the new assets
+with revision-specific URLs and verify their SHA-256 values in the browser.
+
 Public creation initially uses the historical default. For `independent` and
 `shared`, each fresh-layout sample therefore includes that initial layout, the
 internal policy change and its repaint, font readiness, and the final redraw.
