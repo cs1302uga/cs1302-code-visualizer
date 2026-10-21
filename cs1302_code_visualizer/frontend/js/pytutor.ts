@@ -3477,7 +3477,10 @@ class DataVisualizer {
         safeMarkup('<span class="nullObj">' + this.getRealLabel("None") + "</span>"),
       );
     } else if (typ == "number") {
-      d3DomElement.append(safeMarkup('<span class="numberObj">' + obj + "</span>"));
+      const number = document.createElement("span");
+      number.className = "numberObj";
+      number.textContent = String(obj);
+      d3DomElement.append(number);
     } else if (typ == "boolean") {
       if (obj) {
         d3DomElement.append(
@@ -3917,9 +3920,13 @@ class DataVisualizer {
 
       if (isInstance || obj.length > headerLength) {
         var lab = isInstance ? "inst" : "class";
-        d3DomElement.append(safeMarkup('<table class="' + lab + 'Tbl"></table>'));
-
-        var tbl = d3DomElement.children("table:last"); // tricky, there's more than 1 table if isPprintInstance is true
+        // This structure contains only fixed element names and internal classes.
+        // Build it directly; trace-provided labels still use text nodes or the
+        // existing sanitizer, without parsing an HTML template for every field.
+        const objectTable = document.createElement("table");
+        objectTable.className = lab + "Tbl";
+        d3DomElement.append(objectTable);
+        var tbl = $(objectTable);
 
         let attrs = myViz.curTrace[stepNum].heap_attrs?.[objID];
         let types = attrs?.type;
@@ -3939,22 +3946,17 @@ class DataVisualizer {
           renderedEntries++;
 
           let isFinal = attrs?.final?.[Number(ind) - 2] === true;
-          tbl.append(
-            safeMarkup(`<tr class="${lab}Entry${isFinal ? " isFinal" : ""}">
-               <td class="${lab}Key"></td>
-               <td class="${lab}Val"></td>
-             </tr>`),
-          );
-
-          var newRow = tbl.find("tr:last");
-          var keyTd = newRow.find("td:first");
-          var valTd = newRow.find("td:last");
+          const row = document.createElement("tr");
+          row.className = `${lab}Entry${isFinal ? " isFinal" : ""}`;
+          const keyCell = document.createElement("td"), valueCell = document.createElement("td");
+          keyCell.className = lab + "Key"; valueCell.className = lab + "Val";
+          row.append(keyCell, valueCell); tbl.append(row);
+          var keyTd = $(keyCell), valTd = $(valueCell);
 
           // the keys should always be strings, so render them directly (and without quotes):
           // (actually this isn't the case when strings are rendered on the heap)
           if (typeof kvPair[0] == "string") {
             // common case ...
-            var attrnameStr = htmlspecialchars(kvPair[0]);
             let fieldType = Array.isArray(types)
               ? types[Number(ind) - 2]
               : undefined;
@@ -3962,8 +3964,11 @@ class DataVisualizer {
               myViz.params.includeTypes && fieldType
                 ? `<div class="fieldTypeLabel">${htmlsanitize(myViz.trimTypePrefix(fieldType))}</div>`
                 : "";
-            keyTd.append(safeMarkup(typeHtml));
-            keyTd.append(safeMarkup('<span class="keyObj">' + attrnameStr + "</span>"));
+            if (typeHtml) keyTd.append(safeMarkup(typeHtml));
+            const keyLabel = document.createElement("span");
+            keyLabel.className = "keyObj";
+            keyLabel.textContent = kvPair[0];
+            keyTd.append(keyLabel);
           } else {
             // when strings are rendered as heap objects ...
             myViz.renderNestedObject(kvPair[0], stepNum, keyTd);

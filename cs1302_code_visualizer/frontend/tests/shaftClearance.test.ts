@@ -8,6 +8,23 @@ const other={left:400,top:0,right:440,bottom:40};
 const route=(segments:Segment[], destination=other,width=1):Route=>
   ({segments,head:[[400,20],[394,17],[394,23]],kind:"test",target:destination,width});
 describe("shaft separation",()=>{
+  it("retains curved, diagonal and wide-stroke contacts when distant shafts are indexed",()=>{
+    const nearby=[route([[[0,0],[0,100]]],other,3),
+      route([[[20,0],[60,0],[60,100],[100,100]]],other,5),
+      route([[[100,0],[200,100]]],other,2)];
+    const distant=Array.from({length:80},(_,i)=>route([[[1000+i*20,-400],[1000+i*20,500]]],other,1));
+    const occupied=[...nearby,...distant];
+    for(const strict of [false,true])for(const width of [1,3,9]) {
+      const combined=new ShaftClearance(occupied,target,width,"destination",strict);
+      const separate=occupied.map(r=>new ShaftClearance([r],target,width,"destination",strict));
+      const probes:Segment[]=[[[8,10],[8,90]],[[9,10],[9,90]],[[7,101],[7,140]],
+        [[20,3],[60,3],[60,103],[100,103]],[[100,3],[200,103]],
+        [[-100,50],[300,50]],[[1005,-500],[1005,600]]];
+      // Exercise both the initial linear queries and the later indexed queries.
+      for(let repeat=0;repeat<8;repeat++)for(const p of probes)
+        expect(combined.clearSegment(p)).toBe(separate.every(s=>s.clearSegment(p)));
+    }
+  });
   it("separates horizontal aliases away from the target, regardless of segment subdivision",()=>{
     const occupied=route([[[0,60],[410,60]]],other);
     const clearance=new ShaftClearance([occupied],other,1);

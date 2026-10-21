@@ -1,5 +1,6 @@
 /** Geometry-only reference routing. Coordinates are CSS pixels in the connector canvas. */
 import { ShaftClearance } from "./shaftClearance";
+import { RectangleIndex } from "./rectangleIndex";
 import { arrowHead as head, Point } from "./connectorGeometry";
 export type { Point } from "./connectorGeometry";
 export interface Rect { left: number; top: number; right: number; bottom: number }
@@ -41,6 +42,14 @@ export function circleIntersects(center: Point, radius: number, rect: Rect): boo
 
 /** Conservative subdivision: reject uncertain contacts, never miss a narrow crossing. */
 export function intersects(segment: Segment, rect: Rect, depth=0): boolean {
+  // Visibility-grid edges are axis aligned. Their hull/interior overlap is
+  // exact, including zero-length points; avoid allocating and clipping for
+  // each obstacle at every visited grid edge.
+  if(segment.length===2&&(segment[0][0]===segment[1][0]||segment[0][1]===segment[1][1])) {
+    const [a,b]=segment;
+    return Math.max(a[0],b[0])>rect.left&&Math.min(a[0],b[0])<rect.right&&
+      Math.max(a[1],b[1])>rect.top&&Math.min(a[1],b[1])<rect.bottom;
+  }
   const b = bounds(segment);
   // Include zero-width/height hulls (straight horizontal/vertical segments).
   if (b.right <= rect.left || b.left >= rect.right || b.bottom <= rect.top || b.top >= rect.bottom) return false;
@@ -73,7 +82,7 @@ export function pathData(route: Route): string {
     ` ${s.length===4 ? "C" : s.length===3 ? "Q" : "L"} `+s.slice(1).map(p=>p.join(" ")).join(" ")).join("");
 }
 const rear = (h: Point[]) => mix(h[1],h[2]);
-export function clear(route: Route, obstacles: Rect[], width: number): boolean {
+export function clear(route: Route, obstacles: Rect[], width: number, index?: RectangleIndex<Rect>): boolean {
   const hb=expand(bounds(route.head),.5);
   const hulls=route.segments.map(s=>expand(bounds(s),width/2));
   const extent={...hb};
@@ -81,12 +90,13 @@ export function clear(route: Route, obstacles: Rect[], width: number): boolean {
     extent.left=Math.min(extent.left,h.left);extent.right=Math.max(extent.right,h.right);
     extent.top=Math.min(extent.top,h.top);extent.bottom=Math.max(extent.bottom,h.bottom);
   }
-  for(const r of obstacles) {
-    if(!overlaps(extent,r))continue;
-    if(overlaps(hb,r))return false;
-    for(let i=0;i<hulls.length;i++) if(overlaps(hulls[i],r)&&intersects(route.segments[i],expand(r,width/2)))return false;
-  }
-  return true;
+  const blocked=(r:Rect)=>{
+    if(!overlaps(extent,r))return false;
+    if(overlaps(hb,r))return true;
+    for(let i=0;i<hulls.length;i++) if(overlaps(hulls[i],r)&&intersects(route.segments[i],expand(r,width/2)))return true;
+    return false;
+  };
+  return !(index ? index.some(extent,blocked) : obstacles.some(blocked));
 }
 
 /** Keep the initial departure monotone, then forbid source-box re-entry. */
@@ -124,9 +134,29 @@ export function clearsSource(route: Route, sourceBox: Rect, width: number): bool
 }
 
 /** A new head must also clear every shaft already routed, including hover width. */
-function headClearsRoutes(h: Point[], routes: Route[], width: number): boolean {
-  return routes.every(route => route.segments.every(segment =>
-    !intersects(segment, expand(bounds(h), 2 + (route.width ?? width) / 2))));
+function headClearance(routes: Route[], width: number): (head:Point[])=>boolean {
+  let index:RectangleIndex<{segment:Segment;padding:number}>|undefined;
+  // All candidates in this search use the same immutable occupied routes.
+  // Reuse the exact decision for an arrival while trying different departures.
+  const decisions=new Map<string,boolean>();
+  return h=>{
+    const key=h.map(p=>p.join(",")).join(";");
+    let clear=decisions.get(key);
+    if(clear===undefined) {
+      const box=bounds(h);
+      if(decisions.size===64) {
+        const segments=routes.flatMap(route=>route.segments.map(segment=>({segment,padding:2+(route.width??width)/2})));
+        index=new RectangleIndex(segments,entry=>expand(bounds(entry.segment),entry.padding));
+      }
+      clear=index ? !index.some(box,entry=>intersects(entry.segment,expand(box,entry.padding))) :
+        routes.every(route=>{
+          const protectedHead=expand(box,2+(route.width??width)/2);
+          return route.segments.every(segment=>!intersects(segment,protectedHead));
+        });
+      decisions.set(key,clear);
+    }
+    return clear;
+  };
 }
 
 /** Only a self-reference's initial departure may occupy the target body. */
@@ -178,12 +208,8 @@ function search(start: Point,end: Point,obstacles: Rect[],margin: number, shafts
   ports?:{starts:Point[];ends:Point[];source:Point;limit?:number}): Point[]|undefined {
   const starts=ports?.starts??[start],ends=ports?.ends??[end];
   const region=expand(bounds([...starts,...ends]),margin);
-  const estimate=(p:Point)=>{
-    let distance=Infinity;
-    for(const q of ends)distance=Math.min(distance,Math.abs(p[0]-q[0])+Math.abs(p[1]-q[1]));
-    return distance*(ports?1.25:1);
-  };
   const local=obstacles.filter(r=>overlaps(region,r));
+  const obstacleIndex=new RectangleIndex(local,r=>r);
   const xs=[region.left,region.right,...starts.map(p=>p[0]),...ends.map(p=>p[0])],
     ys=[region.top,region.bottom,...starts.map(p=>p[1]),...ends.map(p=>p[1])];
   for(const r of [...local,...shafts.channels.filter(r=>overlaps(region,r))]) { xs.push(Math.max(region.left,r.left),Math.min(region.right,r.right));
@@ -193,6 +219,17 @@ function search(start: Point,end: Point,obstacles: Rect[],margin: number, shafts
   const index=(p:Point)=>y.indexOf(p[1])*nx+x.indexOf(p[0]);
   const goals=new Set(ends.map(index));
   const point=(i:number):Point=>[x[i%nx],y[Math.floor(i/nx)]];
+  const estimates=new Map<number,number>();
+  const estimate=(i:number)=>{
+    let result=estimates.get(i);
+    if(result===undefined) {
+      const p=point(i);
+      let distance=Infinity;
+      for(const q of ends)distance=Math.min(distance,Math.abs(p[0]-q[0])+Math.abs(p[1]-q[1]));
+      result=distance*(ports?1.25:1);estimates.set(i,result);
+    }
+    return result;
+  };
   const dist=new Map<number,number>(),prev=new Map<number,number>();
   // A* ties prefer progress toward the goal, then stable state ID.
   // This avoids exploring every equal-cost cell in long, open channels.
@@ -205,9 +242,9 @@ function search(start: Point,end: Point,obstacles: Rect[],margin: number, shafts
       if(!less(heap[k],last))break;heap[i]=heap[k];i=k;}heap[i]=last;}return v;};
   for(const p of starts) {
     const state=index(p)*3,cost=ports?Math.abs(p[0]-ports.source[0])+Math.abs(p[1]-ports.source[1]):0;
-    dist.set(state,cost);push([cost+estimate(p),state,cost]);
+    dist.set(state,cost);push([cost+estimate(index(p)),state,cost]);
   }
-  const visibility=new Map<string,boolean>();
+  const visibility=new Map<number,boolean>();
   // Bound each candidate search; exhaustion tries another port or exterior route.
   let visited=0;
   while(heap.length && visited++<(ports?.limit??(ports?200000:5000))) {
@@ -216,16 +253,19 @@ function search(start: Point,end: Point,obstacles: Rect[],margin: number, shafts
     if(goals.has(i)){const result:Point[]=[];let s=state;while(true){result.push(point(Math.floor(s/3)));
       if(!prev.has(s))break;s=prev.get(s)!;}return result.reverse();}
     const col=i%nx,row=Math.floor(i/nx);
-    for(const [j,nd] of [[col>0?i-1:-1,1],[col+1<nx?i+1:-1,1],[row>0?i-nx:-1,2],[row+1<ny?i+nx:-1,2]]) {
+    for(let neighbor=0;neighbor<4;neighbor++) {
+      const nd=neighbor<2?1:2;
+      const j=neighbor===0?(col>0?i-1:-1):neighbor===1?(col+1<nx?i+1:-1):
+        neighbor===2?(row>0?i-nx:-1):(row+1<ny?i+nx:-1);
       if(j<0)continue;
-      const q=point(j),key=`${Math.min(i,j)}:${Math.max(i,j)}`;
+      const q=point(j),key=Math.min(i,j)*2+(nd===2?1:0);
       let open=visibility.get(key);
-      if(open===undefined){open=!local.some(r=>intersects([p,q],r))&&shafts.clearSegment([p,q]);visibility.set(key,open);}
+      if(open===undefined){open=!obstacleIndex.some(bounds([p,q]),r=>intersects([p,q],r))&&shafts.clearSegment([p,q]);visibility.set(key,open);}
       if(!open)continue;
       const next=j*3+nd,ncost=cost+Math.abs(p[0]-q[0])+Math.abs(p[1]-q[1])+(dir&&dir!==nd?18:0);
       if(ncost>=(dist.get(next)??Infinity))continue;
       dist.set(next,ncost);prev.set(next,state);
-      push([ncost+estimate(q),next,ncost]);
+      push([ncost+estimate(j),next,ncost]);
     }
   }
 }
@@ -233,13 +273,14 @@ function search(start: Point,end: Point,obstacles: Rect[],margin: number, shafts
 /** Frame-parent links attach to frame boundaries, not reference value boxes. */
 export function routeFrameParent(a: Attachment, text: Rect[], objects: Rect[], occupiedHeads: Rect[], occupiedRoutes: Route[] = []): Route | undefined {
   const shafts=new ShaftClearance(occupiedRoutes,a.target,a.width,a.targetKey,a.strict);
+  const headClears=headClearance(occupiedRoutes,a.width);
   const {sourceSide, targetSide, curviness} = a.parent!;
   const s = a.source, t = a.target;
   const protectedRects = [...text.map(r => expand(r, 1)), ...occupiedHeads.map(r => expand(r, 2))];
   const frames = [a.sourceBox, t];
   const unrelated = objects.filter((r, i) => i !== a.sourceOwner && i !== a.targetOwner && r.right > r.left);
   const valid = (route: Route, obstacles: Rect[]) => clear(route, obstacles, a.width) &&
-    headClearsRoutes(route.head, occupiedRoutes, a.width) && shafts.clear(route) &&
+    headClears(route.head) && shafts.clear(route) &&
     // The boundary attachment is allowed; crossing either frame's contents is not.
     frames.every(frame => !overlaps(bounds(route.head), frame) &&
       route.segments.every(segment => !intersects(segment, frame)));
@@ -247,7 +288,7 @@ export function routeFrameParent(a: Attachment, text: Rect[], objects: Rect[], o
     for (const fraction of [.5, .75, .25, .875, .125]) {
       const tip: Point = [targetSide < 0 ? t.left : t.right, t.top + (t.bottom - t.top) * fraction];
       const h = head(tip, [targetSide, 0]), end = rear(h);
-      if (!headClearsRoutes(h, occupiedRoutes, a.width)) continue;
+      if (!headClears(h)) continue;
       const original: Route = {kind: "parent", head: h, segments: [
         [s, [s[0] + sourceSide * curviness, s[1]], [end[0] + targetSide * curviness, end[1]], end],
       ]};
@@ -287,6 +328,7 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
     }));
     occupiedRoutes=occupiedRoutes.filter(r=>!aliases.includes(r));
   }
+  const headClears=headClearance(occupiedRoutes,a.width);
   const s=a.source,t=a.target,exit:Point=[Math.max(s[0],a.enclosure.right-4),s[1]];
   const protectedRects=[...text.map(r=>expand(r,1)),...occupiedHeads.map(r=>expand(r,2))];
   const unrelated=objects.filter((r,i)=>i!==a.sourceOwner&&i!==a.targetOwner&&r.right>r.left&&r.bottom>r.top);
@@ -297,16 +339,27 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
     [[box.left,box.top],[box.left,box.bottom]],[[box.right,box.top],[box.right,box.bottom]]],
     head:[],kind:"border",width:1}],a.target,a.width);
   let closeDeparture:Route|undefined;
+  const obstacleIndexes=new Map<Rect[],{calls:number;index?:RectangleIndex<Rect>}>();
+  const indexed=(obs:Rect[])=>{
+    let entry=obstacleIndexes.get(obs);
+    if(!entry){entry={calls:0};obstacleIndexes.set(obs,entry);}
+    if(++entry.calls===128)entry.index=new RectangleIndex(obs,r=>r);
+    return entry.index;
+  };
   // A shallow enclosure has room for a useful exterior departure. In tall
   // containers, a trip around the whole container obscures ordinary field links.
   let preferRoom=box.bottom-box.top<=2*(a.sourceBox.bottom-a.sourceBox.top)+16;
   // Candidate selection is stateful: retain the first safe narrow departure
   // as a fallback while continuing to look for a roomier route.
   const acceptCandidate=(r:Route,obs=protectedRects)=>{
+    // Reject text/head-obstacle hits before the more expensive rounded source
+    // departure checks. These predicates are pure; fallback selection stays
+    // below all validators and retains its original candidate order.
+    if(!clear(r,obs,a.width,indexed(obs)))return false;
     const roomy=!preferRoom||(clearsSource(r,expand(a.sourceBox,6),a.width)&&borders.clear(r));
     if(!roomy&&closeDeparture)return false;
-    if(!clear(r,obs,a.width)||!clearsSource(r,a.sourceBox,a.width)||
-      !clearsTarget(r,a)||!headClearsRoutes(r.head,occupiedRoutes,a.width)||!shafts.clear(r))return false;
+    if(!clearsSource(r,a.sourceBox,a.width)||
+      !clearsTarget(r,a)||!headClears(r.head)||!shafts.clear(r))return false;
     if(!roomy) {closeDeparture=r;return false;}
     return true;
   };
@@ -414,7 +467,7 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
     if(!a.returning&&acceptCandidate(original,obs))return original;
     for(const {tip,normal} of tips) {
       const h=head(tip,normal),e=rear(h);
-      if(occupiedHeads.some(r=>overlaps(expand(bounds(h),2),r))||!headClearsRoutes(h,occupiedRoutes,a.width))continue;
+      if(occupiedHeads.some(r=>overlaps(expand(bounds(h),2),r))||!headClears(h))continue;
       const approach:Point=[e[0]+normal[0]*12,e[1]+normal[1]*12];
       if(!clear({segments:[[approach,e]],head:h,kind:"arrival"},obs,a.width)||!shafts.clearSegment([approach,e]))continue;
       const exits=[...new Set(shafts.channels.flatMap(r=>[r.left,r.right]))]

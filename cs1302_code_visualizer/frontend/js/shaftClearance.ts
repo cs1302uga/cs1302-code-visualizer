@@ -1,5 +1,6 @@
 /** Separate parallel shafts without prohibiting crossings. */
 import {bounds, expand, type Point, type Rect, type Route, type Segment} from "./referenceRouting";
+import {RectangleIndex} from "./rectangleIndex";
 
 // Visible edge-to-edge space, in CSS pixels, in addition to both stroke extents.
 export const SHAFT_CLEARANCE = 6;
@@ -59,6 +60,8 @@ const same=(a:Rect|undefined,b:Rect)=>a&&a.left===b.left&&a.right===b.right&&a.t
 export class ShaftClearance {
   readonly channels: Rect[];
   private occupied: Line[];
+  private occupiedIndex?: RectangleIndex<Line>;
+  private queries=0;
   constructor(routes: Route[],target: Rect,private width: number,targetKey?: string,strict=false) {
     const arrival=expand(target,16);
     const outsideArrival=(line:Line):Line[]=>{
@@ -103,7 +106,13 @@ export class ShaftClearance {
   clearSegment(segment: Segment): boolean {
     if(!this.occupied.length)return true;
     const candidate:Line[]=[];flatten(segment,this.width,candidate);
-    return candidate.every(a=>this.occupied.every(b=>!conflict(a,b)));
+    // Simple routes rarely query enough segments to repay index construction.
+    // Build lazily for the repeated queries of exterior/visibility searches.
+    if(++this.queries===32&&this.occupied.length>16)this.occupiedIndex=new RectangleIndex(this.occupied,line=>
+      expand(line.rect,SHAFT_CLEARANCE+(this.width+line.width)/2+line.error));
+    const index=this.occupiedIndex;
+    return candidate.every(a=>index ? !index.some(expand(a.rect,a.error),b=>conflict(a,b)) :
+      this.occupied.every(b=>!conflict(a,b)));
   }
   clear(route: Route): boolean { return route.segments.every(s=>this.clearSegment(s)); }
 }

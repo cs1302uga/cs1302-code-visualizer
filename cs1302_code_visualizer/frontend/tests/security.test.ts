@@ -33,6 +33,19 @@ describe("untrusted trace rendering", () => {
     instance.destroy?.();
   });
 
+  it.each(["INSTANCE", "CLASS"])("keeps %s field labels literal in directly constructed rows", kind => {
+    const label='<img src=x onerror="alert(1)"><script>bad()</script>&"';
+    const header=kind==="CLASS" ? [kind,"Example",[]] : [kind,"Example"];
+    const trace={code:"",trace:[{event:"step_line",line:1,globals:{item:["REF","1"]},
+      ordered_globals:["item"],heap:{"1":[...header,[label,3],["constructor",-1.5]]},
+      stack_to_render:[],stdout:""}]};
+    const instance=create({lang:"java",trace,element:document.getElementById("viz")!});
+    expect([...document.querySelectorAll(".keyObj")].map(e=>e.textContent)).toEqual([label,"constructor"]);
+    expect([...document.querySelectorAll(".numberObj")].map(e=>e.textContent)).toEqual(["3","-1.5"]);
+    expect(document.querySelector("#viz img,#viz script,#viz [onerror]")).toBeNull();
+    instance.destroy();
+  });
+
   it("retains source text and SVG controls in the full code view", () => {
     const code = 'String s = "<tag>";';
     new ExecutionVisualizer("viz", { code, trace: [{ event: "step_line", line: 1,
