@@ -59,7 +59,7 @@ const same=(a:Rect|undefined,b:Rect)=>a&&a.left===b.left&&a.right===b.right&&a.t
 export class ShaftClearance {
   readonly channels: Rect[];
   private occupied: Line[];
-  constructor(routes: Route[],target: Rect,private width: number,targetKey?: string) {
+  constructor(routes: Route[],target: Rect,private width: number,targetKey?: string,strict=false) {
     const arrival=expand(target,16);
     const outsideArrival=(line:Line):Line[]=>{
       const delta=sub(line.b,line.a),cuts=[0,1];
@@ -77,7 +77,7 @@ export class ShaftClearance {
       });
     };
     this.occupied=routes.flatMap(r=>{
-      const alias=targetKey!==undefined&&r.targetKey!==undefined ? r.targetKey===targetKey : same(r.target,target);
+      const alias=!strict&&(targetKey!==undefined&&r.targetKey!==undefined ? r.targetKey===targetKey : same(r.target,target));
       // Keep horizontal alias runs distinct outside the attachment corridor.
       // Shared vertical aliases remain available for tightly stacked sources.
       return alias?lines(r).filter(line=>Math.abs(line.b[0]-line.a[0])>=Math.sqrt(3)*Math.abs(line.b[1]-line.a[1])).flatMap(outsideArrival):lines(r);

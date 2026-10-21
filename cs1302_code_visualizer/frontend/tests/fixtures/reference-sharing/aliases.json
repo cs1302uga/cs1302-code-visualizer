@@ -1,0 +1,191 @@
+{
+  "code": "Node a = new Node(42), b = a, c = a, equalCopy = new Node(42);\nb = equalCopy;\nb = a;",
+  "trace": [
+    {
+      "line": 1,
+      "event": "step_line",
+      "func_name": "main",
+      "stack_to_render": [
+        {
+          "func_name": "main",
+          "frame_id": 1,
+          "unique_hash": "main_1",
+          "is_parent": false,
+          "is_zombie": false,
+          "is_highlighted": true,
+          "parent_frame_id_list": [],
+          "ordered_varnames": [
+            "a",
+            "b",
+            "c",
+            "equalCopy"
+          ],
+          "encoded_locals": {
+            "a": [
+              "REF",
+              1
+            ],
+            "b": [
+              "REF",
+              1
+            ],
+            "c": [
+              "REF",
+              1
+            ],
+            "equalCopy": [
+              "REF",
+              2
+            ]
+          }
+        }
+      ],
+      "globals": {},
+      "ordered_globals": [],
+      "heap": {
+        "1": [
+          "INSTANCE",
+          "Node",
+          [
+            "value",
+            42
+          ]
+        ],
+        "2": [
+          "INSTANCE",
+          "Node",
+          [
+            "value",
+            42
+          ]
+        ]
+      },
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "line": 2,
+      "event": "step_line",
+      "func_name": "main",
+      "stack_to_render": [
+        {
+          "func_name": "main",
+          "frame_id": 1,
+          "unique_hash": "main_1",
+          "is_parent": false,
+          "is_zombie": false,
+          "is_highlighted": true,
+          "parent_frame_id_list": [],
+          "ordered_varnames": [
+            "a",
+            "b",
+            "c",
+            "equalCopy"
+          ],
+          "encoded_locals": {
+            "a": [
+              "REF",
+              1
+            ],
+            "b": [
+              "REF",
+              2
+            ],
+            "c": [
+              "REF",
+              1
+            ],
+            "equalCopy": [
+              "REF",
+              2
+            ]
+          }
+        }
+      ],
+      "globals": {},
+      "ordered_globals": [],
+      "heap": {
+        "1": [
+          "INSTANCE",
+          "Node",
+          [
+            "value",
+            42
+          ]
+        ],
+        "2": [
+          "INSTANCE",
+          "Node",
+          [
+            "value",
+            42
+          ]
+        ]
+      },
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "line": 3,
+      "event": "step_line",
+      "func_name": "main",
+      "stack_to_render": [
+        {
+          "func_name": "main",
+          "frame_id": 1,
+          "unique_hash": "main_1",
+          "is_parent": false,
+          "is_zombie": false,
+          "is_highlighted": true,
+          "parent_frame_id_list": [],
+          "ordered_varnames": [
+            "a",
+            "b",
+            "c",
+            "equalCopy"
+          ],
+          "encoded_locals": {
+            "a": [
+              "REF",
+              1
+            ],
+            "b": [
+              "REF",
+              1
+            ],
+            "c": [
+              "REF",
+              1
+            ],
+            "equalCopy": [
+              "REF",
+              2
+            ]
+          }
+        }
+      ],
+      "globals": {},
+      "ordered_globals": [],
+      "heap": {
+        "1": [
+          "INSTANCE",
+          "Node",
+          [
+            "value",
+            42
+          ]
+        ],
+        "2": [
+          "INSTANCE",
+          "Node",
+          [
+            "value",
+            42
+          ]
+        ]
+      },
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

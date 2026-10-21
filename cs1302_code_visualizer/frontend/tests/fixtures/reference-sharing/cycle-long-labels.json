@@ -1,0 +1,40 @@
+{
+  "code": "// Three Node objects form a directed cycle. Three long-named locals refer to its entry object.",
+  "trace": [
+    {
+      "line": 1,
+      "event": "step_line",
+      "func_name": "main",
+      "stack_to_render": [
+        {
+          "func_name": "main",
+          "frame_id": 1,
+          "unique_hash": "main_1",
+          "is_parent": false,
+          "is_zombie": false,
+          "is_highlighted": true,
+          "parent_frame_id_list": [],
+          "ordered_varnames": [
+            "entryPointWithALongDescriptiveName",
+            "anotherReferenceToTheEntryPoint",
+            "thirdReferenceToTheEntryPoint"
+          ],
+          "encoded_locals": {
+            "entryPointWithALongDescriptiveName": ["REF", 1],
+            "anotherReferenceToTheEntryPoint": ["REF", 1],
+            "thirdReferenceToTheEntryPoint": ["REF", 1]
+          }
+        }
+      ],
+      "globals": {},
+      "ordered_globals": [],
+      "heap": {
+        "1": ["INSTANCE", "Node", ["nextNodeInTheCycle", ["REF", 2]]],
+        "2": ["INSTANCE", "Node", ["nextNodeInTheCycle", ["REF", 3]]],
+        "3": ["INSTANCE", "Node", ["nextNodeInTheCycle", ["REF", 1]]]
+      },
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

@@ -108,6 +108,91 @@ prototypes, review PDFs, browser captures, benchmark results, and security scans
 belong in the ignored root `.scratch/` directory, as required by
 [the development-artifact policy](../../CONTRIBUTING.md#development-artifacts).
 
+## Controlled terminal-path sharing
+
+Terminal-path sharing is an internal development policy. The production default
+remains the historical routing behavior described above. There is no public
+visualizer option or CLI flag for sharing. The connector manager exposes
+`setReferenceRoutingPolicy("historical" | "independent" | "shared")` for controlled
+comparisons: `independent` establishes the controlled baseline, while `shared`
+also evaluates terminal-path proposals. Selecting a development policy is not
+evidence that its release acceptance gates have passed.
+
+Both controlled policies construct the same validated independent or explicitly
+owned baseline before optional optimization. For aligned ordinary stack
+references, an estimate compares distinct-target lane clearance with the
+available gap to visible, nonempty heap objects. If the estimate exceeds that gap, those references
+use canonical target-first ordering to establish the crowded baseline;
+frame-parent and heap-reference slots keep their order. Noncrowded diagrams
+retain source ordering. This narrow baseline coordination does not adopt the
+separately evaluated general target-first policy.
+
+If incoming references exceed estimated target arrival capacity, or that target
+already has an owned suffix, baseline construction can attach a new reference to
+a validated existing directed suffix after simple independent candidates are
+exhausted. Previously routed paths keep their geometry. The candidate must
+respect text, dots, future source departures, and declared ownership, and later
+routes must avoid its shared suffix. This establishes a baseline when no route
+for the new source has yet been accepted; it makes no optional length-improvement
+claim. Baseline groups may therefore exist under `independent` as well as
+`shared`, and optional optimization must be compared against that same baseline.
+
+A shared path is a drawing convention for several reference values that refer to
+the same object. Every source keeps its value box, dot, distinguishable initial
+branch, logical connection, and complete directed route to that object. A join
+does not create an object or another reference value. A target may have several
+groups and independent arrivals. Exact target identity and compatible persistent
+semantic styles are required; equal-looking objects and equal colors do not
+establish eligibility. Self-loops, returning references, frame-parent pointers,
+and local compact-string arrows retain their existing presentation.
+
+The conservative admission contract compares proposals against one validated
+baseline. Every member's complete route length and bend count must be
+non-increasing, a clear direct route keeps its geometry, and both unique painted
+shaft length and arrowhead count decrease. Unrelated routes and object positions
+stay fixed. New joins and the entire shared suffix exclude unrelated crossings
+and ambiguous near contacts, including maximum supported emphasis widths.
+Ordinary readable crossings remain allowed elsewhere. Rounded geometry, text,
+source dots, source exits, and target boundaries retain their clearance checks.
+Optional sharing cannot justify extra layout repair or a weaker baseline.
+
+The geometry-only planner first gives any qualifying exact shared suffix
+explicit ownership. Optional proposals use one straight monotone spine with
+ordered joins and at most one terminal bend. They are partitioned by exact target,
+persistent style, supported stroke width, and arrival side. A partition considers
+at most four target tips and a finite selection of straight or one-bend spine
+profiles, capped at 24 profiles. It does not enumerate arbitrary source subsets
+or build general branching trees. A profile can retain maximal contiguous runs
+of admissible members, so one protected direct route does not veto a useful
+farther group; the retained candidate list also stays capped at 24. The cap bounds operations; measured browser
+results are still required to establish performance.
+
+Logical connections remain individually selectable and describable. Shared base
+segments and the terminal arrowhead have one physical owner; selecting a member
+emphasizes its private branch and complete suffix without changing geometry or
+highlighting sibling branches. Persistent style changes can change eligibility;
+transient emphasis does not change membership. Identical states and settings
+must restore equivalent routes without navigation-history-dependent behavior.
+
+Inspect `manager.referenceSharingPlan` when investigating the controlled policy.
+It reports complete logical routes, groups, baseline validity, accepted proposals,
+`profilesTried`, and diagnostic reasons for declined proposals. A valid independent arrival is a
+normal result when sharing would not improve it. A baseline-validation failure
+requires investigation; historical undeclared overlap is not a compliant fallback.
+`manager.routing.baselineOrdering` reports `source` or `target` so the crowded
+baseline coordination is visible in diagnostics. Plan group count and `accepted`
+can include baseline ownership; they do not alone establish an optional gain.
+The [benchmark harness](../../scripts/benchmark_reference_routing/README.md)
+collects these diagnostics alongside independent/shared comparisons and separate
+state/style-transition measurements.
+
+Production enablement requires semantic, geometry, lifecycle, export, performance,
+and maintainer visual review of baseline/proposed pairs. Review static exports at
+native and reduced size, including monochrome, and check source-to-target tracing,
+alias recognition, reference-value versus object counts, and assignment versus
+object mutation. These are engineering acceptance tasks, not evidence of improved
+student learning or universal readability.
+
 ## Validation and performance
 
 Run the geometry regressions from the repository root:
@@ -152,3 +237,15 @@ with warm assets; it does not measure cold loading or a complete execution-step
 transition. Record browser, hardware, viewport, and sampling protocol with new
 results. These budgets are comparison targets on a controlled environment, not
 guarantees for every device. Keep measurements and review reports in `.scratch/`.
+
+The harness retains its original `benchmarkRouting` policy-switch measurement:
+public creation initially uses the historical policy, then a controlled policy
+selection and final redraw are included in the fresh-layout sample. Its separate
+`benchmarkRoutingInitialPolicy` experiment selects the internal policy before
+the first connection, using a temporary harness wrapper discovered through an
+untimed bootstrap. Both modes retain full public creation and final redraw work.
+Record the initialization method and compare shared routing with the strict
+independent baseline under that same method. An initial-policy result is an
+additional measurement; it does not replace a policy-switch failure or silently
+redefine the 300 ms gate. The harness guide details the bootstrap, assertions,
+cleanup, and limitations. Run acceptance measurements without competing tests.

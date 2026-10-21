@@ -17,6 +17,8 @@ export interface Attachment {
   returning: boolean;
   width: number;
   lane?: number;
+  /** Controlled routing requires explicit ownership for every shared interval. */
+  strict?: boolean;
   parent?: { sourceSide: -1 | 1; targetSide: -1 | 1; curviness: number };
 }
 export const expand = (r: Rect, n: number): Rect =>
@@ -230,7 +232,7 @@ function search(start: Point,end: Point,obstacles: Rect[],margin: number, shafts
 
 /** Frame-parent links attach to frame boundaries, not reference value boxes. */
 export function routeFrameParent(a: Attachment, text: Rect[], objects: Rect[], occupiedHeads: Rect[], occupiedRoutes: Route[] = []): Route | undefined {
-  const shafts=new ShaftClearance(occupiedRoutes,a.target,a.width,a.targetKey);
+  const shafts=new ShaftClearance(occupiedRoutes,a.target,a.width,a.targetKey,a.strict);
   const {sourceSide, targetSide, curviness} = a.parent!;
   const s = a.source, t = a.target;
   const protectedRects = [...text.map(r => expand(r, 1)), ...occupiedHeads.map(r => expand(r, 2))];
@@ -274,8 +276,10 @@ export function routeFrameParent(a: Attachment, text: Rect[], objects: Rect[], o
   return undefined;
 }
 
-export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupiedHeads: Rect[], occupiedRoutes: Route[] = [], shareAliasHeads=false): Route|undefined {
-  const shafts=new ShaftClearance(occupiedRoutes,a.target,a.width,a.targetKey);
+export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupiedHeads: Rect[], occupiedRoutes: Route[] = [], shareAliasHeads=false,
+  ownedFallback?:()=>Route|undefined): Route|undefined {
+  shareAliasHeads &&= !a.strict;
+  const shafts=new ShaftClearance(occupiedRoutes,a.target,a.width,a.targetKey,a.strict);
   const aliases=occupiedRoutes.filter(r=>a.targetKey!==undefined&&r.targetKey===a.targetKey);
   if(shareAliasHeads) {
     occupiedHeads=occupiedHeads.filter(h=>!aliases.some(r=>{
@@ -363,6 +367,30 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
   const h=head([legacy.left,(legacy.top+legacy.bottom)/2],[-1,0]),end=rear(h),bend=end[0]>=exit[0]?(end[0]-exit[0])/2:40;
   const original:Route={segments:[[s,exit],[exit,[exit[0]+bend,exit[1]],[end[0]-bend,end[1]],end]],head:h,kind:"original"};
   if(!a.returning&&acceptCandidate(original,strict))return original;
+  // A self-reference must leave its object in one straight monotone departure.
+  // Another arrival can seal the horizontal exit while a shallow diagonal is
+  // clear. Try a bounded exterior departure family before the orthogonal grid,
+  // which cannot discover these initial segments. Historical routing is intact.
+  if(a.strict&&a.sourceOwner>=0&&a.sourceOwner===a.targetOwner) {
+    for(const offset of [12,-12,24,-24])for(const gap of [10,12,8,16,24]) {
+      const depart:Point=[t.right+gap,s[1]+offset];
+      for(const {tip,normal} of tips) {
+        const h=head(tip,normal),e=rear(h),approach:Point=[e[0]+normal[0]*12,e[1]+normal[1]*12];
+        for(const corner of [[depart[0],approach[1]],[approach[0],depart[1]]] as Point[]) {
+          const r=polyline([s,depart,corner,approach,e],h,0);
+          if(acceptCandidate(r,strict))return r;
+        }
+      }
+    }
+  }
+  // The caller may supply an explicitly owned baseline after validating its
+  // complete partial scene. It must not be an unvalidated alias exemption.
+  // Try it before the independent exterior/grid search, whose growing port
+  // combinations otherwise make crowded arrivals disproportionately expensive.
+  if(a.strict&&ownedFallback) {
+    const owned=ownedFallback();
+    if(owned)return owned;
+  }
   const outerRight=Math.max(...objects.map(r=>r.right),...text.map(r=>r.right),...shafts.channels.map(r=>r.right))+16;
   // A clear lower exit and exterior lane often solve a border-hugging alias
   // immediately. Try every arrival before spending the dogleg search budget.
@@ -478,6 +506,6 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
   }
   // Preserve distinct alias arrivals whenever a route is available. Only
   // crowded targets that exhaust those options may share an arrival arrowhead.
-  if(!shareAliasHeads&&aliases.length)return routeReference(a,text,objects,occupiedHeads,occupiedRoutes,true);
+  if(!a.strict&&!shareAliasHeads&&aliases.length)return routeReference(a,text,objects,occupiedHeads,occupiedRoutes,true);
   return undefined;
 }

@@ -1466,6 +1466,7 @@ class DataVisualizer {
       ],
       Anchors: ["RightMiddle", "LeftMiddle"],
       PaintStyle: { lineWidth: 1, strokeStyle: connectorBaseColor },
+      SemanticStyle: "reference-active",
 
       // From: http://jsplumb.github.io/jsplumb/home.html#container
       // "It is strongly recommended that you set a Container before you begin plumbing."
@@ -3290,6 +3291,7 @@ class DataVisualizer {
         // if this connector starts in the selected stack frame ...
         if (stackFrameDiv.attr("id") == frameID) {
           // then HIGHLIGHT IT!
+          c.setSemanticStyle("reference-active");
           c.setPaintStyle({ lineWidth: 1, strokeStyle: connectorBaseColor });
           c.endpoints[0].setPaintStyle({ fillStyle: connectorBaseColor });
           //c.endpoints[1].setVisible(false, true, true); // JUST set right endpoint to be invisible
@@ -3311,6 +3313,7 @@ class DataVisualizer {
           //  it originated from the stack). for instance, in C there are
           //  heap pointers, but we doesn't use heapConnectionEndpointIDs
           //  NB: 2020-02-04 - upgraded C/C++ to use heapConnectionEndpointIDs )
+          c.setSemanticStyle("reference-inactive");
           c.setPaintStyle({
             lineWidth: 1,
             strokeStyle: connectorInactiveColor,
