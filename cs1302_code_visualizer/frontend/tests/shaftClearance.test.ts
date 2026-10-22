@@ -21,8 +21,10 @@ describe("shaft separation",()=>{
         [[20,3],[60,3],[60,103],[100,103]],[[100,3],[200,103]],
         [[-100,50],[300,50]],[[1005,-500],[1005,600]]];
       // Exercise both the initial linear queries and the later indexed queries.
-      for(let repeat=0;repeat<8;repeat++)for(const p of probes)
+      for(let repeat=0;repeat<8;repeat++)for(const p of probes) {
         expect(combined.clearSegment(p)).toBe(separate.every(s=>s.clearSegment(p)));
+        expect(combined.clearSegment([...p].reverse())).toBe(separate.every(s=>s.clearSegment(p)));
+      }
     }
   });
   it("separates horizontal aliases away from the target, regardless of segment subdivision",()=>{

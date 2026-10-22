@@ -7,6 +7,26 @@ interface Node<T> { rect: Rect; entries?: Entry<T>[]; left?: Node<T>; right?: No
 // Inclusive bounds deliberately retain boundary contacts and zero-area queries.
 const touches=(a:Rect,b:Rect)=>a.left<=b.right&&a.right>=b.left&&a.top<=b.bottom&&a.bottom>=b.top;
 
+function someNode<T>(node:Node<T>|undefined,query:Rect,test:(value:T)=>boolean):boolean {
+  if(!node||!touches(node.rect,query))return false;
+  if(node.entries) {
+    for(const entry of node.entries)if(touches(entry.rect,query)&&test(entry.value))return true;
+    return false;
+  }
+  return someNode(node.left,query,test)||someNode(node.right,query,test);
+}
+
+function interiorNode<T>(node:Node<T>|undefined,query:Rect):boolean {
+  if(!node||query.right<=node.rect.left||query.left>=node.rect.right||
+    query.bottom<=node.rect.top||query.top>=node.rect.bottom)return false;
+  if(node.entries) {
+    for(const {rect:r} of node.entries)if(query.right>r.left&&query.left<r.right&&
+      query.bottom>r.top&&query.top<r.bottom)return true;
+    return false;
+  }
+  return interiorNode(node.left,query)||interiorNode(node.right,query);
+}
+
 export class RectangleIndex<T> {
   private root?: Node<T>;
 
@@ -29,11 +49,14 @@ export class RectangleIndex<T> {
   }
 
   some(query: Rect, test: (value:T)=>boolean): boolean {
-    const visit=(node:Node<T>|undefined):boolean=>{
-      if(!node||!touches(node.rect,query))return false;
-      if(node.entries)return node.entries.some(e=>touches(e.rect,query)&&test(e.value));
-      return visit(node.left)||visit(node.right);
-    };
-    return visit(this.root);
+    return someNode(this.root,query,test);
+  }
+
+  /** Exact interior overlap for rectangles and axis-aligned segment hulls.
+   * A zero-width/height query inside a rectangle still intersects its interior;
+   * boundary-only contact does not. Diagonal/curved paths need `some` instead.
+   */
+  intersectsInterior(query:Rect):boolean {
+    return interiorNode(this.root,query);
   }
 }

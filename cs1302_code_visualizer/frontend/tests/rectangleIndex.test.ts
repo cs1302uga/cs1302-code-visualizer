@@ -30,10 +30,14 @@ describe("rectangle broad phase",()=>{
       const query={left:Math.min(a[0],b[0]),right:Math.max(a[0],b[0]),
         top:Math.min(a[1],b[1]),bottom:Math.max(a[1],b[1])};
       expect(index.some(query,r=>intersects(segment,r))).toBe(rectangles.some(r=>intersects(segment,r)));
+      if(a[0]===b[0]||a[1]===b[1]) {
+        expect(index.intersectsInterior(query)).toBe(rectangles.some(r=>intersects(segment,r)));
+      }
     }
     // A caller may treat boundary contact as occupied even when interior
     // intersection does not: broad-phase filtering must keep that choice.
     expect(index.some({left:-100,right:-100,top:-60,bottom:-60},()=>true)).toBe(true);
     expect(new RectangleIndex<Rect>([],r=>r).some(rectangles[0],()=>true)).toBe(false);
+    expect(new RectangleIndex<Rect>([],r=>r).intersectsInterior(rectangles[0])).toBe(false);
   });
 });

@@ -37,7 +37,36 @@ function compatiblePair(): SharedReferenceInput {
   return input;
 }
 
+/** Grow the same owned-baseline pattern used when simple arrivals run out. */
+function ownedScene(count=48): SharedReferenceInput {
+  const input=scene(4);
+  input.objects[0].bottom=130+count*40;
+  for(let i=4;i<count;i++) {
+    const original=input.edges[0];
+    input.edges.push({key:`source-${i}`,styleKey:original.styleKey,
+      attachment:{...original.attachment,source:[92,150+i*40],
+        sourceBox:{left:50,top:140+i*40,right:100,bottom:160+i*40},lane:i},
+      route:{segments:[],head:[],kind:"pending"}});
+    const plan=attachSharedReferenceBaseline(input,i);
+    expect(plan,`owned baseline reference ${i}`).toBeDefined();
+    input.edges.forEach((edge,j)=>{edge.route=plan!.routes[j];});
+  }
+  return input;
+}
+
 describe("explicit terminal reference sharing", () => {
+  it("bounds quadratic round-corner length under translation and reflection", () => {
+    for(const radius of [1,12,1024])for(const x of [-1,1])for(const y of [-1,1]) {
+      const start:Point=[100.25,-43.75],corner:Point=[start[0]+x*radius,start[1]];
+      const end:Point=[corner[0],corner[1]+y*radius];
+      const metrics=sharedRouteMetrics({segments:[[start,corner,end]],head:[],kind:"corner"});
+      // Integral of |B'(t)| for B(t)=(2t-t²,t²)*r on [0,1].
+      const exact=radius*(1+Math.log(1+Math.SQRT2)/Math.SQRT2);
+      expect(metrics.lowerLength).toBeLessThanOrEqual(exact);
+      expect(metrics.length).toBeGreaterThanOrEqual(exact);
+      expect(metrics.length-metrics.lowerLength).toBeLessThan(1e-7);
+    }
+  });
   it.each([3,4,12])("shares compatible cohorts among %s aliases without losing a source or adding length/bends", count => {
     const input=scene(count), snapshot=JSON.stringify(input), plan=planSharedReferences(input);
     expect(plan.baselineValid,JSON.stringify(plan.diagnostics)).toBe(true);
@@ -212,8 +241,26 @@ describe("explicit terminal reference sharing", () => {
     expect(validateSharedReferencePlan(input,plan.routes,broken)).toContain("logical path disagrees with shared paint");
   });
 
+  it("rechecks ownership and new protected paint after validating the same geometry", () => {
+    const input=ownedScene(),plan=planSharedReferences(input);
+    expect(plan.groups.length).toBeGreaterThan(0);
+    expect(plan.groups.some(group=>group.members.length>=8)).toBe(true);
+    expect(validateSharedReferencePlan(input,plan.routes,plan.groups)).toEqual([]);
+    // The exact same segments become illegal when their declared ownership is
+    // removed. A warmed geometry decision must not grant an alias exemption.
+    expect(validateSharedReferencePlan(input,plan.routes,[]).length).toBeGreaterThan(0);
+    expect(validateSharedReferencePlan(input,plan.routes,plan.groups)).toEqual([]);
+    const segment=plan.groups.find(group=>group.members.length>=8)!.physicalPieces[0].segment;
+    const p=segment[0],q=segment[segment.length-1];
+    const x=(p[0]+q[0])/2,y=(p[1]+q[1])/2;
+    const obstructed={...input,obstacles:[{left:x-1,right:x+1,top:y-1,bottom:y+1}]};
+    expect(validateSharedReferencePlan(obstructed,plan.routes,plan.groups).join(" "))
+      .toContain("text or source-dot clearance");
+  });
+
   it("rejects a short directed reversal even entirely inside the declared join neighborhood", () => {
-    const input=scene(4), plan=planSharedReferences(input), groups=structuredClone(plan.groups), group=groups[0];
+    const input=ownedScene(), plan=planSharedReferences(input), groups=structuredClone(plan.groups);
+    const group=groups.find(group=>group.members.length>=8)!;
     const at=group.segments.length-1, [start,end]=group.segments[at];
     const point=(t:number):Point=>[start[0]+t*(end[0]-start[0]),start[1]+t*(end[1]-start[1])];
     const p=point(.02),q=point(.01),replacement=[[start,p],[p,q],[q,end]];

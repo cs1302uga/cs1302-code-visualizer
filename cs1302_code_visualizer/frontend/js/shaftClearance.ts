@@ -60,7 +60,7 @@ const same=(a:Rect|undefined,b:Rect)=>a&&a.left===b.left&&a.right===b.right&&a.t
 export class ShaftClearance {
   readonly channels: Rect[];
   private occupied: Line[];
-  private occupiedIndex?: RectangleIndex<Line>;
+  private occupiedIndexes: Partial<Record<"all"|"horizontal"|"vertical",RectangleIndex<Line>>>={};
   private queries=0;
   constructor(routes: Route[],target: Rect,private width: number,targetKey?: string,strict=false) {
     const arrival=expand(target,16);
@@ -108,11 +108,25 @@ export class ShaftClearance {
     const candidate:Line[]=[];flatten(segment,this.width,candidate);
     // Simple routes rarely query enough segments to repay index construction.
     // Build lazily for the repeated queries of exterior/visibility searches.
-    if(++this.queries===32&&this.occupied.length>16)this.occupiedIndex=new RectangleIndex(this.occupied,line=>
-      expand(line.rect,SHAFT_CLEARANCE+(this.width+line.width)/2+line.error));
-    const index=this.occupiedIndex;
-    return candidate.every(a=>index ? !index.some(expand(a.rect,a.error),b=>conflict(a,b)) :
-      this.occupied.every(b=>!conflict(a,b)));
+    const indexed=++this.queries>=32&&this.occupied.length>16;
+    const result=candidate.every(a=>{
+      if(!indexed)return this.occupied.every(b=>!conflict(a,b));
+      const kind=a.a[1]===a.b[1]?"horizontal":a.a[0]===a.b[0]?"vertical":"all";
+      let index=this.occupiedIndexes[kind];
+      if(!index) {
+        // A grid edge cannot conflict with a perpendicular shaft. Keep a
+        // conservative angular band wider than the exact 30-degree predicate,
+        // so orientation filtering never grants clearance by itself.
+        const occupied=kind==="all"?this.occupied:this.occupied.filter(b=>{
+          const x=b.b[0]-b.a[0],y=b.b[1]-b.a[1];
+          return (kind==="horizontal"?x*x:y*y)>=.7*(x*x+y*y);
+        });
+        index=this.occupiedIndexes[kind]=new RectangleIndex(occupied,line=>
+          expand(line.rect,SHAFT_CLEARANCE+(this.width+line.width)/2+line.error));
+      }
+      return !index.some(expand(a.rect,a.error),b=>conflict(a,b));
+    });
+    return result;
   }
   clear(route: Route): boolean { return route.segments.every(s=>this.clearSegment(s)); }
 }

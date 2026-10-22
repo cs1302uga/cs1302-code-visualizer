@@ -260,7 +260,7 @@ function search(start: Point,end: Point,obstacles: Rect[],margin: number, shafts
       if(j<0)continue;
       const q=point(j),key=Math.min(i,j)*2+(nd===2?1:0);
       let open=visibility.get(key);
-      if(open===undefined){open=!obstacleIndex.some(bounds([p,q]),r=>intersects([p,q],r))&&shafts.clearSegment([p,q]);visibility.set(key,open);}
+      if(open===undefined){open=!obstacleIndex.intersectsInterior(bounds([p,q]))&&shafts.clearSegment([p,q]);visibility.set(key,open);}
       if(!open)continue;
       const next=j*3+nd,ncost=cost+Math.abs(p[0]-q[0])+Math.abs(p[1]-q[1])+(dir&&dir!==nd?18:0);
       if(ncost>=(dist.get(next)??Infinity))continue;
@@ -463,13 +463,10 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
   const deferred:{depart:Point;approach:Point;h:Point[];e:Point;obs:Rect[]}[]=[];
   let cheapAttempts=0;
   const cheap=(r:Route,obs:Rect[])=>++cheapAttempts<=512&&acceptCandidate(r,obs);
-  for(const obs of [strict,protectedRects]) {
-    if(!a.returning&&acceptCandidate(original,obs))return original;
-    for(const {tip,normal} of tips) {
-      const h=head(tip,normal),e=rear(h);
-      if(occupiedHeads.some(r=>overlaps(expand(bounds(h),2),r))||!headClears(h))continue;
-      const approach:Point=[e[0]+normal[0]*12,e[1]+normal[1]*12];
-      if(!clear({segments:[[approach,e]],head:h,kind:"arrival"},obs,a.width)||!shafts.clearSegment([approach,e]))continue;
+  const departureCache=new Map<Rect[],{points:Point[];clear:(boolean|undefined)[]}>();
+  function* departuresFor(obs:Rect[]):Generator<Point> {
+    let cached=departureCache.get(obs);
+    if(!cached) {
       const exits=[...new Set(shafts.channels.flatMap(r=>[r.left,r.right]))]
         .filter(x=>x>=a.sourceBox.right+12).sort((x,y)=>x-y);
       // A same-target lane may fit between the source box and a different
@@ -481,8 +478,25 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
       const departures:Point[]=[...(preferRoom?[below]:[]),
         ...right.map((x):Point=>[x,s[1]]),[s[0],a.sourceBox.bottom+12],[s[0],a.sourceBox.top-12],
         [s[0],a.sourceBox.bottom+short],[s[0],a.sourceBox.top-short]];
-      for(const depart of departures) {
-        if(obs.some(r=>intersects([s,depart],expand(r,a.width/2)))||!shafts.clearSegment([s,depart]))continue;
+      cached={points:departures,clear:[]};departureCache.set(obs,cached);
+    }
+    // Preserve lazy candidate validation: an early successful route must not
+    // pay to inspect departures that it never visits. Later arrival ports
+    // reuse only the decisions already made for this same obstacle set.
+    for(const [i,depart] of cached.points.entries()) {
+      if(cached.clear[i]===undefined)cached.clear[i]=
+        !obs.some(r=>intersects([s,depart],expand(r,a.width/2)))&&shafts.clearSegment([s,depart]);
+      if(cached.clear[i])yield depart;
+    }
+  }
+  for(const obs of [strict,protectedRects]) {
+    if(!a.returning&&acceptCandidate(original,obs))return original;
+    for(const {tip,normal} of tips) {
+      const h=head(tip,normal),e=rear(h);
+      if(occupiedHeads.some(r=>overlaps(expand(bounds(h),2),r))||!headClears(h))continue;
+      const approach:Point=[e[0]+normal[0]*12,e[1]+normal[1]*12];
+      if(!clear({segments:[[approach,e]],head:h,kind:"arrival"},obs,a.width)||!shafts.clearSegment([approach,e]))continue;
+      for(const depart of departuresFor(obs)) {
         for(const corner of [[depart[0],approach[1]],[approach[0],depart[1]]] as Point[]) {
           for(const radius of [12,0]) {
             const r=polyline([s,depart,corner,approach,e],h,radius);

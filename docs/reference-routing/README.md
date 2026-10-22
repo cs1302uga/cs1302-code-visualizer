@@ -258,12 +258,16 @@ on the measured browser/hardware are:
 | Representative fixtures: p95 full redraw | 16 ms |
 | 48 objects / 108 references: p95 full redraw | 50 ms |
 | 48 objects / 108 references: maximum fresh layout | 300 ms |
+| 48 aliases to one object (`fan-in-48`): maximum fresh layout | 300 ms |
+| 48 aliases to 12 objects (`many-groups-12x4`): maximum fresh layout | 300 ms |
 
 A full redraw includes value-box layout. Fresh layout creates a new visualizer
 with warm assets; it does not measure cold loading or a complete execution-step
 transition. Record browser, hardware, viewport, and sampling protocol with new
 results. These budgets are comparison targets on a controlled environment, not
 guarantees for every device. Keep measurements and review reports in `.scratch/`.
+Each fresh-layout gate uses the maximum of six new visualizers with warm assets.
+The same 300 ms limit applies to both added stress cases before default enablement.
 
 The harness retains its original `benchmarkRouting` policy-switch measurement:
 public creation initially uses the historical policy, then a controlled policy

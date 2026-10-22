@@ -53,6 +53,9 @@ export interface SharedReferencePlan {
 
 const EPS = 1e-7;
 const MAX_PROFILES = 24;
+// Small cohorts seldom repeat enough validation to repay serialized keys.
+const CACHE_COHORT = 8;
+const MAX_CACHED_CHECKS = 32768;
 const eq = (a: Point, b: Point) => a[0] === b[0] && a[1] === b[1];
 const sub = (a: Point, b: Point): Point => [a[0] - b[0], a[1] - b[1]];
 const dot = (a: Point, b: Point) => a[0] * b[0] + a[1] * b[1];
@@ -88,12 +91,30 @@ function segmentBounds(segment: Segment): Rect {
 }
 function separated(a: Segment, b: Segment, margin: number): boolean {
   const x = segmentBounds(a), y = segmentBounds(b);
+  return separatedRects(x,y,margin);
+}
+function separatedRects(x: Rect,y: Rect,margin: number): boolean {
   return x.right+margin < y.left || x.left-margin > y.right ||
     x.bottom+margin < y.top || x.top-margin > y.bottom;
 }
 function lengthBounds(segment: Segment, depth = 0): [number, number] {
   const cached = depth === 0 ? lengthCache.get(segment) : undefined;
   if (cached) return cached;
+  if(!depth&&segment.length===3) {
+    const u=sub(segment[1],segment[0]),v=sub(segment[2],segment[1]);
+    // An axis-aligned quadratic round corner has equal perpendicular legs.
+    // Its exact arc length is r * (1 + asinh(1) / sqrt(2)); use an outward
+    // floating-point allowance instead of recursively subdividing identical
+    // corner shapes at every proposed join.
+    const radius=Math.max(Math.abs(u[0]),Math.abs(u[1]));
+    if(radius>0&&((u[0]===0&&v[1]===0&&Math.abs(u[1])===Math.abs(v[0]))||
+      (u[1]===0&&v[0]===0&&Math.abs(u[0])===Math.abs(v[1])))) {
+      const length=radius*(1+Math.asinh(1)/Math.SQRT2);
+      const error=64*Number.EPSILON*Math.max(1,...segment.flat().map(Math.abs));
+      const result:[number,number]=[Math.max(0,length-error),length+error];
+      lengthCache.set(segment,result);return result;
+    }
+  }
   const lower = distance(segment[0], last(segment));
   const upper = segment.slice(1).reduce((sum, p, i) => sum + distance(segment[i], p), 0);
   if (upper - lower <= .00001 || depth === 16) {
@@ -217,6 +238,12 @@ function prefixTo(segments: Segment[], point: Point): Segment[] | undefined {
   return undefined;
 }
 
+interface SuffixChecks {
+  paths: Map<string,number>;
+  pairs: Map<string,{segments:Segment[];length:number;key:string}>;
+}
+const suffixChecks=new WeakMap<Rect[],SuffixChecks>();
+
 function factorSuffixes(input: SharedReferenceInput, routes: Route[]): SharedReferenceGroup[] {
   const cohorts = new Map<string, number[]>();
   input.edges.forEach((edge, i) => {
@@ -229,17 +256,33 @@ function factorSuffixes(input: SharedReferenceInput, routes: Route[]): SharedRef
     if (members.length < 2) continue;
     members.sort((a, b) => input.edges[a].key.localeCompare(input.edges[b].key));
     const paths = members.map(i => normalized(routes[i].segments));
+    let cache=members.length>=CACHE_COHORT?suffixChecks.get(input.objects):undefined;
+    if(!cache&&members.length>=CACHE_COHORT){cache={paths:new Map(),pairs:new Map()};suffixChecks.set(input.objects,cache);}
+    const identities=cache?paths.map(path=>{
+      const key=JSON.stringify(path);
+      let id=cache!.paths.get(key);
+      if(id===undefined){id=cache!.paths.size;cache!.paths.set(key,id);}
+      return id;
+    }):[];
     // Nested suffixes are still one directed chain: an upstream pair can share
     // before another member joins. Choose the longest existing pair suffix,
     // then declare each member's exact downstream interval on that chain.
-    const suffixes:Segment[][] = [];
+    let suffix:Segment[]=[],suffixLength=-Infinity,suffixKey="";
     for(let i=0;i<paths.length;i++)for(let j=i+1;j<paths.length;j++) {
-      const shared=commonSuffix([paths[i],paths[j]]);
-      if(shared.length)suffixes.push(shared);
+      const pair=`${identities[i]},${identities[j]}`;
+      let found=cache?.pairs.get(pair);
+      if(!found) {
+        const segments=commonSuffix([paths[i],paths[j]]);
+        found={segments,length:segments.reduce((n,s)=>n+lengthBounds(s)[1],0),key:JSON.stringify(segments)};
+        if(cache&&cache.pairs.size<MAX_CACHED_CHECKS)cache.pairs.set(pair,found);
+      }
+      const {segments:shared,length,key}=found;
+      if(!shared.length)continue;
+      if(length<suffixLength)continue;
+      if(length>suffixLength||key.localeCompare(suffixKey)<0) {
+        suffix=shared;suffixLength=length;suffixKey=key;
+      }
     }
-    const suffix = suffixes.sort((a,b) =>
-      b.reduce((n,s)=>n+lengthBounds(s)[1],0)-a.reduce((n,s)=>n+lengthBounds(s)[1],0) ||
-      JSON.stringify(a).localeCompare(JSON.stringify(b)))[0] ?? [];
     if (!suffix.length) continue;
     const branches = members.map((index, j) => {
       const shared=commonSuffix([paths[j],suffix]);
@@ -389,6 +432,46 @@ function edgeError(input: SharedReferenceInput, r: Route, index: number): string
   return undefined;
 }
 
+function simplePathError(full: Segment[]): string|undefined {
+  // Coordinate-monotone Beziers cannot revisit an earlier point: each
+  // control-polygon step has the same sign on each axis. Distinct segment
+  // endpoints were checked above. This proves simplicity without comparing
+  // every flattened interval of every member of a long shared suffix.
+  const directions=[0,0];
+  const monotone=full.every(segment=>segment.slice(1).every((p,i)=>p.every((v,axis)=>{
+    const sign=Math.sign(v-segment[i][axis]);
+    if(sign&&directions[axis]&&sign!==directions[axis])return false;
+    directions[axis] ||= sign;
+    return true;
+  })));
+  const lines=monotone?[]:full.flatMap(flat);
+  const boxes=lines.map(line=>bounds([line.a,line.b]));
+  for(let i=0;i<lines.length;i++)for(let j=i+1;j<lines.length;j++) {
+    if(j===i+1) {
+      const u=sub(lines[i].b,lines[i].a),v=sub(lines[j].b,lines[j].a);
+      if(Math.abs(cross(u,v))<=EPS&&dot(u,v)<0)return "member reverses along a directed interval";
+    } else if(!separatedRects(boxes[i],boxes[j],lines[i].error+lines[j].error+EPS)&&
+      lineDistance(lines[i],lines[j])<=lines[i].error+lines[j].error+EPS) {
+      return "member has a self-intersection or repeated interval";
+    }
+  }
+  return undefined;
+}
+
+const simplicityChecks=new WeakMap<Rect[],Map<string,string|null>>();
+function checkedSimplicity(input: SharedReferenceInput,full: Segment[]): string|undefined {
+  let cache=simplicityChecks.get(input.objects);
+  if(!cache){cache=new Map();simplicityChecks.set(input.objects,cache);}
+  // Factoring inserts collinear join vertices without changing an existing
+  // member's path. Normalize only the cache key, never the painted geometry.
+  const key=JSON.stringify(normalized(full));
+  const previous=cache.get(key);
+  if(previous!==undefined)return previous??undefined;
+  const result=simplePathError(full);
+  if(cache.size<MAX_CACHED_CHECKS)cache.set(key,result??null);
+  return result;
+}
+
 function groupError(input: SharedReferenceInput, routes: Route[], group: SharedReferenceGroup): string | undefined {
   if (group.members.length < 2 || new Set(group.members).size !== group.members.length ||
       group.members.some(i => !Number.isInteger(i) || !input.edges[i]) ||
@@ -417,15 +500,8 @@ function groupError(input: SharedReferenceInput, routes: Route[], group: SharedR
         !sameSegment(group.head, routes[member].head)) return "logical path disagrees with shared paint";
     const nodes=full.map(s=>String(s[0]));nodes.push(String(last(last(full))));
     if(new Set(nodes).size!==nodes.length)return "member has a directed cycle";
-    const lines=full.flatMap(flat);
-    for(let i=0;i<lines.length;i++)for(let j=i+1;j<lines.length;j++) {
-      const u=sub(lines[i].b,lines[i].a),v=sub(lines[j].b,lines[j].a);
-      if(j===i+1) {
-        if(Math.abs(cross(u,v))<=EPS&&dot(u,v)<0)return "member reverses along a directed interval";
-      } else if(lineDistance(lines[i],lines[j])<=lines[i].error+lines[j].error+EPS) {
-        return "member has a self-intersection or repeated interval";
-      }
-    }
+    const simplicity=group.members.length>=CACHE_COHORT?checkedSimplicity(input,full):simplePathError(full);
+    if(simplicity)return simplicity;
     for (let i = at; i < ownership.length; i++) ownership[i].push(member);
   }
   if (ownership.some((members, i) => members.length !== group.physicalPieces[i].members.length ||
@@ -484,6 +560,44 @@ function pairError(a: Piece, b: Piece): string | undefined {
   return undefined;
 }
 
+// Owned-baseline construction repeatedly validates an unchanged partial scene
+// as a new source joins. Reuse only the geometry-dependent pair predicate;
+// membership, identities, complete logical paths and obstacles are still checked
+// on every call. The scene's measured object array bounds the cache lifetime.
+interface PairChecks {
+  segments: WeakMap<Segment,number>;
+  identities: Map<string,number>;
+  results: Map<string,string|null>;
+}
+const pairChecks=new WeakMap<Rect[],PairChecks>();
+function segmentIdentity(cache:PairChecks,segment:Segment):number {
+  let id=cache.segments.get(segment);
+  if(id===undefined) {
+    const key=JSON.stringify(segment);
+    id=cache.identities.get(key);
+    if(id===undefined){id=cache.identities.size;cache.identities.set(key,id);}
+    cache.segments.set(segment,id);
+  }
+  return id;
+}
+function checkedPair(input: SharedReferenceInput,a: Piece,b: Piece): string|undefined {
+  const sameGroup=!!a.group&&a.group===b.group;
+  if(!sameGroup&&a.members.length===1&&b.members.length===1&&a.members[0]===b.members[0])return undefined;
+  if(separated(a.segment,b.segment,SHAFT_CLEARANCE+(a.width+b.width)/2))return undefined;
+  let cache=pairChecks.get(input.objects);
+  if(!cache) {
+    cache={segments:new WeakMap(),identities:new Map(),results:new Map()};
+    pairChecks.set(input.objects,cache);
+  }
+  const roles=(sameGroup?1:0)|(a.shared?2:0)|(b.shared?4:0);
+  const key=`${segmentIdentity(cache,a.segment)},${segmentIdentity(cache,b.segment)},${a.width},${b.width},${roles}`;
+  const previous=cache.results.get(key);
+  if(previous!==undefined)return previous??undefined;
+  const result=pairError(a,b);
+  if(cache.results.size<MAX_CACHED_CHECKS)cache.results.set(key,result??null);
+  return result;
+}
+
 /** Validates geometry and ownership, never trusting declared member labels alone. */
 export function validateSharedReferencePlan(input: SharedReferenceInput, routes: Route[], groups: SharedReferenceGroup[]): string[] {
   const errors: string[] = [];
@@ -499,8 +613,9 @@ export function validateSharedReferencePlan(input: SharedReferenceInput, routes:
     if (error) return [error];
   }
   const painted = pieces(input, routes, groups);
+  const reuse=groups.some(g=>g.members.length>=CACHE_COHORT);
   for (let i = 0; i < painted.length; i++) for (let j = i+1; j < painted.length; j++) {
-    const error = pairError(painted[i], painted[j]);
+    const error = reuse?checkedPair(input,painted[i], painted[j]):pairError(painted[i],painted[j]);
     if (error) return [error];
   }
   const grouped = new Set(groups.flatMap(g => g.members));

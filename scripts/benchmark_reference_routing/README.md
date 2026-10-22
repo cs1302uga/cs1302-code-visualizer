@@ -36,6 +36,23 @@ blocks. This makes a slow case observable without changing the router's
 deterministic operation limits. Use `caseNames` to isolate a case; the harness
 does not impose an elapsed-time cutoff on routing.
 
+Before default enablement, the maximum of six fresh warm-asset layouts must be
+at most 300 ms for **each** of `dense-48`, `fan-in-48`, and
+`many-groups-12x4`. Use the original `benchmarkRouting` policy-switch method for
+this gate. Report every case, including failures; a passing dense case or a
+separate initial-policy result cannot substitute for either stress case.
+
+Check the two complete reports in independent/shared order:
+
+```sh
+node scripts/benchmark_reference_routing/check-budgets.cjs \
+  .scratch/independent.json .scratch/shared.json
+```
+
+This command recomputes maxima and p95 values from the raw samples, checks all
+14 cases and controlled baselines, and exits nonzero for a missing or failing
+gate. It rejects the separate initial-policy protocol for this acceptance check.
+
 The default `historical` policy is the production comparison. `independent`
 requests the controlled independent baseline; `shared` also tries terminal-path
 sharing. A controlled-baseline failure is a failure to investigate, not a timing
