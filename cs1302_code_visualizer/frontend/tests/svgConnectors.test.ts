@@ -277,17 +277,46 @@ describe("reference routing on measured renderer geometry", () => {
   it("opens a target attachment when text covers every original boundary",()=>{
     document.body.innerHTML='<div id="scene"><div class="stackFrame"><span id="source" class="value-box"></span></div><div id="target" class="heapObject">label</div></div>';
     const scene=document.getElementById("scene")!,source=document.getElementById("source")!,target=document.getElementById("target")!;
-    vi.spyOn(scene,"getBoundingClientRect").mockReturnValue(new DOMRect(0,0,400,200));
-    vi.spyOn(source,"getBoundingClientRect").mockReturnValue(new DOMRect(10,10,40,19));
-    vi.spyOn(source.parentElement!,"getBoundingClientRect").mockReturnValue(new DOMRect(5,5,60,30));
-    vi.spyOn(target,"getBoundingClientRect").mockImplementation(()=>new DOMRect(180,10,Math.max(70,parseFloat(target.style.minWidth)||0),40));
-    vi.spyOn(Range.prototype,"getClientRects").mockReturnValue([new DOMRect(180,10,70,40)] as any);
+    // Canvas padding moves the rendered content. Keep the geometry stub faithful
+    // when the accepted attachment needs leading space outside the original box.
+    const offset=()=>({x:parseFloat(scene.style.paddingLeft)||0,y:parseFloat(scene.style.paddingTop)||0});
+    const computedStyle=window.getComputedStyle.bind(window);
+    vi.spyOn(window,"getComputedStyle").mockImplementation((element,pseudo)=>{
+      const style=computedStyle(element,pseudo);
+      if(element!==scene)return style;
+      // jsdom can retain a stale serialized padding shorthand after removing
+      // its longhands. This fixture has no stylesheet padding; use its actual
+      // inline longhands for both computed padding and the geometry stubs.
+      return new Proxy(style,{get:(declaration,property)=>{
+        if(["paddingLeft","paddingTop","paddingBottom","paddingRight"].includes(String(property)))
+          return scene.style[property as "paddingLeft"]||"0px";
+        return Reflect.get(declaration,property,declaration);
+      }});
+    });
+    vi.spyOn(scene,"getBoundingClientRect").mockImplementation(()=>{
+      const {x,y}=offset();return new DOMRect(0,0,400+x,200+y);
+    });
+    vi.spyOn(source,"getBoundingClientRect").mockImplementation(()=>{
+      const {x,y}=offset();return new DOMRect(10+x,10+y,40,19);
+    });
+    vi.spyOn(source.parentElement!,"getBoundingClientRect").mockImplementation(()=>{
+      const {x,y}=offset();return new DOMRect(5+x,5+y,60,30);
+    });
+    vi.spyOn(target,"getBoundingClientRect").mockImplementation(()=>{
+      const {x,y}=offset();return new DOMRect(180+x,10+y,Math.max(70,parseFloat(target.style.minWidth)||0),40);
+    });
+    vi.spyOn(Range.prototype,"getClientRects").mockImplementation(()=>{
+      const {x,y}=offset();return [new DOMRect(180+x,10+y,70,40)] as any;
+    });
     const manager=new SvgConnectorManager({Container:scene});
     const c=manager.connect({source,target});
     expect(parseFloat(target.style.minWidth)).toBeGreaterThan(70);
-    expect(pathPoints(c.pathElement.getAttribute("d")!).some(([x,y])=>x>180&&x<250&&y>10&&y<50)).toBe(false);
+    const moved=offset();
+    expect(pathPoints(c.pathElement.getAttribute("d")!).some(([x,y])=>
+      x>180+moved.x&&x<250+moved.x&&y>10+moved.y&&y<50+moved.y)).toBe(false);
     const first=c.pathElement.getAttribute("d");manager.repaintEverything();
     expect(c.pathElement.getAttribute("d")).toBe(first);
+    expect(offset()).toEqual(moved);
   });
 
   it("preserves source spacing when the dot already has the required text clearance",()=>{

@@ -135,8 +135,13 @@ describe("CodeVisualizer", () => {
       expect(container.querySelector(".ExecutionVisualizer")).not.toBeNull();
       expect(container.children.length).toBeGreaterThan(0);
 
+      const manager = (instance.visualizer as any).dataViz.jsPlumbInstance;
+      expect(manager.layoutCoordinator.diagnostics.outcome).toBe("accepted");
       instance.destroy?.();
       expect(container.innerHTML).toBe("");
+      expect(manager.layoutCoordinator.diagnostics.outcome).toBe("idle");
+      expect(manager.layoutCoordinator.acceptedPlan).toBeUndefined();
+      expect(manager.svgCanvas.parentNode).toBeNull();
     });
 
     it("renders a styled rectangle for an empty object instance", () => {

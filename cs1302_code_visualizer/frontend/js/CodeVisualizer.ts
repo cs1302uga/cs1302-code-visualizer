@@ -222,6 +222,7 @@ export function create({
     },
     destroy: () => {
       element.removeEventListener("keydown", keyHandler);
+      visualizer.dataViz.jsPlumbInstance.dispose();
       element.innerHTML = "";
     },
     element: element,

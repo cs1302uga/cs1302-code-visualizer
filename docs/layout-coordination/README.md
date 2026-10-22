@@ -54,3 +54,46 @@ closure, and an architectural extraction alone does not establish a speedup.
 Issue [#27](https://github.com/cs1302uga/cs1302-code-visualizer/issues/27) and pull
 request [#28](https://github.com/cs1302uga/cs1302-code-visualizer/pull/28) depend on
 this prerequisite work. Issue #27 is an issue, not a pull request.
+
+## Implementation boundaries
+
+The per-visualizer [layout coordinator](../../cs1302_code_visualizer/frontend/js/layoutCoordinator.ts)
+owns preparation, bounded repair, canvas allocation, rollback, and final paint.
+The [placement controller](../../cs1302_code_visualizer/frontend/js/placementModels.ts)
+selects independent stack/global and heap plans from the supplied sequence in
+canonical order. Models receive their own canonical predecessor, current state,
+settings, model versions, and measured boxes for both regions. They can propose
+region effects without obtaining DOM nodes. The legacy heap adapter retains the
+existing row heuristic and nudge/drag behavior; the legacy stack model retains
+the existing Java frame order.
+
+The [scene adapter](../../cs1302_code_visualizer/frontend/js/connectorScene.ts)
+keeps DOM bindings beside the measured routing data. The
+[router](../../cs1302_code_visualizer/frontend/js/connectorRouting.ts) consumes
+only that data and returns a complete plan or a typed constraint. Reservation
+retries do not move shapes. Geometric repairs are journaled by the coordinator
+and followed by fresh measurement. Failure clears stale paint and restores
+temporary repairs to the current state's sized, model-placed baseline; it does
+not rewind semantic navigation.
+
+The [grid search](../../cs1302_code_visualizer/frontend/js/orthogonalSearch.ts)
+preserves horizontal/vertical arrival states, Manhattan length, an 18-unit axis
+change cost, current heuristic weights, deterministic ordering, and pop caps.
+Its independent Dijkstra oracle is restricted to at most 2,048 orientation-state
+slots and the same graph objective. Endpoint stub turns, terminal stubs, heads,
+rounding, and signed directions remain outside that objective. A bounded or
+weighted production search does not establish global geometric optimality.
+
+These are internal seams. The public rendering factory gains no new placement
+or routing options. Future global strategies still need explicit identity,
+context, objective, and verification contracts described in the
+[design](design.md) and [research](research.md).
+
+## Native review
+
+Build the frontend, then follow the
+[native review instructions](../../CONTRIBUTING.md#rendering-tests-and-benchmarks)
+to capture the four frame-transition states in light and dark themes plus four
+reference fixtures. The generated gallery and manifest distinguish native PNG,
+native SVG, and separately reopened SVG raster evidence. Geometry replay and the
+same-graph oracle support the public rendering checks; neither replaces them.
