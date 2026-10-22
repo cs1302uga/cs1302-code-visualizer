@@ -74,6 +74,22 @@ The rendering benchmark checks dimensions and decoded pixels and reports time an
 
 For SVG changes, generate milestone screenshots and inspect PNG/SVG pairs using the [comparison gallery](docs/svg-gallery.md). Keep generated evidence under the ignored `.scratch/svg-gallery/` directory. Use JDK 25 for the full Java example suite; example 33 uses `java.lang.IO`. Multi-file examples use the tracer's file-input mode so companion sources are available.
 
+For coordinated stack/heap layout changes, build the frontend first and capture
+the public export fixtures with the native review tool:
+
+```sh
+make build-frontend
+uv run python -m scripts.review_layout_coordinator --out .scratch/layout-coordinator-review
+```
+
+The output includes an offline gallery, 12 native PNG/SVG pairs, separately
+reopened SVG rasters, and a manifest of source, bundle, input, and export hashes.
+Use `--compare PATH` with a previous capture to compare decoded PNG pixels,
+SVG routes and descriptions, and reopened SVG pixels independently. Source and
+bundle hashes identify the captured files; they do not establish that the bundle
+was rebuilt from those sources. Capture after a clean build and record its commit.
+The JDK 25 CI job uploads the review package as `layout-coordinator-review`.
+
 ## Development artifacts
 
 Use the ignored root `.scratch/` directory for proposals, throwaway prototypes,

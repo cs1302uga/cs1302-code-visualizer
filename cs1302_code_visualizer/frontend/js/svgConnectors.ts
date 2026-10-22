@@ -11,7 +11,7 @@ function escapeCssSelector(id: string): string {
  */
 
 import $ from "jquery";
-import { ConnectorRouting } from "./connectorRouting";
+import { LayoutCoordinator } from "./layoutCoordinator";
 
 import { SOURCE_RADIUS, arrowTriangle } from "./connectorGeometry";
 export { ARROW_LENGTH, SOURCE_INSET, SOURCE_RADIUS, arrowTriangle } from "./connectorGeometry";
@@ -196,6 +196,7 @@ export class SvgConnection {
     this.canvas = manager.svgCanvas;
     this.groupElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
     this.groupElement.setAttribute("class", "_jsPlumb_connector _svg_connector");
+    this.groupElement.style.display = "none";
 
     this.pathElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
     this.pathElement.setAttribute("fill", "none");
@@ -295,8 +296,10 @@ export class SvgConnection {
  * Manages the collection and lifecycle of SVG pointer connectors in a container.
  */
 export class SvgConnectorManager {
-  private readonly routing = new ConnectorRouting();
+  /** Internal placement/repair seam; not a CLI or public rendering-policy option. */
+  public readonly layoutCoordinator = new LayoutCoordinator();
   private batchDepth = 0;
+  private repaintPending = false;
   public container: HTMLElement;
   public readonly svgCanvas: SVGSVGElement;
   public connections: SvgConnection[] = [];
@@ -326,6 +329,9 @@ export class SvgConnectorManager {
    * @param container Target container element, selector string, or jQuery object.
    */
   public setContainer(container: HTMLElement | JQuery | string): void {
+    // Restore owned effects while the previous container and detached nodes
+    // are still available, before measuring or binding a different surface.
+    this.layoutCoordinator.reset(this.connections);
     if (typeof container === "string") {
       this.container = (document.querySelector(container) || document.body) as HTMLElement;
     } else if ("jquery" in (container as any) || Array.isArray(container)) {
@@ -369,13 +375,11 @@ export class SvgConnectorManager {
    * Resets and clears all active connections.
    */
   public reset(): void {
-    this.routing.clearRepairs();
+    this.layoutCoordinator.reset(this.connections);
     for (const conn of [...this.connections]) {
       conn.detach();
     }
     this.connections = [];
-    this.container.style.paddingBottom = "";
-    this.container.style.paddingRight = "";
   }
 
   /**
@@ -384,16 +388,32 @@ export class SvgConnectorManager {
   public beginBatch(): void { this.batchDepth++; }
 
   /** Restore intrinsic geometry before measuring shared value-box widths. */
-  public prepareLayout(): void { this.routing.clearRepairs(); }
+  public prepareLayout(): void { this.layoutCoordinator.prepareLayout(); }
 
   public endBatch(): void {
     this.batchDepth = Math.max(0, this.batchDepth - 1);
     this.repaintEverything();
   }
 
+  /** Abort materialization without routing a partially constructed semantic view. */
+  public cancelBatch(): void {
+    this.batchDepth = 0;
+    this.repaintPending = false;
+    this.layoutCoordinator.reset(this.connections);
+  }
+
   public repaintEverything(): void {
-    if (this.batchDepth) return;
-    this.routing.repaint(this.container, this.connections);
+    if (this.batchDepth) { this.repaintPending = true; return; }
+    this.repaintPending = false;
+    this.layoutCoordinator.settle(this.container, this.connections);
+  }
+
+  /** Release retained repair/model effects even when the semantic DOM is detached. */
+  public dispose(): void {
+    this.reset();
+    this.layoutCoordinator.dispose();
+    this.batchDepth = 0;
+    this.svgCanvas.remove();
   }
 
   /**
