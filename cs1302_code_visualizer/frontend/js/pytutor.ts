@@ -4456,10 +4456,13 @@ class DataVisualizer {
       this.hideFieldsSet = null; // reset
     }
 
-    // now that this.hideVarsSet and this.hideFieldsSet have been updated ...
-    this.precomputeCurTraceLayouts(); // recompute layouts to account for hidden vars/objects
-    this.renderDataStructures(this.owner.curInstr); // render current step again
-    //this.owner.updateOutput(); // alternatively, try this
+    // Initial filters are configured before the starting instruction is chosen.
+    // The first render below will plan and materialize that selected step once.
+    // Later filter changes must immediately rebuild the currently displayed step.
+    if (this.owner.hasRendered) {
+      this.precomputeCurTraceLayouts();
+      this.renderDataStructures(this.owner.curInstr);
+    }
   }
 
   // precondition: obj[0] is in {'INSTANCE', 'INSTANCE_PPRINT', 'CLASS'}

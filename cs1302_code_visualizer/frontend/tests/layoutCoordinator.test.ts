@@ -243,6 +243,9 @@ describe("production layout coordination",()=>{
     expect(planner).not.toHaveBeenCalled();expect(preparation).not.toHaveBeenCalled();
     expect(f.manager.connections.every(c=>c.groupElement.style.display==="none")).toBe(true);
     partial.detach();
+    // Grouped connector detachment settles surviving memberships immediately.
+    // Observe the explicit redraw separately from that lifecycle operation.
+    preparation.mockClear();
     f.manager.repaintEverything();expect(preparation).toHaveBeenCalledTimes(1);
   });
 

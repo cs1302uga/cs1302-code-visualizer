@@ -67,6 +67,22 @@ afterEach(() => {
 });
 
 describe("production placement strategies", () => {
+  it("configures initial filters before materializing only the selected step, then updates live filters", () => {
+    const materialized: number[] = [],original=ExecutionVisualizer.prototype.try_hook;
+    vi.spyOn(ExecutionVisualizer.prototype,"try_hook").mockImplementation(function(this:ExecutionVisualizer,name,args) {
+      if(name==="end_renderDataStructures")materialized.push(this.curInstr);
+      return original.call(this,name,args);
+    });
+    const {root,data}=render([state([frame(0)]),state([frame(1)]),state([frame(2)])],
+      {hideVars:["value"],hideFields:[],jumpToEnd:true});
+    expect(materialized).toEqual([2]);
+    expect(frameOrder(root)).toEqual(["2"]);
+    expect(root.querySelectorAll(".stackVarName")).toHaveLength(0);
+    data.selectivelyHideVarsAndFields([],[]);
+    expect(materialized).toEqual([2,2]);
+    expect(root.querySelectorAll(".stackVarName")).toHaveLength(1);
+  });
+
   it("reverses Java's supplied frame order once and retains keyed frame nodes through reordering", () => {
     const states = [state([frame(2), frame(1), frame(0)]), state([frame(0), frame(2), frame(1)])];
     const original = structuredClone(states);
