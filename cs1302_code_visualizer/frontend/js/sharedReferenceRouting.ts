@@ -410,10 +410,15 @@ function pieces(input: SharedReferenceInput, routes: Route[], groups: SharedRefe
 }
 
 function exitSide(r: Route): string {
-  const p = r.segments[0][0], q = r.segments.flat().find(q => !eq(p, q));
-  if (!q) return "none";
-  const d = sub(q, p);
-  return Math.abs(d[0]) >= Math.abs(d[1]) ? (d[0] > 0 ? "right" : "left") : (d[1] > 0 ? "bottom" : "top");
+  const p = r.segments[0][0];
+  // Only the first nonzero control step defines departure. Long owned suffixes
+  // must not be flattened again by every comparison in candidate sorting.
+  for(const segment of r.segments)for(const q of segment) {
+    if(eq(p,q))continue;
+    const dx=q[0]-p[0],dy=q[1]-p[1];
+    return Math.abs(dx)>=Math.abs(dy)?(dx>0?"right":"left"):(dy>0?"bottom":"top");
+  }
+  return "none";
 }
 
 function edgeError(input: SharedReferenceInput, r: Route, index: number): string | undefined {
@@ -879,7 +884,7 @@ export function attachSharedReferenceBaseline(input: SharedReferenceInput, newIn
   const edge=input.edges[newIndex];
   if(!edge||!eligible(edge))return undefined;
   const source=edge.attachment.source;
-  const candidates:{route:Route;key:string;length:number}[]=[];
+  const candidates:{route:Route;key:string;length:number;right:boolean}[]=[];
   for(const [index,other] of input.edges.entries()) {
     if(index===newIndex||!eligible(other)||other.styleKey!==edge.styleKey||
       other.attachment.targetKey!==edge.attachment.targetKey||other.attachment.width!==edge.attachment.width)continue;
@@ -899,10 +904,14 @@ export function attachSharedReferenceBaseline(input: SharedReferenceInput, newIn
       if(!eq(turn,join))branch.push([turn,join]);
       const suffix:Segment[]=[...(eq(join,segment[1])?[]:[[join,segment[1]]]),...other.route.segments.slice(at+1)];
       const proposed=route([...branch,...suffix],other.route.head,edge.attachment);
-      candidates.push({route:proposed,key:JSON.stringify([other.key,at]),length:sharedRouteMetrics(proposed).length});
+      // Ranking needs length, not bends. Preserve the metric's exact sum order
+      // while avoiding a scan of every suffix control edge for every proposal.
+      const candidateLength=proposed.segments.reduce((sum,s)=>sum+lengthBounds(s)[1],distance(rear(proposed.head),proposed.head[0]));
+      candidates.push({route:proposed,key:JSON.stringify([other.key,at]),length:candidateLength,
+        right:exitSide(proposed)==="right"});
     }
   }
-  candidates.sort((a,b)=>Number(exitSide(b.route)==="right")-Number(exitSide(a.route)==="right") ||
+  candidates.sort((a,b)=>Number(b.right)-Number(a.right) ||
     a.length-b.length||a.key.localeCompare(b.key));
   let profilesTried=0;
   for(const candidate of candidates.slice(0,MAX_PROFILES)) {
