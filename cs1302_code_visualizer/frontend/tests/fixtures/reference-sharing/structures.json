@@ -1,0 +1,215 @@
+{
+  "code": "// Shared nodes, rows, map entries, strings, null, a cycle, and a self-reference.",
+  "trace": [
+    {
+      "line": 1,
+      "event": "step_line",
+      "func_name": "main",
+      "stack_to_render": [
+        {
+          "func_name": "caller",
+          "frame_id": 1,
+          "unique_hash": "caller_1",
+          "is_parent": false,
+          "is_zombie": false,
+          "is_highlighted": false,
+          "parent_frame_id_list": [],
+          "ordered_varnames": [
+            "saved"
+          ],
+          "encoded_locals": {
+            "saved": [
+              "REF",
+              1
+            ]
+          }
+        },
+        {
+          "func_name": "main",
+          "frame_id": 2,
+          "unique_hash": "main_2",
+          "is_parent": false,
+          "is_zombie": false,
+          "is_highlighted": true,
+          "parent_frame_id_list": [],
+          "ordered_varnames": [
+            "root",
+            "alias",
+            "row",
+            "matrix",
+            "map",
+            "firstString",
+            "aliasString",
+            "equalString",
+            "absent"
+          ],
+          "encoded_locals": {
+            "root": [
+              "REF",
+              1
+            ],
+            "alias": [
+              "REF",
+              1
+            ],
+            "row": [
+              "REF",
+              3
+            ],
+            "matrix": [
+              "REF",
+              4
+            ],
+            "map": [
+              "REF",
+              7
+            ],
+            "firstString": [
+              "REF",
+              5
+            ],
+            "aliasString": [
+              "REF",
+              5
+            ],
+            "equalString": [
+              "REF",
+              6
+            ],
+            "absent": null
+          }
+        }
+      ],
+      "globals": {},
+      "ordered_globals": [],
+      "heap": {
+        "1": [
+          "INSTANCE",
+          "Node",
+          [
+            "next",
+            [
+              "REF",
+              2
+            ]
+          ],
+          [
+            "self",
+            [
+              "REF",
+              1
+            ]
+          ],
+          [
+            "text",
+            [
+              "REF",
+              5
+            ]
+          ]
+        ],
+        "2": [
+          "INSTANCE",
+          "Node",
+          [
+            "next",
+            [
+              "REF",
+              1
+            ]
+          ],
+          [
+            "self",
+            null
+          ],
+          [
+            "text",
+            [
+              "REF",
+              6
+            ]
+          ]
+        ],
+        "3": [
+          "LIST",
+          [
+            "REF",
+            1
+          ],
+          [
+            "REF",
+            1
+          ],
+          [
+            "REF",
+            2
+          ],
+          null
+        ],
+        "4": [
+          "LIST",
+          [
+            "REF",
+            3
+          ],
+          [
+            "REF",
+            3
+          ]
+        ],
+        "5": [
+          "INSTANCE",
+          "String",
+          [
+            "___NO_LABEL!___",
+            "same"
+          ]
+        ],
+        "6": [
+          "INSTANCE",
+          "String",
+          [
+            "___NO_LABEL!___",
+            "same"
+          ]
+        ],
+        "7": [
+          "DICT",
+          [
+            [
+              "REF",
+              1
+            ],
+            [
+              "REF",
+              2
+            ]
+          ],
+          [
+            [
+              "REF",
+              2
+            ],
+            [
+              "REF",
+              1
+            ]
+          ]
+        ]
+      },
+      "stdout": "",
+      "stderr": "",
+      "heap_attrs": {
+        "3": {
+          "type": "Node[]"
+        },
+        "4": {
+          "type": "Node[][]"
+        },
+        "7": {
+          "type": "Map<Node, Node>"
+        }
+      }
+    }
+  ]
+}

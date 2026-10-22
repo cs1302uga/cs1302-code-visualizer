@@ -3,6 +3,7 @@ import { SOURCE_INSET } from "./connectorGeometry";
 import { Attachment, Rect, bounds, expand, pathData } from "./referenceRouting";
 import type { SvgConnection } from "./svgConnectors";
 import type { ConnectorRoutePlan, MeasuredConnectorEdge, MeasuredConnectorScene } from "./connectorRouting";
+import type { SharedReferencePlan } from "./sharedReferenceRouting";
 
 const bodies=".instTbl,.classTbl,.dictTbl,.listTbl,.tupleTbl,.stackTbl,.queueTbl";
 const ownerSelector=".heapObject,.stackFrame,.zombieStackFrame";
@@ -16,6 +17,12 @@ export interface ConnectorMeasurement {
     targetBodies: Map<number, HTMLElement>;
     sourceBoxes: Map<number, HTMLElement>;
   };
+}
+
+/** SVG publication adapter. Solver input contains only the measured facts above. */
+export interface ConnectorPaintHost {
+  paintReferencePlan(ordered: SvgConnection[], plan?: SharedReferencePlan): void;
+  clearReferencePaint(): void;
 }
 
 /** Read each element rectangle once in this pass, including repair passes. No paint writes. */
@@ -56,10 +63,11 @@ export function measureConnectorScene(container: HTMLElement, connections: reado
   const localEndpoints=Array.from(root.querySelectorAll(".compact-string-arrow circle,.compact-string-arrow polygon,.compact-string-arrow path"))
     .filter(visible).map(el=>expand(rect(el),.5));
   const targetBodies=new Map<number,HTMLElement>(),sourceBoxes=new Map<number,HTMLElement>();
+  const targetIdentities=new Map<Element,number>();
   const edges:MeasuredConnectorEdge[]=[];
   connections.forEach((c,connectionIndex)=>{
     const source=c.source[0],target=c.target[0];
-    if(!source||!target)return;
+    if(!source||!target||!container.contains(source)||!container.contains(target))return;
     const box=source.closest<HTMLElement>(".value-box");
     const sb=rect(box??source),t=rect(target);
     if(!visible(source)||!visible(target)||sb.right<=sb.left||sb.bottom<=sb.top||t.right<=t.left||t.bottom<=t.top)return;
@@ -79,8 +87,28 @@ export function measureConnectorScene(container: HTMLElement, connections: reado
     }
     targetBodies.set(connectionIndex,body);
     if(box)sourceBoxes.set(connectionIndex,box);
-    edges.push({connectionIndex,sourceId:c.sourceId,targetId:c.targetId,heapOrigin,attachment:a});
+    if(!targetIdentities.has(target))targetIdentities.set(target,targetIdentities.size);
+    const styleKey=c.semanticStyle?JSON.stringify([
+      c.scope,c.semanticStyle,
+      c.paintStyle.lineWidth??1,c.paintStyle.strokeStyle,c.paintStyle.fillStyle,
+      c.hoverPaintStyle.lineWidth??1,c.hoverPaintStyle.strokeStyle,c.hoverPaintStyle.fillStyle]):null;
+    edges.push({connectionIndex,sourceId:c.sourceId,targetId:c.targetId,heapOrigin,attachment:a,
+      targetIdentity:targetIdentities.get(target)!,styleKey,sharingEligible:false});
   });
+  // Resolve element identity and naming ambiguities once at the host boundary.
+  // Search consumes numeric identities and eligibility facts, never DOM nodes.
+  const targets=new Map<string,number>(),ambiguous=new Set<string>(),sourceCounts=new Map<string,number>();
+  for(const edge of edges) {
+    if(targets.has(edge.targetId)&&targets.get(edge.targetId)!==edge.targetIdentity)ambiguous.add(edge.targetId);
+    targets.set(edge.targetId,edge.targetIdentity!);
+    sourceCounts.set(edge.sourceId,(sourceCounts.get(edge.sourceId)??0)+1);
+  }
+  for(const edge of edges) {
+    const a=edge.attachment,c=connections[edge.connectionIndex];
+    edge.sharingEligible=!!edge.sourceId&&!!edge.targetId&&sourceCounts.get(edge.sourceId)===1&&
+      !ambiguous.has(edge.targetId)&&c.target[0].id===edge.targetId&&
+      !a.parent&&!a.returning&&!(a.sourceOwner>=0&&a.sourceOwner===a.targetOwner);
+  }
   edges.sort((a,b)=>Number(a.heapOrigin)-Number(b.heapOrigin)||
     a.attachment.source[1]-b.attachment.source[1]||a.attachment.source[0]-b.attachment.source[0]||
     a.attachment.target.left-b.attachment.target.left||a.attachment.target.top-b.attachment.target.top||
@@ -91,7 +119,8 @@ export function measureConnectorScene(container: HTMLElement, connections: reado
 }
 
 /** Only the coordinator's final accepted plan is published. Invisible endpoints stay hidden. */
-export function paintConnectorPlan(measurement: ConnectorMeasurement, plan: ConnectorRoutePlan): void {
+export function paintConnectorPlan(measurement: ConnectorMeasurement, plan: ConnectorRoutePlan,
+  host?: ConnectorPaintHost): void {
   for(const c of measurement.bindings.connections)c.groupElement.style.display="none";
   for(const {connectionIndex,attachment:a,route:r} of plan.connectors) {
     const c=measurement.bindings.connections[connectionIndex];
@@ -101,14 +130,21 @@ export function paintConnectorPlan(measurement: ConnectorMeasurement, plan: Conn
     delete c.pathElement.dataset.returnLane;
     c.groupElement.style.display="";
   }
+  host?.paintReferencePlan(plan.connectors.map(c=>measurement.bindings.connections[c.connectionIndex]),plan.sharingPlan);
 }
 
 /** Failure/reset removes stale route geometry as well as hiding every group. */
-export function clearConnectorPaint(connections: readonly SvgConnection[]): void {
+export function clearConnectorPaint(connections: readonly SvgConnection[], host?: ConnectorPaintHost): void {
+  host?.clearReferencePaint();
   for(const c of connections) {
     c.groupElement.style.display="none";
     c.pathElement.setAttribute("d","");c.arrowElement.setAttribute("points","");
     c.dotElement.removeAttribute("cx");c.dotElement.removeAttribute("cy");
     delete c.pathElement.dataset.routing;delete c.pathElement.dataset.returnLane;
+    if(c.branchElement) {
+      c.branchElement.style.display="none";
+      c.branchElement.setAttribute("d","");
+    }
+    delete c.groupElement.dataset.sharedReference;
   }
 }

@@ -1,0 +1,59 @@
+{
+  "code": "// Four distinct local variables refer to one Node object.",
+  "trace": [
+    {
+      "line": 1,
+      "event": "step_line",
+      "func_name": "main",
+      "stack_to_render": [
+        {
+          "func_name": "main",
+          "frame_id": 1,
+          "unique_hash": "main_1",
+          "is_parent": false,
+          "is_zombie": false,
+          "is_highlighted": true,
+          "parent_frame_id_list": [],
+          "ordered_varnames": [
+            "alias0",
+            "alias1",
+            "alias2",
+            "alias3"
+          ],
+          "encoded_locals": {
+            "alias0": [
+              "REF",
+              1
+            ],
+            "alias1": [
+              "REF",
+              1
+            ],
+            "alias2": [
+              "REF",
+              1
+            ],
+            "alias3": [
+              "REF",
+              1
+            ]
+          }
+        }
+      ],
+      "globals": {},
+      "ordered_globals": [],
+      "heap": {
+        "1": [
+          "INSTANCE",
+          "Node",
+          [
+            "value",
+            42
+          ]
+        ]
+      },
+      "stdout": "",
+      "stderr": ""
+    }
+  ]
+}

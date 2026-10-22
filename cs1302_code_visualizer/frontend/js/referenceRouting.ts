@@ -1,6 +1,7 @@
 /** Geometry-only reference routing. Coordinates are CSS pixels in the connector canvas. */
 import { ShaftClearance } from "./shaftClearance";
 import { searchOrthogonalGrid } from "./orthogonalSearch";
+import { RectangleIndex } from "./rectangleIndex";
 import { arrowHead as head, Point } from "./connectorGeometry";
 export type { Point } from "./connectorGeometry";
 export interface Rect { left: number; top: number; right: number; bottom: number }
@@ -18,6 +19,8 @@ export interface Attachment {
   returning: boolean;
   width: number;
   lane?: number;
+  /** Controlled routing requires explicit ownership for every shared interval. */
+  strict?: boolean;
   parent?: { sourceSide: -1 | 1; targetSide: -1 | 1; curviness: number };
 }
 export const expand = (r: Rect, n: number): Rect =>
@@ -40,6 +43,14 @@ export function circleIntersects(center: Point, radius: number, rect: Rect): boo
 
 /** Conservative subdivision: reject uncertain contacts, never miss a narrow crossing. */
 export function intersects(segment: Segment, rect: Rect, depth=0): boolean {
+  // Visibility-grid edges are axis aligned. Their hull/interior overlap is
+  // exact, including zero-length points; avoid allocating and clipping for
+  // each obstacle at every visited grid edge.
+  if(segment.length===2&&(segment[0][0]===segment[1][0]||segment[0][1]===segment[1][1])) {
+    const [a,b]=segment;
+    return Math.max(a[0],b[0])>rect.left&&Math.min(a[0],b[0])<rect.right&&
+      Math.max(a[1],b[1])>rect.top&&Math.min(a[1],b[1])<rect.bottom;
+  }
   const b = bounds(segment);
   // Include zero-width/height hulls (straight horizontal/vertical segments).
   if (b.right <= rect.left || b.left >= rect.right || b.bottom <= rect.top || b.top >= rect.bottom) return false;
@@ -72,7 +83,7 @@ export function pathData(route: Route): string {
     ` ${s.length===4 ? "C" : s.length===3 ? "Q" : "L"} `+s.slice(1).map(p=>p.join(" ")).join(" ")).join("");
 }
 const rear = (h: Point[]) => mix(h[1],h[2]);
-export function clear(route: Route, obstacles: Rect[], width: number): boolean {
+export function clear(route: Route, obstacles: Rect[], width: number, index?: RectangleIndex<Rect>): boolean {
   const hb=expand(bounds(route.head),.5);
   const hulls=route.segments.map(s=>expand(bounds(s),width/2));
   const extent={...hb};
@@ -80,12 +91,13 @@ export function clear(route: Route, obstacles: Rect[], width: number): boolean {
     extent.left=Math.min(extent.left,h.left);extent.right=Math.max(extent.right,h.right);
     extent.top=Math.min(extent.top,h.top);extent.bottom=Math.max(extent.bottom,h.bottom);
   }
-  for(const r of obstacles) {
-    if(!overlaps(extent,r))continue;
-    if(overlaps(hb,r))return false;
-    for(let i=0;i<hulls.length;i++) if(overlaps(hulls[i],r)&&intersects(route.segments[i],expand(r,width/2)))return false;
-  }
-  return true;
+  const blocked=(r:Rect)=>{
+    if(!overlaps(extent,r))return false;
+    if(overlaps(hb,r))return true;
+    for(let i=0;i<hulls.length;i++) if(overlaps(hulls[i],r)&&intersects(route.segments[i],expand(r,width/2)))return true;
+    return false;
+  };
+  return !(index ? index.some(extent,blocked) : obstacles.some(blocked));
 }
 
 /** Keep the initial departure monotone, then forbid source-box re-entry. */
@@ -123,9 +135,29 @@ export function clearsSource(route: Route, sourceBox: Rect, width: number): bool
 }
 
 /** A new head must also clear every shaft already routed, including hover width. */
-function headClearsRoutes(h: Point[], routes: Route[], width: number): boolean {
-  return routes.every(route => route.segments.every(segment =>
-    !intersects(segment, expand(bounds(h), 2 + (route.width ?? width) / 2))));
+function headClearance(routes: Route[], width: number): (head:Point[])=>boolean {
+  let index:RectangleIndex<{segment:Segment;padding:number}>|undefined;
+  // All candidates in this search use the same immutable occupied routes.
+  // Reuse the exact decision for an arrival while trying different departures.
+  const decisions=new Map<string,boolean>();
+  return h=>{
+    const key=h.map(p=>p.join(",")).join(";");
+    let clear=decisions.get(key);
+    if(clear===undefined) {
+      const box=bounds(h);
+      if(decisions.size===64) {
+        const segments=routes.flatMap(route=>route.segments.map(segment=>({segment,padding:2+(route.width??width)/2})));
+        index=new RectangleIndex(segments,entry=>expand(bounds(entry.segment),entry.padding));
+      }
+      clear=index ? !index.some(box,entry=>intersects(entry.segment,expand(box,entry.padding))) :
+        routes.every(route=>{
+          const protectedHead=expand(box,2+(route.width??width)/2);
+          return route.segments.every(segment=>!intersects(segment,protectedHead));
+        });
+      decisions.set(key,clear);
+    }
+    return clear;
+  };
 }
 
 /** Only a self-reference's initial departure may occupy the target body. */
@@ -178,6 +210,7 @@ function search(start: Point,end: Point,obstacles: Rect[],margin: number, shafts
   const starts=ports?.starts??[start],ends=ports?.ends??[end];
   const region=expand(bounds([...starts,...ends]),margin);
   const local=obstacles.filter(r=>overlaps(region,r));
+  const obstacleIndex=new RectangleIndex(local,r=>r);
   const xs=[region.left,region.right,...starts.map(p=>p[0]),...ends.map(p=>p[0])],
     ys=[region.top,region.bottom,...starts.map(p=>p[1]),...ends.map(p=>p[1])];
   for(const r of [...local,...shafts.channels.filter(r=>overlaps(region,r))]) { xs.push(Math.max(region.left,r.left),Math.min(region.right,r.right));
@@ -188,21 +221,22 @@ function search(start: Point,end: Point,obstacles: Rect[],margin: number, shafts
     x,y,ends,
     sources:starts.map(point=>({point,initialCost:ports
       ?Math.abs(point[0]-ports.source[0])+Math.abs(point[1]-ports.source[1]):0})),
-    segmentVisible:(p,q)=>!local.some(r=>intersects([p,q],r))&&shafts.clearSegment([p,q]),
+    segmentVisible:(p,q)=>!obstacleIndex.intersectsInterior(bounds([p,q]))&&shafts.clearSegment([p,q]),
   },{heuristicWeight:ports?1.25:1,maxPops:ports?.limit??(ports?200000:5000)});
   return result.status==="found"?result.points:undefined;
 }
 
 /** Frame-parent links attach to frame boundaries, not reference value boxes. */
 export function routeFrameParent(a: Attachment, text: Rect[], objects: Rect[], occupiedHeads: Rect[], occupiedRoutes: Route[] = []): Route | undefined {
-  const shafts=new ShaftClearance(occupiedRoutes,a.target,a.width,a.targetKey);
+  const shafts=new ShaftClearance(occupiedRoutes,a.target,a.width,a.targetKey,a.strict);
+  const headClears=headClearance(occupiedRoutes,a.width);
   const {sourceSide, targetSide, curviness} = a.parent!;
   const s = a.source, t = a.target;
   const protectedRects = [...text.map(r => expand(r, 1)), ...occupiedHeads.map(r => expand(r, 2))];
   const frames = [a.sourceBox, t];
   const unrelated = objects.filter((r, i) => i !== a.sourceOwner && i !== a.targetOwner && r.right > r.left);
   const valid = (route: Route, obstacles: Rect[]) => clear(route, obstacles, a.width) &&
-    headClearsRoutes(route.head, occupiedRoutes, a.width) && shafts.clear(route) &&
+    headClears(route.head) && shafts.clear(route) &&
     // The boundary attachment is allowed; crossing either frame's contents is not.
     frames.every(frame => !overlaps(bounds(route.head), frame) &&
       route.segments.every(segment => !intersects(segment, frame)));
@@ -210,7 +244,7 @@ export function routeFrameParent(a: Attachment, text: Rect[], objects: Rect[], o
     for (const fraction of [.5, .75, .25, .875, .125]) {
       const tip: Point = [targetSide < 0 ? t.left : t.right, t.top + (t.bottom - t.top) * fraction];
       const h = head(tip, [targetSide, 0]), end = rear(h);
-      if (!headClearsRoutes(h, occupiedRoutes, a.width)) continue;
+      if (!headClears(h)) continue;
       const original: Route = {kind: "parent", head: h, segments: [
         [s, [s[0] + sourceSide * curviness, s[1]], [end[0] + targetSide * curviness, end[1]], end],
       ]};
@@ -239,8 +273,10 @@ export function routeFrameParent(a: Attachment, text: Rect[], objects: Rect[], o
   return undefined;
 }
 
-export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupiedHeads: Rect[], occupiedRoutes: Route[] = [], shareAliasHeads=false): Route|undefined {
-  const shafts=new ShaftClearance(occupiedRoutes,a.target,a.width,a.targetKey);
+export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupiedHeads: Rect[], occupiedRoutes: Route[] = [], shareAliasHeads=false,
+  ownedFallback?:()=>Route|undefined): Route|undefined {
+  shareAliasHeads &&= !a.strict;
+  const shafts=new ShaftClearance(occupiedRoutes,a.target,a.width,a.targetKey,a.strict);
   const aliases=occupiedRoutes.filter(r=>a.targetKey!==undefined&&r.targetKey===a.targetKey);
   if(shareAliasHeads) {
     occupiedHeads=occupiedHeads.filter(h=>!aliases.some(r=>{
@@ -248,6 +284,7 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
     }));
     occupiedRoutes=occupiedRoutes.filter(r=>!aliases.includes(r));
   }
+  const headClears=headClearance(occupiedRoutes,a.width);
   const s=a.source,t=a.target,exit:Point=[Math.max(s[0],a.enclosure.right-4),s[1]];
   const protectedRects=[...text.map(r=>expand(r,1)),...occupiedHeads.map(r=>expand(r,2))];
   const unrelated=objects.filter((r,i)=>i!==a.sourceOwner&&i!==a.targetOwner&&r.right>r.left&&r.bottom>r.top);
@@ -258,16 +295,27 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
     [[box.left,box.top],[box.left,box.bottom]],[[box.right,box.top],[box.right,box.bottom]]],
     head:[],kind:"border",width:1}],a.target,a.width);
   let closeDeparture:Route|undefined;
+  const obstacleIndexes=new Map<Rect[],{calls:number;index?:RectangleIndex<Rect>}>();
+  const indexed=(obs:Rect[])=>{
+    let entry=obstacleIndexes.get(obs);
+    if(!entry){entry={calls:0};obstacleIndexes.set(obs,entry);}
+    if(++entry.calls===128)entry.index=new RectangleIndex(obs,r=>r);
+    return entry.index;
+  };
   // A shallow enclosure has room for a useful exterior departure. In tall
   // containers, a trip around the whole container obscures ordinary field links.
   let preferRoom=box.bottom-box.top<=2*(a.sourceBox.bottom-a.sourceBox.top)+16;
   // Candidate selection is stateful: retain the first safe narrow departure
   // as a fallback while continuing to look for a roomier route.
   const acceptCandidate=(r:Route,obs=protectedRects)=>{
+    // Reject text/head-obstacle hits before the more expensive rounded source
+    // departure checks. These predicates are pure; fallback selection stays
+    // below all validators and retains its original candidate order.
+    if(!clear(r,obs,a.width,indexed(obs)))return false;
     const roomy=!preferRoom||(clearsSource(r,expand(a.sourceBox,6),a.width)&&borders.clear(r));
     if(!roomy&&closeDeparture)return false;
-    if(!clear(r,obs,a.width)||!clearsSource(r,a.sourceBox,a.width)||
-      !clearsTarget(r,a)||!headClearsRoutes(r.head,occupiedRoutes,a.width)||!shafts.clear(r))return false;
+    if(!clearsSource(r,a.sourceBox,a.width)||
+      !clearsTarget(r,a)||!headClears(r.head)||!shafts.clear(r))return false;
     if(!roomy) {closeDeparture=r;return false;}
     return true;
   };
@@ -328,6 +376,30 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
   const h=head([legacy.left,(legacy.top+legacy.bottom)/2],[-1,0]),end=rear(h),bend=end[0]>=exit[0]?(end[0]-exit[0])/2:40;
   const original:Route={segments:[[s,exit],[exit,[exit[0]+bend,exit[1]],[end[0]-bend,end[1]],end]],head:h,kind:"original"};
   if(!a.returning&&acceptCandidate(original,strict))return original;
+  // A self-reference must leave its object in one straight monotone departure.
+  // Another arrival can seal the horizontal exit while a shallow diagonal is
+  // clear. Try a bounded exterior departure family before the orthogonal grid,
+  // which cannot discover these initial segments. Historical routing is intact.
+  if(a.strict&&a.sourceOwner>=0&&a.sourceOwner===a.targetOwner) {
+    for(const offset of [12,-12,24,-24])for(const gap of [10,12,8,16,24]) {
+      const depart:Point=[t.right+gap,s[1]+offset];
+      for(const {tip,normal} of tips) {
+        const h=head(tip,normal),e=rear(h),approach:Point=[e[0]+normal[0]*12,e[1]+normal[1]*12];
+        for(const corner of [[depart[0],approach[1]],[approach[0],depart[1]]] as Point[]) {
+          const r=polyline([s,depart,corner,approach,e],h,0);
+          if(acceptCandidate(r,strict))return r;
+        }
+      }
+    }
+  }
+  // The caller may supply an explicitly owned baseline after validating its
+  // complete partial scene. It must not be an unvalidated alias exemption.
+  // Try it before the independent exterior/grid search, whose growing port
+  // combinations otherwise make crowded arrivals disproportionately expensive.
+  if(a.strict&&ownedFallback) {
+    const owned=ownedFallback();
+    if(owned)return owned;
+  }
   const outerRight=Math.max(...objects.map(r=>r.right),...text.map(r=>r.right),...shafts.channels.map(r=>r.right))+16;
   // A clear lower exit and exterior lane often solve a border-hugging alias
   // immediately. Try every arrival before spending the dogleg search budget.
@@ -347,13 +419,10 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
   const deferred:{depart:Point;approach:Point;h:Point[];e:Point;obs:Rect[]}[]=[];
   let cheapAttempts=0;
   const cheap=(r:Route,obs:Rect[])=>++cheapAttempts<=512&&acceptCandidate(r,obs);
-  for(const obs of [strict,protectedRects]) {
-    if(!a.returning&&acceptCandidate(original,obs))return original;
-    for(const {tip,normal} of tips) {
-      const h=head(tip,normal),e=rear(h);
-      if(occupiedHeads.some(r=>overlaps(expand(bounds(h),2),r))||!headClearsRoutes(h,occupiedRoutes,a.width))continue;
-      const approach:Point=[e[0]+normal[0]*12,e[1]+normal[1]*12];
-      if(!clear({segments:[[approach,e]],head:h,kind:"arrival"},obs,a.width)||!shafts.clearSegment([approach,e]))continue;
+  const departureCache=new Map<Rect[],{points:Point[];clear:(boolean|undefined)[]}>();
+  function* departuresFor(obs:Rect[]):Generator<Point> {
+    let cached=departureCache.get(obs);
+    if(!cached) {
       const exits=[...new Set(shafts.channels.flatMap(r=>[r.left,r.right]))]
         .filter(x=>x>=a.sourceBox.right+12).sort((x,y)=>x-y);
       // A same-target lane may fit between the source box and a different
@@ -365,8 +434,25 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
       const departures:Point[]=[...(preferRoom?[below]:[]),
         ...right.map((x):Point=>[x,s[1]]),[s[0],a.sourceBox.bottom+12],[s[0],a.sourceBox.top-12],
         [s[0],a.sourceBox.bottom+short],[s[0],a.sourceBox.top-short]];
-      for(const depart of departures) {
-        if(obs.some(r=>intersects([s,depart],expand(r,a.width/2)))||!shafts.clearSegment([s,depart]))continue;
+      cached={points:departures,clear:[]};departureCache.set(obs,cached);
+    }
+    // Preserve lazy candidate validation: an early successful route must not
+    // pay to inspect departures that it never visits. Later arrival ports
+    // reuse only the decisions already made for this same obstacle set.
+    for(const [i,depart] of cached.points.entries()) {
+      if(cached.clear[i]===undefined)cached.clear[i]=
+        !obs.some(r=>intersects([s,depart],expand(r,a.width/2)))&&shafts.clearSegment([s,depart]);
+      if(cached.clear[i])yield depart;
+    }
+  }
+  for(const obs of [strict,protectedRects]) {
+    if(!a.returning&&acceptCandidate(original,obs))return original;
+    for(const {tip,normal} of tips) {
+      const h=head(tip,normal),e=rear(h);
+      if(occupiedHeads.some(r=>overlaps(expand(bounds(h),2),r))||!headClears(h))continue;
+      const approach:Point=[e[0]+normal[0]*12,e[1]+normal[1]*12];
+      if(!clear({segments:[[approach,e]],head:h,kind:"arrival"},obs,a.width)||!shafts.clearSegment([approach,e]))continue;
+      for(const depart of departuresFor(obs)) {
         for(const corner of [[depart[0],approach[1]],[approach[0],depart[1]]] as Point[]) {
           for(const radius of [12,0]) {
             const r=polyline([s,depart,corner,approach,e],h,radius);
@@ -443,6 +529,6 @@ export function routeReference(a: Attachment,text: Rect[],objects: Rect[],occupi
   }
   // Preserve distinct alias arrivals whenever a route is available. Only
   // crowded targets that exhaust those options may share an arrival arrowhead.
-  if(!shareAliasHeads&&aliases.length)return routeReference(a,text,objects,occupiedHeads,occupiedRoutes,true);
+  if(!a.strict&&!shareAliasHeads&&aliases.length)return routeReference(a,text,objects,occupiedHeads,occupiedRoutes,true);
   return undefined;
 }

@@ -1,6 +1,6 @@
 /** Per-visualizer ownership of preparation, bounded repair, measurement, and final paint. */
-import { ConnectorRouting, ConnectorRoutePlan, RoutingConstraint } from "./connectorRouting";
-import { clearConnectorPaint, ConnectorMeasurement, measureConnectorScene, paintConnectorPlan } from "./connectorScene";
+import { ConnectorRouting, ConnectorRoutePlan, ReferenceRoutingPolicy, RoutingConstraint } from "./connectorRouting";
+import { clearConnectorPaint, ConnectorMeasurement, ConnectorPaintHost, measureConnectorScene, paintConnectorPlan } from "./connectorScene";
 import { PlacementController } from "./placementModels";
 import type { SvgConnection } from "./svgConnectors";
 
@@ -67,7 +67,14 @@ export class LayoutCoordinator {
   private preparation?:()=>void;
   private connections:readonly SvgConnection[]=[];
 
-  public constructor(private readonly routing=new ConnectorRouting()) {}
+  public constructor(private readonly routing=new ConnectorRouting(), private readonly paintHost?: ConnectorPaintHost) {}
+
+  /** Policy changes invalidate accepted paint even when routing is batched. */
+  public invalidateRouting(): void {
+    this.committedPlan=undefined;
+    this.acceptedRouteCache=undefined;
+    clearConnectorPaint(this.connections,this.paintHost);
+  }
 
   /** Only a fully accepted run under the current placement revision. Never a route cache. */
   public get acceptedPlan(): ConnectorRoutePlan | undefined {
@@ -83,11 +90,12 @@ export class LayoutCoordinator {
     this.repairs.restore();
     this.placement.restore();
     try { this.preparation?.(); }
-    catch(error) { this.acceptedRouteCache=undefined;clearConnectorPaint(this.connections);throw error; }
+    catch(error) { this.acceptedRouteCache=undefined;clearConnectorPaint(this.connections,this.paintHost);throw error; }
   }
 
   /** Synchronous bounded settling; geometry writes always precede fresh measurement. */
-  public settle(container: HTMLElement, connections: readonly SvgConnection[]): ConnectorRoutePlan {
+  public settle(container: HTMLElement, connections: readonly SvgConnection[],
+    policy: ReferenceRoutingPolicy="historical"): ConnectorRoutePlan {
     this.connections=connections;
     this.diagnostics={...idleDiagnostics(),outcome:"running"};
     const diagnostics=this.diagnostics;
@@ -108,7 +116,7 @@ export class LayoutCoordinator {
         // IDs/indices, attachment widths and parent styles. Canvas/content are
         // independently revalidated below, even when their padding was restored.
         const {objects,heapOwners,text,textOwners,localEndpoints,edges}=measured.scene;
-        const sceneKey=JSON.stringify(["legacy-routing-1",this.placement.revision,
+        const sceneKey=JSON.stringify(["coordinated-reference-routing-1",policy,this.placement.revision,
           objects,heapOwners,text,textOwners,localEndpoints,edges]);
         // An accepted reservation-only retry is canonical for this same scene,
         // so identical redraws need not rediscover the failed unreserved pass.
@@ -117,7 +125,7 @@ export class LayoutCoordinator {
         const key=JSON.stringify([sceneKey,reserveTurns]);
         const cached=this.acceptedRouteCache?.key===key?this.acceptedRouteCache.plan:undefined;
         const pending=candidate?.sceneKey===sceneKey?candidate.plan:undefined;
-        const result=cached||pending?{ok:true as const,plan:(cached??pending)!}:this.routing.plan(measured.scene,reserveTurns);
+        const result=cached||pending?{ok:true as const,plan:(cached??pending)!}:this.routing.plan(measured.scene,reserveTurns,policy);
         if(cached)diagnostics.routeCacheHits++;
         if(result.ok===false) {
           this.acceptedRouteCache=undefined;
@@ -152,7 +160,7 @@ export class LayoutCoordinator {
           measured=measure();reserveTurns=false;
           continue;
         }
-        paintConnectorPlan(measured,plan);
+        paintConnectorPlan(measured,plan,this.paintHost);
         freezePlan(plan);
         this.committedPlan=plan;
         this.committedPlacementRevision=this.placement.revision;
@@ -166,7 +174,7 @@ export class LayoutCoordinator {
       this.acceptedRouteCache=undefined;
       diagnostics.outcome="failed";
       this.repairs.restore();
-      clearConnectorPaint(connections);
+      clearConnectorPaint(connections,this.paintHost);
       throw error;
     }
   }
@@ -186,7 +194,8 @@ export class LayoutCoordinator {
     }
     if(constraint.kind==="no-candidate"&&constraint.sourceCanExit) {
       const target=bindings.targetBodies.get(edge.connectionIndex)!;
-      this.repairs.write(target,"min-width",`${Math.ceil(a.target.right-a.target.left)+24}px`);
+      this.repairs.write(target,"min-width",`${Math.max(Math.ceil(a.target.right-a.target.left)+24,
+        constraint.targetCapacity??0)}px`);
       this.diagnostics.repairKinds.push("target-widening");
       return true;
     }
@@ -217,7 +226,7 @@ export class LayoutCoordinator {
   public reset(connections: readonly SvgConnection[]=this.connections): void {
     this.repairs.restore();
     this.placement.restore();
-    clearConnectorPaint(connections);
+    clearConnectorPaint(connections,this.paintHost);
     this.connections=[];this.committedPlan=undefined;this.committedPlacementRevision=-1;
     this.acceptedRouteCache=undefined;
     this.diagnostics=idleDiagnostics();
