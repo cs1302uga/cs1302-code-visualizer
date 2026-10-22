@@ -19,22 +19,28 @@ export function createValueBox(cell: HTMLElement): HTMLElement {
 export function layoutValueBoxes(root: HTMLElement): void {
   const cells = Array.from(root.querySelectorAll<HTMLElement>(valueCellSelector));
   const widths = new Map<Element, number>();
+  const entries: {cell:HTMLElement;box:HTMLElement;table:HTMLTableElement}[]=[];
   for (const cell of cells) {
     const box = cell.querySelector<HTMLElement>(':scope > .value-box, :scope > .compact-string > .value-box');
     if (!box) continue;
+    entries.push({cell,box,table:cell.closest('table')!});
+  }
+  // Reset every surface before reading any text geometry. Interleaving each
+  // reset with a measurement forces a table layout for every value cell.
+  for (const {box} of entries) {
     box.style.width = 'max-content';
+  }
+  for (const {box,table} of entries) {
     const range = document.createRange();
     range.selectNodeContents(box);
     const width = Math.max(40, Math.ceil(range.getBoundingClientRect?.().width || 0) + 22);
-    const table = cell.closest('table')!;
     widths.set(table, Math.max(widths.get(table) ?? 40, width));
   }
-  for (const cell of cells) {
-    const box = cell.querySelector<HTMLElement>(':scope > .value-box, :scope > .compact-string > .value-box');
-    if (box) box.style.width = `${widths.get(cell.closest('table')!) ?? 40}px`;
+  for (const {cell,box,table} of entries) {
+    box.style.width = `${widths.get(table) ?? 40}px`;
     const arrow = cell.querySelector<SVGSVGElement>('.compact-string-arrow');
     if (box && arrow) {
-      const width = widths.get(cell.closest('table')!) ?? 40;
+      const width = widths.get(table) ?? 40;
       const tip = width + 15;
       arrow.setAttribute('width', String(tip + 1));
       arrow.querySelector('path')!.setAttribute('d', `M ${width - SOURCE_INSET} 9.5 H ${tip - ARROW_LENGTH}`);

@@ -90,6 +90,24 @@ bundle hashes identify the captured files; they do not establish that the bundle
 was rebuilt from those sources. Capture after a clean build and record its commit.
 The JDK 25 CI job uploads the review package as `layout-coordinator-review`.
 
+For controlled independent/shared reference-routing comparisons, build the
+frontend first and capture the native review package:
+
+```sh
+make build-frontend
+uv run python -m scripts.review_shared_references
+```
+
+Open `.scratch/reference-sharing-review/index.html` to compare native/50% and
+monochrome output. Keep the adjacent PNGs, SVGs, reopened SVG raster, and
+`manifest.json` with the gallery. The manifest records source, bundle, input,
+and export hashes; capture after a clean build and record its commit. Compare
+sharing against the controlled independent baseline; historical output supplies
+context. The JDK 25 pull-request CI job uploads the package as
+`reference-sharing-review`. Record maintainer approval or specific objections
+in the issue; generating the package does not supply approval or establish the
+separate [performance gates](scripts/benchmark_reference_routing/README.md).
+
 ## Development artifacts
 
 Use the ignored root `.scratch/` directory for proposals, throwaway prototypes,
@@ -123,4 +141,4 @@ without installing system tools. Installed commands read the caller project's
 configuration when present and otherwise use the configuration shipped in the wheel.
 The release workflow runs the same wheel check after building the distributions.
 
-The [release workflow](.github/workflows/release.yml) runs on main-branch pushes, pull requests targeting main, and tag pushes. A tag push triggers publication after validation; it uploads the frontend bundles and Python distributions to a GitHub release. Follow the project's existing tag naming convention. The workflow does not publish to PyPI.
+The [release workflow](.github/workflows/release.yml) runs on main-branch pushes, pull requests targeting any branch (including stacked feature branches), and tag pushes. A tag push triggers publication after validation; it uploads the frontend bundles and Python distributions to a GitHub release. Follow the project's existing tag naming convention. The workflow does not publish to PyPI.

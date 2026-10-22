@@ -12,6 +12,9 @@ function escapeCssSelector(id: string): string {
 
 import $ from "jquery";
 import { LayoutCoordinator } from "./layoutCoordinator";
+import type { ReferenceRoutingPolicy } from "./connectorRouting";
+import { pathData, type Route } from "./referenceRouting";
+import type { SharedReferencePlan } from "./sharedReferenceRouting";
 
 import { SOURCE_RADIUS, arrowTriangle } from "./connectorGeometry";
 export { ARROW_LENGTH, SOURCE_INSET, SOURCE_RADIUS, arrowTriangle } from "./connectorGeometry";
@@ -32,6 +35,8 @@ export interface SvgConnectOptions {
   source: string | HTMLElement | JQuery;
   target: string | HTMLElement | JQuery;
   scope?: string;
+  /** Declared reference meaning; custom paint without a declaration stays independent. */
+  semanticStyle?: string | null;
   anchors?: [string, string];
   connector?: unknown[];
   endpoint?: unknown[];
@@ -112,6 +117,7 @@ export class SvgConnection {
   public paintStyle: SvgPaintStyle;
   public hoverPaintStyle: SvgPaintStyle;
   public isHovered = false;
+  public semanticStyle: string | null;
 
   public readonly endpoints: [SvgEndpoint, SvgEndpoint];
   public readonly canvas: SVGSVGElement;
@@ -119,6 +125,8 @@ export class SvgConnection {
   public readonly pathElement: SVGPathElement;
   public readonly dotElement: SVGCircleElement;
   public readonly arrowElement: SVGPolygonElement;
+  /** Private painted branch when pathElement represents a hidden complete logical route. */
+  public branchElement?: SVGPathElement;
 
   public constructor(manager: SvgConnectorManager, options: SvgConnectOptions) {
     this.manager = manager;
@@ -154,6 +162,9 @@ export class SvgConnection {
     this.target = $(rawTarget);
 
     this.scope = options.scope || "default";
+    this.semanticStyle = options.semanticStyle !== undefined ? options.semanticStyle :
+      options.paintStyle ? null : manager.defaults.SemanticStyle ??
+        (manager.defaults.PaintStyle ? null : "reference-default");
     this.anchors = options.anchors || ["RightMiddle", "LeftMiddle"];
 
     if (
@@ -231,7 +242,14 @@ export class SvgConnection {
     if (!this.isHovered) {
       this.applyStyle(this.paintStyle);
     }
-    if (style.lineWidth !== undefined) this.manager.repaintEverything();
+    this.manager.repaintEverything();
+  }
+
+  /** Change reference meaning independently of theme colors. */
+  public setSemanticStyle(style: string | null): void {
+    if (this.semanticStyle === style) return;
+    this.semanticStyle = style;
+    this.manager.repaintEverything();
   }
 
   /**
@@ -243,7 +261,7 @@ export class SvgConnection {
     if (this.isHovered) {
       this.applyStyle(this.hoverPaintStyle);
     }
-    if (style.lineWidth !== undefined) this.manager.repaintEverything();
+    this.manager.repaintEverything();
   }
 
   /**
@@ -258,6 +276,7 @@ export class SvgConnection {
         fillStyle: (hover ? this.hoverPaintStyle : this.paintStyle).strokeStyle,
       });
     }
+    this.manager.refreshSharedStyles();
   }
 
   private applyStyle(style: SvgPaintStyle): void {
@@ -268,6 +287,10 @@ export class SvgConnection {
     }
     if (style.lineWidth !== undefined) {
       this.pathElement.setAttribute("stroke-width", String(style.lineWidth));
+    }
+    if (this.branchElement) {
+      this.branchElement.setAttribute("stroke", style.strokeStyle || "#005583");
+      this.branchElement.setAttribute("stroke-width", String(style.lineWidth ?? 1));
     }
   }
 
@@ -288,6 +311,7 @@ export class SvgConnection {
     const idx = this.manager.connections.indexOf(this);
     if (idx !== -1) {
       this.manager.connections.splice(idx, 1);
+      this.manager.repaintEverything();
     }
   }
 }
@@ -297,13 +321,37 @@ export class SvgConnection {
  */
 export class SvgConnectorManager {
   /** Internal placement/repair seam; not a CLI or public rendering-policy option. */
-  public readonly layoutCoordinator = new LayoutCoordinator();
+  public readonly layoutCoordinator = new LayoutCoordinator(undefined, this);
   private batchDepth = 0;
   private repaintPending = false;
   public container: HTMLElement;
   public readonly svgCanvas: SVGSVGElement;
   public connections: SvgConnection[] = [];
   public defaults: Record<string, any> = {};
+  private policy: ReferenceRoutingPolicy = "historical";
+  public referenceSharingPlan?: SharedReferencePlan;
+  private sharedPaint = new Map<string, {
+    element: SVGGElement;
+    paths: { element: SVGPathElement; members: SvgConnection[] }[];
+    head: SVGPolygonElement;
+    members: SvgConnection[];
+  }>();
+
+  public get referenceRoutingPolicy(): ReferenceRoutingPolicy { return this.policy; }
+  public get referenceSharingEnabled(): boolean { return this.policy === "shared"; }
+
+  /** Internal development comparison policy; not a public visualizer option. */
+  public setReferenceRoutingPolicy(policy: ReferenceRoutingPolicy): void {
+    if (!["historical", "independent", "shared"].includes(policy)) throw new Error("Unknown reference routing policy");
+    if (policy === this.policy) return;
+    this.policy = policy;
+    this.layoutCoordinator.invalidateRouting();
+    this.repaintEverything();
+  }
+
+  public setReferenceSharingEnabled(enabled: boolean): void {
+    this.setReferenceRoutingPolicy(enabled ? "shared" : "historical");
+  }
 
   public constructor(defaults?: Record<string, unknown>) {
     this.defaults = defaults || {};
@@ -346,6 +394,7 @@ export class SvgConnectorManager {
       }
       this.container.appendChild(this.svgCanvas);
     }
+    if (this.connections.length) this.repaintEverything();
   }
 
   /**
@@ -376,10 +425,15 @@ export class SvgConnectorManager {
    */
   public reset(): void {
     this.layoutCoordinator.reset(this.connections);
+    this.beginBatch();
     for (const conn of [...this.connections]) {
       conn.detach();
     }
     this.connections = [];
+    // Reset has already restored owned geometry. Do not settle an empty view
+    // here: that would rerun preparation and create fresh repair/model writes.
+    this.batchDepth = Math.max(0, this.batchDepth - 1);
+    this.repaintPending = false;
   }
 
   /**
@@ -405,7 +459,7 @@ export class SvgConnectorManager {
   public repaintEverything(): void {
     if (this.batchDepth) { this.repaintPending = true; return; }
     this.repaintPending = false;
-    this.layoutCoordinator.settle(this.container, this.connections);
+    this.layoutCoordinator.settle(this.container, this.connections, this.policy);
   }
 
   /** Release retained repair/model effects even when the semantic DOM is detached. */
@@ -414,6 +468,105 @@ export class SvgConnectorManager {
     this.layoutCoordinator.dispose();
     this.batchDepth = 0;
     this.svgCanvas.remove();
+  }
+
+  /** The coordinator calls this adapter on failure, invalidation, and reset. */
+  public clearReferencePaint(): void {
+    for (const paint of this.sharedPaint.values()) paint.element.remove();
+    this.sharedPaint.clear();
+    this.referenceSharingPlan = undefined;
+    for (const connection of this.connections) {
+      connection.pathElement.style.display = "";
+      connection.arrowElement.style.display = "";
+      if (connection.branchElement) connection.branchElement.style.display = "none";
+      delete connection.groupElement.dataset.sharedReference;
+    }
+  }
+
+  /** Paint physical ownership while retaining complete per-connection path access. */
+  public paintReferencePlan(ordered: SvgConnection[], plan?: SharedReferencePlan): void {
+    this.referenceSharingPlan = plan;
+    const grouped = new Set(plan?.groups.flatMap(group => group.members.map(i => ordered[i])) ?? []);
+    for (const connection of this.connections) {
+      const shared = grouped.has(connection);
+      connection.pathElement.style.display = shared ? "none" : "";
+      connection.arrowElement.style.display = shared ? "none" : "";
+      if (connection.branchElement) connection.branchElement.style.display = "none";
+      delete connection.groupElement.dataset.sharedReference;
+    }
+    const retained = new Set<string>();
+    for (const group of plan?.groups ?? []) {
+      retained.add(group.id);
+      let paint = this.sharedPaint.get(group.id);
+      if (!paint) {
+        const element = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        element.setAttribute("class", "shared-reference-group");
+        element.dataset.sharedReference = group.id;
+        const head = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+        head.setAttribute("class", "shared-reference-head");
+        element.append(head);
+        this.svgCanvas.append(element);
+        paint = { element, paths: [], head, members: [] };
+        this.sharedPaint.set(group.id, paint);
+      }
+      paint.members = group.members.map(i => ordered[i]);
+      paint.element.dataset.referenceTarget = group.targetKey;
+      paint.element.dataset.memberSources = JSON.stringify(paint.members.map(c => c.sourceId));
+      while (paint.paths.length > group.physicalPieces.length) paint.paths.pop()!.element.remove();
+      group.physicalPieces.forEach((piece, i) => {
+        let path = paint!.paths[i];
+        if (!path) {
+          const element = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          element.setAttribute("class", "shared-reference-segment");
+          element.setAttribute("fill", "none");
+          paint!.element.insertBefore(element, paint!.head);
+          path = { element, members: [] }; paint!.paths.push(path);
+        }
+        path.members = piece.members.map(index => ordered[index]);
+        path.element.dataset.memberSources = JSON.stringify(path.members.map(c => c.sourceId));
+        path.element.setAttribute("d", pathData({ segments: [piece.segment], head: [], kind: "shared" }));
+      });
+      paint.head.setAttribute("points", group.head.map(p => p.join(",")).join(" "));
+      for (const branch of group.branches) {
+        const connection = ordered[branch.index];
+        connection.groupElement.dataset.sharedReference = group.id;
+        if (!connection.branchElement) {
+          connection.branchElement = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          connection.branchElement.setAttribute("class", "shared-reference-branch");
+          connection.branchElement.setAttribute("fill", "none");
+          connection.groupElement.insertBefore(connection.branchElement, connection.dotElement);
+        }
+        connection.branchElement.style.display = branch.segments.length ? "" : "none";
+        if (branch.segments.length) connection.branchElement.setAttribute("d", pathData({
+          segments: branch.segments, head: [], kind: "branch",
+        } as Route));
+      }
+    }
+    for (const [id, paint] of this.sharedPaint) if (!retained.has(id)) {
+      paint.element.remove(); this.sharedPaint.delete(id);
+    }
+    this.refreshSharedStyles();
+  }
+
+  /** Transient emphasis changes owned paint only, with no geometry reads or regrouping. */
+  public refreshSharedStyles(): void {
+    const styleFor = (members: SvgConnection[]): SvgPaintStyle => {
+      const highlighted = members.find(c => c.isHovered);
+      return highlighted ? highlighted.hoverPaintStyle : members[0].paintStyle;
+    };
+    for (const paint of this.sharedPaint.values()) {
+      for (const piece of paint.paths) {
+        const style = styleFor(piece.members);
+        piece.element.setAttribute("stroke", style.strokeStyle || "#005583");
+        piece.element.setAttribute("stroke-width", String(style.lineWidth ?? 1));
+      }
+      paint.head.setAttribute("fill", styleFor(paint.members).strokeStyle || "#005583");
+      for (const connection of paint.members) {
+        const style = connection.isHovered ? connection.hoverPaintStyle : connection.paintStyle;
+        connection.branchElement?.setAttribute("stroke", style.strokeStyle || "#005583");
+        connection.branchElement?.setAttribute("stroke-width", String(style.lineWidth ?? 1));
+      }
+    }
   }
 
   /**
@@ -439,7 +592,9 @@ export class SvgConnectorManager {
         matched.forEach(fn);
       },
       detach: (): void => {
+        this.beginBatch();
         matched.forEach((c) => c.detach());
+        this.endBatch();
       },
     };
   }
@@ -453,3 +608,5 @@ export class SvgConnectorManager {
     return new SvgConnectorManager(defaults);
   }
 }
+
+export type { ReferenceRoutingPolicy } from "./connectorRouting";
