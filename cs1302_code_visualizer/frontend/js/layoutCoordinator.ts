@@ -106,6 +106,10 @@ export class LayoutCoordinator {
     try {
       this.prepareLayout();
       let measured=measure(),attempt=0,reserveTurns=false,trailingPasses=0;
+      // A complete solution may survive canvas allocation within this transaction.
+      // Reuse only after remeasurement proves every routing dependency unchanged;
+      // it is still unpublished and must pass the canvas checks below.
+      let candidate: {sceneKey:string;reserveTurns:boolean;plan:ConnectorRoutePlan}|undefined;
       while(true) {
         diagnostics.attempts++;
         // These are exactly the solver's dependencies, including ordered edge
@@ -117,9 +121,11 @@ export class LayoutCoordinator {
         // An accepted reservation-only retry is canonical for this same scene,
         // so identical redraws need not rediscover the failed unreserved pass.
         if(this.acceptedRouteCache?.sceneKey===sceneKey)reserveTurns=this.acceptedRouteCache.reserveTurns;
+        if(candidate?.sceneKey===sceneKey)reserveTurns=candidate.reserveTurns;
         const key=JSON.stringify([sceneKey,reserveTurns]);
         const cached=this.acceptedRouteCache?.key===key?this.acceptedRouteCache.plan:undefined;
-        const result=cached?{ok:true as const,plan:cached}:this.routing.plan(measured.scene,reserveTurns,policy);
+        const pending=candidate?.sceneKey===sceneKey?candidate.plan:undefined;
+        const result=cached||pending?{ok:true as const,plan:(cached??pending)!}:this.routing.plan(measured.scene,reserveTurns,policy);
         if(cached)diagnostics.routeCacheHits++;
         if(result.ok===false) {
           this.acceptedRouteCache=undefined;
@@ -135,6 +141,7 @@ export class LayoutCoordinator {
           continue;
         }
         const plan=result.plan,ext=plan.extent;
+        candidate={sceneKey,reserveTurns,plan};
         if(ext&&(ext.left<8||ext.top<8)) {
           if(attempt>=connections.length+6)throw new LayoutConstraintError({kind:"canvas-exhausted",side:"leading"});
           const style=getComputedStyle(container);

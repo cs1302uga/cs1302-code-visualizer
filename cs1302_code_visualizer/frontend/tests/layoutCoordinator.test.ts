@@ -267,6 +267,19 @@ describe("production layout coordination",()=>{
     const cold=scene();cold.connect();expect(painted(cold.manager)).toEqual(first);
   });
 
+  it.each([false,true])("remeasures trailing canvas allocation and reroutes only when geometry changes (%s)",movesTarget=>{
+    const f=scene({parent:true,sourceLeft:120});
+    if(movesTarget)vi.spyOn(f.target,"getBoundingClientRect").mockImplementation(()=>
+      new DOMRect(200+(parseFloat(f.container.style.paddingRight)||0),30,70,50));
+    const planner=vi.spyOn(ConnectorRouting.prototype,"plan");
+    const c=f.connect(),coordinator=f.manager.layoutCoordinator;
+    expect(coordinator.diagnostics.repairKinds).toContain("trailing-padding");
+    expect(coordinator.diagnostics.measurementPasses).toBe(2);
+    expect(planner).toHaveBeenCalledTimes(movesTarget?2:1);
+    expect(coordinator.acceptedPlan!.connectors[0].attachment.target.right).toBe(f.target.getBoundingClientRect().right);
+    expect(c.groupElement.style.display).toBe("");
+  });
+
   it("reuses only accepted measured scenes and invalidates reuse on failure/revision/geometry",()=>{
     const f=scene();f.connect();
     const planner=vi.spyOn(ConnectorRouting.prototype,"plan");
