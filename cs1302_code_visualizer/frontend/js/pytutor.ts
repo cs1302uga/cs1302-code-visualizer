@@ -650,6 +650,7 @@ export class ExecutionVisualizer {
       this.dataViz.selectivelyHideVarsAndFields(
         this.params.hideVars || [],
         this.params.hideFields || [],
+        true /* configure initial options before selecting/materializing a step */,
       );
     }
 
@@ -4433,7 +4434,7 @@ class DataVisualizer {
   // ... but consider the case where there are NO COLONS in the string,
   // which indicates a variable/field name that should be matched
   // regardless of what function/object it belongs to
-  selectivelyHideVarsAndFields(hideVarsLst, hideFieldsLst) {
+  selectivelyHideVarsAndFields(hideVarsLst, hideFieldsLst, deferInitialMaterialization = false) {
     if (hideVarsLst.length > 0) {
       this.hideVarsSet = d3Map();
       hideVarsLst.forEach((e) => this.hideVarsSet.set(e, true));
@@ -4448,10 +4449,9 @@ class DataVisualizer {
       this.hideFieldsSet = null; // reset
     }
 
-    // Initial filters are configured before the starting instruction is chosen.
-    // The first render below will plan and materialize that selected step once.
-    // Later filter changes must immediately rebuild the currently displayed step.
-    if (this.owner.hasRendered) {
+    // Only constructor option configuration is deferred. Ordinary setter calls
+    // also apply synchronously during the initial render's height callback.
+    if (!deferInitialMaterialization) {
       this.precomputeCurTraceLayouts();
       this.renderDataStructures(this.owner.curInstr);
     }

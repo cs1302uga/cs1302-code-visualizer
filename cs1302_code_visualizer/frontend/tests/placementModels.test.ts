@@ -83,6 +83,27 @@ describe("production placement strategies", () => {
     expect(root.querySelectorAll(".stackVarName")).toHaveLength(1);
   });
 
+  it("applies a filter synchronously from the initial full-view height callback", () => {
+    const is=$.fn.is,height=$.fn.height;
+    vi.spyOn($.fn,"is").mockImplementation(function(this:JQuery,selector:any) {
+      return selector===":visible"?true:is.call(this,selector);
+    });
+    vi.spyOn($.fn,"height").mockImplementation(function(this:JQuery,...args:any[]):any {
+      if(!args.length&&this[0]?.id==="dataViz")return this.find(".stackVarName").length*10;
+      if(!args.length&&this[0]?.matches("td.cod"))return 20;
+      return (height as any).apply(this,args);
+    });
+    let callbacks=0;
+    const {root,data}=render([state([frame(0)])],{hideCode:false,hideVars:[],hideFields:[],
+      heightChangeCallback:(view:ExecutionVisualizer)=>{
+        callbacks++;
+        view.dataViz.selectivelyHideVarsAndFields(["value"],[]);
+      }});
+    expect(callbacks).toBe(1);
+    expect(data.inHideVarsSet("method0","value")).toBe(true);
+    expect(root.querySelectorAll(".stackVarName")).toHaveLength(0);
+  });
+
   it("reverses Java's supplied frame order once and retains keyed frame nodes through reordering", () => {
     const states = [state([frame(2), frame(1), frame(0)]), state([frame(0), frame(2), frame(1)])];
     const original = structuredClone(states);
