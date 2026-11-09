@@ -100,3 +100,35 @@ No general SVG minifier runs in this pipeline. In particular, descriptions and
 structured metadata are functional content. Local `use` references must resolve
 inside the document, and gallery embedding prefixes their IDs along with other
 references. External resources remain prohibited.
+
+## Shared-sequence prototype
+
+Generate a self-contained HTML player from a trusted trace:
+
+```sh
+uv run python -m scripts.svg_sequence \
+  docs/array-orientation/fixtures/edges.json \
+  --output .scratch/svg-sequence/edges.html
+```
+
+Open the file locally. Previous, Next, and the step slider support backward and
+random access. Download SVG exports the selected state with its local definitions,
+text, theme rules, and accessible description. This experimental tool does not
+change the public CLI's standalone SVG output.
+
+The versioned manifest interns identical XML subtrees across all frames. Each
+frame references a complete root, so seeking does not replay earlier deltas.
+Text, attributes, child order, geometry, and styles all participate in identity.
+The player retains unchanged subtrees and reconciles changed nodes in one mounted
+SVG. It keeps no hidden frame DOM or detached-node cache; the full shared
+representation remains in memory for random access.
+
+Input is restricted by workflow to SVGs produced by the exporter from the trace.
+The player is not a sanitizer or an arbitrary SVG/manifest loader. Embedded JSON
+escapes HTML delimiters, and labels are constructed as text nodes.
+
+This prototype still generates every standalone state before interning it; it
+does not reduce export-time layout measurement. Sharing can reduce repeated data,
+but the HTML player and manifest also have overhead. Compare both raw and gzip
+sizes against the same independent SVG sequence before claiming a saving. Browser
+paint, accessibility acceptance, and playback speed require separate measurement.
