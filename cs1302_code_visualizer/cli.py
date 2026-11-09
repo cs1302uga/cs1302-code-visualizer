@@ -16,6 +16,7 @@ from .browser_driver import generate_step_images
 from .errors import CodeVisError, CodeVisualizerError
 from .session import RenderingSession
 from .string_options import add_string_argument, string_options_from_args
+from .svg_sequence import pack_frames, sequence_html
 from .theme_options import add_theme_argument, theme_options
 
 
@@ -195,8 +196,11 @@ def _process_batch_job(
     java_home: Path | None,
     array_options: dict[str, Any] | None = None,
     class_path: Sequence[str] | None = None,
+    html_fragment: bool = False,
 ) -> list[Path]:
     """Execute trace generation, rendering, and atomic file emission for a single batch job."""
+    sequence = format.upper() == "HTML"
+    all_steps = all_steps or sequence
     writer = AtomicJobWriter(force=force)
     try:
         # Generate trace
@@ -225,13 +229,15 @@ def _process_batch_job(
             images = generate_step_images(
                 trace_text,
                 dpi=dpi,
-                format=format,
+                format="SVG" if sequence else format,
                 include_types=include_types,
                 text_memory_labels=text_memory_labels,
                 strip_type_prefixes=strip_type_prefixes,
                 **(array_options or {}),
                 session=session,
             )
+            if sequence:
+                images = [sequence_html(pack_frames(images), fragment=html_fragment).encode("utf-8")]
             lines = _image_lines(trace_text, len(images)) if "{line}" in output_pattern else []
             for idx, img_bytes in enumerate(images):
                 img_path = format_output_path(
@@ -331,7 +337,8 @@ def _image_lines(trace_text: str, count: int) -> list[int]:
 
 def run_batch_cli(args: argparse.Namespace) -> int:
     """Handle batch mode execution across files, directory, or NDJSON manifest."""
-    multi_step = bool(args.all_steps or args.breakpoints)
+    sequence = getattr(args, "format", "PNG").upper() == "HTML"
+    multi_step = bool(args.all_steps or args.breakpoints) and not sequence
     output_pattern: str = (
         args.output_pattern
         if args.output_pattern is not None
@@ -464,6 +471,7 @@ def run_batch_cli(args: argparse.Namespace) -> int:
                     java_home=java_home,
                     array_options=array_options,
                     class_path=getattr(args, "class_path", None),
+                    html_fragment=getattr(args, "html_fragment", False),
                 )
                 success_count += 1
             except (
@@ -510,24 +518,26 @@ def run_single_cli(args: argparse.Namespace) -> int:
     java_home = trace_generator.ensure_jdk_installed()
     trace_generator.ensure_code_tracer_installed()
 
+    sequence = args.format.upper() == "HTML"
+    all_steps = args.all_steps or sequence
     bps = set(args.breakpoints or [])
     trace_text = trace_generator.generate_trace(
         java_home,
         source_code,
         breakpoints=bps or {-1},
-        accumulate_breakpoints=args.all_steps,
-        all_breakpoints=args.all_steps or not bool(bps),
+        accumulate_breakpoints=all_steps,
+        all_breakpoints=all_steps or not bool(bps),
         extra_tracer_args=[
             f"--class-path={entry}" for entry in getattr(args, "class_path", None) or ()
         ],
     )
 
     with RenderingSession(max_browsers=1) as session:
-        if args.all_steps:
+        if all_steps:
             images = generate_step_images(
                 trace_text,
                 dpi=args.dpi,
-                format=args.format,
+                format="SVG" if sequence else args.format,
                 include_types=args.include_types,
                 text_memory_labels=args.text_memory_labels,
                 strip_type_prefixes=args.strip_type_prefixes,
@@ -539,6 +549,12 @@ def run_single_cli(args: argparse.Namespace) -> int:
                 return 1
             out_base = Path(args.output)
             out_base.parent.mkdir(parents=True, exist_ok=True)
+            if sequence:
+                out_base.write_text(
+                    sequence_html(pack_frames(images), fragment=getattr(args, "html_fragment", False)),
+                    encoding="utf-8",
+                )
+                return 0
             for idx, img in enumerate(images):
                 step_file = out_base.with_name(f"{out_base.stem}.{idx}{out_base.suffix}")
                 step_file.write_bytes(img)
@@ -603,7 +619,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "-o",
         "--output",
-        help="Output image path (for single-file mode).",
+        help="Output image or HTML sequence path (for single-file mode).",
     )
     parser.add_argument(
         "--out-dir",
@@ -616,6 +632,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--trace-pattern",
         help="Template pattern for saving intermediate trace JSON files.",
+    )
+
+    parser.add_argument(
+        "--html-fragment", action="store_true",
+        help="With --format HTML, emit a directly embeddable fragment instead of a full document.",
     )
 
     # Trace & Rendering options
@@ -636,7 +657,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--format",
         default="PNG",
-        help="Image format: standalone SVG or a Pillow raster format. Default: PNG.",
+        help=("Output format: HTML sequence (implies all steps), standalone SVG, "
+              "or a Pillow raster format. Default: PNG."),
     )
     parser.add_argument(
         "--dpi",
@@ -693,6 +715,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     add_string_argument(parser)
     add_array_arguments(parser)
     args = parser.parse_args(argv)
+    if args.html_fragment and args.format.upper() != "HTML":
+        parser.error("--html-fragment requires --format HTML")
 
     if args.batch:
         exit_code = run_batch_cli(args)

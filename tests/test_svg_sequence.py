@@ -5,7 +5,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from scripts.svg_sequence import pack_frames, sequence_html
+from cs1302_code_visualizer.svg_sequence import pack_frames, sequence_html
 
 
 def test_shared_sequence_round_trip():
@@ -68,26 +68,57 @@ def test_player_real_trace_random_seek(tmp_path, rendering_session):
     try:
         driver.get(page.as_uri())
         WebDriverWait(driver, 10).until(
-            lambda d: d.execute_script("return !!document.querySelector('#diagram svg')")
+            lambda d: d.execute_script("return !!document.querySelector('.codevis-sequence').shadowRoot.querySelector('#diagram svg')")
         )
         order = list(range(len(frames))) + list(reversed(range(len(frames)))) + [0, len(frames) - 1, 0]
         for index in order:
             actual = driver.execute_script("""
-                const slider = document.getElementById('step');
+                const slider = document.querySelector('.codevis-sequence').shadowRoot.getElementById('step');
                 slider.value = arguments[0]; slider.dispatchEvent(new Event('input'));
-                return new XMLSerializer().serializeToString(document.querySelector('#diagram svg'));
+                return new XMLSerializer().serializeToString(document.querySelector('.codevis-sequence').shadowRoot.querySelector('#diagram svg'));
             """, index)
             assert signature(ET.fromstring(actual)) == signature(ET.fromstring(frames[index]))
-            assert driver.execute_script("return document.querySelectorAll('#diagram > svg').length") == 1
+            assert driver.execute_script("return document.querySelector('.codevis-sequence').shadowRoot.querySelectorAll('#diagram > svg').length") == 1
         driver.execute_script("""
             window.sequenceDownload = null;
             URL.createObjectURL = blob => { window.sequenceDownload = blob; return 'blob:test'; };
             HTMLAnchorElement.prototype.click = function() {};
-            document.getElementById('download').click();
+            document.querySelector('.codevis-sequence').shadowRoot.getElementById('download').click();
         """)
         downloaded = driver.execute_async_script("""
             const done = arguments[0]; window.sequenceDownload.text().then(done);
         """)
         assert signature(ET.fromstring(downloaded)) == signature(ET.fromstring(frames[0]))
+        host = tmp_path / "embedded.html"
+        fragment = sequence_html(pack_frames(frames), fragment=True)
+        assert "<html" not in fragment
+        host.write_text(
+            "<!doctype html><style>body{margin:0}svg{display:none}button{display:none}</style>"
+            + fragment + fragment
+        )
+        driver.set_window_size(390, 900)
+        driver.get(host.as_uri())
+        WebDriverWait(driver, 10).until(
+            lambda d: d.execute_script(
+                "return [...document.querySelectorAll('.codevis-sequence')]"
+                ".every(host => !!host.shadowRoot?.querySelector('svg'))"
+            )
+        )
+        assert driver.execute_script(
+            "return document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+        )
+        assert driver.execute_script("""
+            const hosts = document.querySelectorAll('.codevis-sequence');
+            const first = hosts[0].shadowRoot, second = hosts[1].shadowRoot;
+            first.getElementById('next').click();
+            return first.getElementById('step').value === '1'
+                && second.getElementById('step').value === '0'
+                && getComputedStyle(first.querySelector('svg')).display !== 'none'
+                && getComputedStyle(first.querySelector('button')).display !== 'none'
+                && [...second.querySelectorAll('use')].length > 0
+                && [...second.querySelectorAll('use')].every(node => {
+                    const bounds = node.getBBox(); return bounds.width > 0 || bounds.height > 0;
+                });
+        """)
     finally:
         driver.quit()

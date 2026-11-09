@@ -55,7 +55,7 @@ but do not implicitly supply compiled dependencies.
 | --- | --- |
 | `-b N`, `--breakpoint N` | Select a source line; repeat to request multiple lines. |
 | `-a`, `--all-steps` | Trace and render all execution steps. |
-| `--format PNG` | Select a raster encoding or standalone `SVG`; default is PNG. Match explicit filename extensions to the encoding. |
+| `--format PNG` | Select a raster encoding, standalone `SVG`, or a shared `HTML` sequence; default is PNG. Match explicit filename extensions to the encoding. |
 | `--string-style compact\|default\|inline` | Choose string presentation; default: separate heap objects. |
 | `--theme light\|dark\|auto` | Select a palette; omit for host-adaptive inline SVG. Auto follows the system. |
 | `--dpi 2` | Scale raster resolution or SVG display dimensions; default is 1. |
@@ -88,6 +88,59 @@ from earlier releases; documents that depend on the old dimensions may need upda
 Reference arrows may take outside routes, increasing image bounds while preserving
 text size. See [reference routing](reference-routing/README.md) for attachment
 rules, placement repair, and a runnable example.
+
+## Shared HTML sequences
+
+```sh
+code-visualizer Main.java --format HTML -o main.html
+code-visualizer --batch --input-dir sources --format HTML --out-dir sequences
+```
+
+`--format HTML` creates one self-contained, experimental SVG sequence player per
+Java input. It implies `--all-steps`; you do not need `-a`. Open the HTML file in a
+browser to move forward, backward, or directly to a step. **Download SVG** saves
+the selected state as an independent SVG with its definitions and description.
+Single-file mode requires `-o`; it writes only that file, without numbered siblings.
+Batch mode defaults to `{dirname}/{basename}.html`; a custom `--output-pattern`
+does not need `{step}`. Existing batch collision and `--force` rules still apply.
+
+The usual theme, DPI, array, string, and labeling options apply to every state.
+Format names are case-insensitive; an explicit filename does not select the
+format. Use `--format SVG -a` when you need separate SVG files for every step.
+
+The HTML shares identical SVG subtrees and mounts only the selected state. It
+contains the player code and needs no server or network resources, although fonts
+are not embedded. JavaScript is required for playback. The exporter still renders
+all states before sharing them, so this option does not promise faster generation
+or smaller files for every trace. It retains the complete shared sequence in
+memory for random access. This is a packaged version of the
+[shared-sequence prototype](svg-gallery.md#shared-sequence-prototype).
+
+### Embed a sequence downstream
+
+Generate a fragment for direct inclusion in another HTML page:
+
+```sh
+code-visualizer Main.java --format HTML --html-fragment -o main.fragment.html
+```
+
+Include the fragment verbatim through your static-site template, server-side
+include, or raw HTML facility. It contains one player host and its initialization
+script, without document-level markup. `--html-fragment` requires `--format HTML`
+and also works in batch mode. Each player mounts in its own Shadow DOM, isolating
+SVG identifiers, styles, and controls from the page and other sequences. Multiple
+fragments can coexist and navigate independently; an iframe is not required.
+
+The player has compact wrapping controls, responsive SVG sizing, and print styles
+that omit the controls. Its width follows its container. Generate with `--theme`
+to choose the diagram palette; host CSS selectors do not cross the shadow boundary.
+Fonts may still be substituted by the viewing browser.
+
+The host must permit the included inline script and styles under its content
+security policy and preserve them during sanitization. Insert fragments through
+HTML parsing with script execution, such as a page template. Assigning a fragment
+to `innerHTML` does not execute its script and will not initialize the player.
+The complete document output remains suitable for opening directly in a browser.
 
 ## SVG exports
 

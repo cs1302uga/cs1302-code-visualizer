@@ -158,3 +158,8 @@ code-visualizer Main.java --string-style compact -o compact.svg
 Python renderers accept `string_style="compact"`. The old rendering argument
 `inline_strings` is deprecated; see the [string style guide](docs/string-style/README.md)
 for migration, shared-string identity, and examples.
+
+For an interactive, self-contained SVG sequence, run
+`code-visualizer Main.java --format HTML -o main.html`. See
+[shared HTML sequences](docs/cli.md#shared-html-sequences) for navigation, downloads,
+batch output, and direct embedding with `--html-fragment`.

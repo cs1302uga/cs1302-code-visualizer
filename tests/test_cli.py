@@ -804,3 +804,40 @@ def test_default_batch_extension_follows_format(tmp_path, monkeypatch, all_steps
     )
     assert sorted(p.name for p in Path("images").iterdir()) == expected
     assert all((Path("images") / name).read_bytes() == image for name in expected)
+
+
+@pytest.mark.parametrize("batch", [False, True])
+@pytest.mark.parametrize("fragment", [False, True])
+def test_html_sequence_cli(tmp_path, batch, fragment):
+    source = tmp_path / "Main.java"
+    source.write_text("class Main {}")
+    output = tmp_path / "sequence.html"
+    frames = [b'<svg xmlns="http://www.w3.org/2000/svg"><text>first</text></svg>',
+              b'<svg xmlns="http://www.w3.org/2000/svg"><text>last</text></svg>']
+    with (
+        patch("cs1302_code_visualizer.cli.trace_generator.ensure_jdk_installed", return_value=None),
+        patch("cs1302_code_visualizer.cli.trace_generator.ensure_code_tracer_installed"),
+        patch("cs1302_code_visualizer.cli.trace_generator.generate_trace", return_value="{}") as trace,
+        patch("cs1302_code_visualizer.cli.RenderingSession") as sessions,
+        patch("cs1302_code_visualizer.cli.generate_step_images", return_value=frames) as render,
+    ):
+        sessions.return_value.__enter__.return_value.generate_trace.return_value = "{}"
+        options = (["--batch", "--output-pattern", str(output)] if batch else ["-o", str(output)])
+        main([str(source), "--format", "hTmL", "--theme", "dark", *options,
+              *(["--html-fragment"] if fragment else [])])
+        assert render.call_args.kwargs["format"] == "SVG"
+        assert render.call_args.kwargs["theme"] == "dark"
+        tracer = sessions.return_value.__enter__.return_value.generate_trace if batch else trace
+        assert tracer.call_args.kwargs["accumulate_breakpoints"] is True
+        assert tracer.call_args.kwargs["all_breakpoints"] is True
+    assert ("<!doctype html>" in output.read_text()) is not fragment
+    data = output.read_text().split('id="sequence">')[1].split("</script>")[0]
+    assert len(json.loads(data)["frames"]) == 2
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["Main.java", "sequence.html"]
+
+
+def test_html_fragment_requires_html(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--html-fragment"])
+    assert exc.value.code == 2
+    assert "--html-fragment requires --format HTML" in capsys.readouterr().err

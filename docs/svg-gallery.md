@@ -114,7 +114,9 @@ uv run python -m scripts.svg_sequence \
 Open the file locally. Previous, Next, and the step slider support backward and
 random access. Download SVG exports the selected state with its local definitions,
 text, theme rules, and accessible description. This experimental tool does not
-change the public CLI's standalone SVG output.
+change standalone SVG output. The installed CLI also exposes this player through
+`code-visualizer Main.java --format HTML -o main.html`; see the
+[CLI guide](cli.md#shared-html-sequences).
 
 The versioned manifest interns identical XML subtrees across all frames. Each
 frame references a complete root, so seeking does not replay earlier deltas.
