@@ -71,6 +71,8 @@ def inline_svg(path: Path, prefix: str) -> tuple[str, str]:
         for key, value in list(element.attrib.items()):
             if key == "id":
                 value = identifiers[value]
+            elif key in {"href", "{http://www.w3.org/1999/xlink}href"} and value.startswith("#"):
+                value = "#" + identifiers[value[1:]]
             elif key in {"aria-labelledby", "aria-describedby"}:
                 value = " ".join(identifiers.get(token, token) for token in value.split())
             else:
@@ -205,11 +207,16 @@ def validate_svg(path: Path, inkscape: bool) -> str:
     namespace = "{http://www.w3.org/2000/svg}"
     if root.tag != namespace + "svg":
         raise ValueError("Export is not an SVG document")
+    identifiers = {element.attrib["id"] for element in root.iter() if "id" in element.attrib}
     for element in root.iter():
         if element.tag in {namespace + tag for tag in ("image", "foreignObject", "script")}:
             raise ValueError("Export contains non-vector or active content")
-        if any("href" in key for key in element.attrib):
-            raise ValueError("Export depends on an external resource")
+        for key, value in element.attrib.items():
+            if "href" in key and (
+                element.tag != namespace + "use" or not value.startswith("#")
+                or value[1:] not in identifiers
+            ):
+                raise ValueError("Export depends on an external or missing resource")
     if inkscape:
         subprocess.run(
             [

@@ -67,3 +67,36 @@ Use the [theme guide's three-frame example and reproduction recipe](themes.md#re
 For an adaptive inline SVG, switch the host's `data-theme` between light, dark, and Auto. With Auto selected, test both system color preferences. Also test explicit instance choices, a transparent canvas against the actual host background, and light print output. A standalone SVG or `<img>` cannot establish that the host's manual toggle works; test inline embedding on the target page.
 
 The [palette tests](../cs1302_code_visualizer/frontend/tests/theme.test.ts) check color-role contrast, and the [browser theme tests](../tests/test_theme_options.py) exercise host/system switching, print, canvas transparency, and inactive connectors. Those checks supplement visual review and the existing selection/accessibility checks above.
+
+## Measure SVG optimization
+
+Use fixed traces to keep Java execution outside the measurement:
+
+```sh
+uv run python -m scripts.benchmark_svg \
+  small-trace-examples/example0/Driver.java.json \
+  docs/array-orientation/fixtures/edges.json \
+  docs/string-style/fixtures/lists.json \
+  --output .scratch/svg-optimization/current --repeats 3
+```
+
+Add `--sequence` to measure every execution step on its shared canvas. The report
+records trace hashes, individual timings, raw bytes, deterministic gzip sizes,
+and element counts. Keep separate output directories for baseline and candidate
+builds. The first request includes browser startup; compare warmed requests
+separately. Export metrics split font waiting, measured-scene construction,
+optimization, and serialization. Text measurement is a subset of construction.
+These timings do not measure browser paint or network transfer.
+
+The exporter measures a detached SVG scene before serializing it. It removes only
+identity opacity groups and shares repeated geometry when local definitions and
+references are smaller. Text, theme roles, clipping, and accessible descriptions
+remain intact. Font descent measurements are cached per browser document with a
+128-entry bound and invalidated when font loading completes or fails. Text ranges,
+positions, descriptions, and connector geometry are measured for each state;
+object identity never authorizes reusing stale geometry.
+
+No general SVG minifier runs in this pipeline. In particular, descriptions and
+structured metadata are functional content. Local `use` references must resolve
+inside the document, and gallery embedding prefixes their IDs along with other
+references. External resources remain prohibited.

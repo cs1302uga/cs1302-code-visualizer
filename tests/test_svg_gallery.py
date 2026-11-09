@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from scripts import svg_gallery
 from scripts.svg_gallery import cases, gallery_html, validate_svg
 
 
@@ -101,3 +102,22 @@ def test_inline_svg_scopes_references_and_exposes_one_structured_description(tmp
     assert 'src="test.svg"' not in page
     assert "<summary>Text description</summary>" in page
     assert 'href="test.svg" download' in page
+
+
+def test_local_geometry_references_are_validated_and_scoped(tmp_path):
+    source = tmp_path / "reuse.svg"
+    description = {"summary": "Repeated shape", "sections": []}
+    source.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg">'
+        '<title id="title">Shape</title><desc id="desc">Details</desc>'
+        f'<metadata data-description="1">{json.dumps(description)}</metadata>'
+        '<defs><path id="shape" d="M0 0L1 1"/></defs><use href="#shape"/></svg>'
+    )
+    svg_gallery.validate_svg(source, False)
+    first, _ = svg_gallery.inline_svg(source, "first")
+    second, _ = svg_gallery.inline_svg(source, "second")
+    assert 'href="#first-shape"' in first
+    assert 'href="#second-shape"' in second
+    source.write_text(source.read_text().replace('href="#shape"', 'href="#missing"'))
+    with pytest.raises(ValueError, match="missing"):
+        svg_gallery.validate_svg(source, False)

@@ -3,6 +3,8 @@
  * This is a renderer for the visualizer's vocabulary, not a general HTML converter.
  */
 
+import { exportContext, optimizeSvg } from "./svgOptimize";
+
 import { describeSvg } from "./svgDescription";
 import { PaintRole, palettes, paintRole, themeCss } from "./theme";
 import { ExportBounds, measureExportBounds } from "./exportBounds";
@@ -36,11 +38,13 @@ function themedPrimitive(
  * Serialize a diagram after fonts and layout have settled. Coordinates stay in
  * CSS pixels; scale changes only the declared outer dimensions.
  */
-export async function exportSvg(root: HTMLElement, scale = 1, bounds?: ExportBounds): Promise<string> {
+export async function measureSvg(root: HTMLElement, scale = 1, bounds?: ExportBounds): Promise<SVGElement> {
   if (!Number.isFinite(scale) || scale <= 0) {
     throw new Error("SVG scale must be positive and finite");
   }
+  const started = performance.now();
   await document.fonts.ready;
+  const ready = performance.now();
   const crop = bounds ?? measureExportBounds(root);
   const width = crop.right - crop.left;
   const height = crop.bottom - crop.top;
@@ -74,15 +78,15 @@ export async function exportSvg(root: HTMLElement, scale = 1, bounds?: ExportBou
   const defs = primitive("defs");
   svg.append(defs);
   let nextClip = 0;
-  const context = document.createElement("canvas").getContext("2d")!;
-  const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const context = exportContext(root.ownerDocument);
+  const graphemes = context.graphemes;
+  let textMilliseconds = 0;
 
   function text(node: Text, parent: SVGElement): void {
     const style = getComputedStyle(node.parentElement!);
     if (style.visibility !== "visible") return;
-    context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    const metrics = context.measureText("Mg");
-    const descent = metrics.fontBoundingBoxDescent;
+    const textStarted = performance.now();
+    const descent = context.descent(`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`);
     const range = document.createRange();
     let offset = 0;
     let current: SVGElement | undefined;
@@ -127,6 +131,7 @@ export async function exportSvg(root: HTMLElement, scale = 1, bounds?: ExportBou
       value += character === "\t" ? " " : character;
     }
     flush();
+    textMilliseconds += performance.now() - textStarted;
   }
 
   function box(element: HTMLElement, parent: SVGElement): void {
@@ -262,5 +267,27 @@ export async function exportSvg(root: HTMLElement, scale = 1, bounds?: ExportBou
       element.setAttribute(`${paint}-opacity`, String(opacity * Number(channels[3])));
     }
   }
-  return new XMLSerializer().serializeToString(svg);
+  (window as any).codevisSvgMetrics = {
+    fontWaitMs: ready - started, constructionMs: performance.now() - ready,
+    textMs: textMilliseconds,
+  };
+  return svg;
+}
+
+/** Consume a detached measured scene; never remeasure or modify the live diagram. */
+export function serializeSvg(scene: SVGElement): string {
+  const started = performance.now();
+  optimizeSvg(scene);
+  const optimized = performance.now();
+  const result = new XMLSerializer().serializeToString(scene);
+  (window as any).codevisSvgMetrics = {
+    ...(window as any).codevisSvgMetrics,
+    optimizationMs: optimized - started,
+    serializationMs: performance.now() - optimized, elements: scene.querySelectorAll("*").length + 1,
+  };
+  return result;
+}
+
+export async function exportSvg(root: HTMLElement, scale = 1, bounds?: ExportBounds): Promise<string> {
+  return serializeSvg(await measureSvg(root, scale, bounds));
 }

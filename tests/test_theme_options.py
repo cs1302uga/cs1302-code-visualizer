@@ -94,10 +94,20 @@ def test_inactive_connectors_and_dark_export(rendering_session):
         )
         root = ET.fromstring(output)
         assert root.attrib["data-codevis-theme"] == theme
+        namespace = "{http://www.w3.org/2000/svg}"
+        definitions = {element.attrib["id"]: element for element in root.iter() if "id" in element.attrib}
+
+        def visible_shapes(element, namespace=namespace, definitions=definitions):
+            if element.tag == namespace + "defs":
+                return []
+            if element.tag == namespace + "use":
+                return [definitions[element.attrib["href"][1:]]]
+            return [element] + [shape for child in element for shape in visible_shapes(child)]
+
+        rendered = visible_shapes(root)
         for tag, attribute in [("path", "stroke"), ("circle", "fill"), ("polygon", "fill")]:
-            elements = root.findall(
-                f'.//{{http://www.w3.org/2000/svg}}{tag}[@data-codevis-{attribute}="inactiveArrow"]'
-            )
+            elements = [element for element in rendered if element.tag == namespace + tag
+                        and element.get(f"data-codevis-{attribute}") == "inactiveArrow"]
             assert len(elements) == 2
             assert all(element.attrib[attribute] == expected for element in elements)
         # The active frame and the heap's Person -> String connection remain blue.
