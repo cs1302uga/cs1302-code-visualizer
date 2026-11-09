@@ -1,5 +1,6 @@
 /** Geometry-only reference routing. Coordinates are CSS pixels in the connector canvas. */
 import { ShaftClearance } from "./shaftClearance";
+import { searchOrthogonalGrid } from "./orthogonalSearch";
 import { arrowHead as head, Point } from "./connectorGeometry";
 export type { Point } from "./connectorGeometry";
 export interface Rect { left: number; top: number; right: number; bottom: number }
@@ -176,56 +177,20 @@ function search(start: Point,end: Point,obstacles: Rect[],margin: number, shafts
   ports?:{starts:Point[];ends:Point[];source:Point;limit?:number}): Point[]|undefined {
   const starts=ports?.starts??[start],ends=ports?.ends??[end];
   const region=expand(bounds([...starts,...ends]),margin);
-  const estimate=(p:Point)=>{
-    let distance=Infinity;
-    for(const q of ends)distance=Math.min(distance,Math.abs(p[0]-q[0])+Math.abs(p[1]-q[1]));
-    return distance*(ports?1.25:1);
-  };
   const local=obstacles.filter(r=>overlaps(region,r));
   const xs=[region.left,region.right,...starts.map(p=>p[0]),...ends.map(p=>p[0])],
     ys=[region.top,region.bottom,...starts.map(p=>p[1]),...ends.map(p=>p[1])];
   for(const r of [...local,...shafts.channels.filter(r=>overlaps(region,r))]) { xs.push(Math.max(region.left,r.left),Math.min(region.right,r.right));
     ys.push(Math.max(region.top,r.top),Math.min(region.bottom,r.bottom)); }
   const unique=(v:number[])=>[...new Set(v)].sort((a,b)=>a-b);
-  const x=unique(xs),y=unique(ys),nx=x.length,ny=y.length;
-  const index=(p:Point)=>y.indexOf(p[1])*nx+x.indexOf(p[0]);
-  const goals=new Set(ends.map(index));
-  const point=(i:number):Point=>[x[i%nx],y[Math.floor(i/nx)]];
-  const dist=new Map<number,number>(),prev=new Map<number,number>();
-  // A* ties prefer progress toward the goal, then stable state ID.
-  // This avoids exploring every equal-cost cell in long, open channels.
-  const heap: [number,number,number][]=[];
-  const less=(a:number[],b:number[])=>a[0]<b[0]||(a[0]===b[0]&&(a[2]>b[2]||(a[2]===b[2]&&a[1]<b[1])));
-  const push=(v:[number,number,number])=>{ heap.push(v); let i=heap.length-1;
-    while(i) {const p=(i-1)>>1;if(!less(v,heap[p]))break;heap[i]=heap[p];i=p;} heap[i]=v; };
-  const pop=()=>{const v=heap[0],last=heap.pop()!; if(heap.length){let i=0;
-    while(i*2+1<heap.length){let k=i*2+1;if(k+1<heap.length&&less(heap[k+1],heap[k]))k++;
-      if(!less(heap[k],last))break;heap[i]=heap[k];i=k;}heap[i]=last;}return v;};
-  for(const p of starts) {
-    const state=index(p)*3,cost=ports?Math.abs(p[0]-ports.source[0])+Math.abs(p[1]-ports.source[1]):0;
-    dist.set(state,cost);push([cost+estimate(p),state,cost]);
-  }
-  const visibility=new Map<string,boolean>();
-  // Bound each candidate search; exhaustion tries another port or exterior route.
-  let visited=0;
-  while(heap.length && visited++<(ports?.limit??(ports?200000:5000))) {
-    const [,state,cost]=pop(); if(dist.get(state)!==cost)continue;
-    const i=Math.floor(state/3),dir=state%3,p=point(i);
-    if(goals.has(i)){const result:Point[]=[];let s=state;while(true){result.push(point(Math.floor(s/3)));
-      if(!prev.has(s))break;s=prev.get(s)!;}return result.reverse();}
-    const col=i%nx,row=Math.floor(i/nx);
-    for(const [j,nd] of [[col>0?i-1:-1,1],[col+1<nx?i+1:-1,1],[row>0?i-nx:-1,2],[row+1<ny?i+nx:-1,2]]) {
-      if(j<0)continue;
-      const q=point(j),key=`${Math.min(i,j)}:${Math.max(i,j)}`;
-      let open=visibility.get(key);
-      if(open===undefined){open=!local.some(r=>intersects([p,q],r))&&shafts.clearSegment([p,q]);visibility.set(key,open);}
-      if(!open)continue;
-      const next=j*3+nd,ncost=cost+Math.abs(p[0]-q[0])+Math.abs(p[1]-q[1])+(dir&&dir!==nd?18:0);
-      if(ncost>=(dist.get(next)??Infinity))continue;
-      dist.set(next,ncost);prev.set(next,state);
-      push([ncost+estimate(q),next,ncost]);
-    }
-  }
+  const x=unique(xs),y=unique(ys);
+  const result=searchOrthogonalGrid({
+    x,y,ends,
+    sources:starts.map(point=>({point,initialCost:ports
+      ?Math.abs(point[0]-ports.source[0])+Math.abs(point[1]-ports.source[1]):0})),
+    segmentVisible:(p,q)=>!local.some(r=>intersects([p,q],r))&&shafts.clearSegment([p,q]),
+  },{heuristicWeight:ports?1.25:1,maxPops:ports?.limit??(ports?200000:5000)});
+  return result.status==="found"?result.points:undefined;
 }
 
 /** Frame-parent links attach to frame boundaries, not reference value boxes. */

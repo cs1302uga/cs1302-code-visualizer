@@ -43,6 +43,7 @@ import { isModernTrace, convertModernTraceToOpt } from "./modernTraceAdapter";
 import { prepareStringTrace, validateStringStyle, stringValue } from "./stringStyle";
 import { createValueBox, layoutValueBoxes, renderCompactString } from "./valueLayout";
 import { StackLabelLayout } from "./stackLabelLayout";
+import type { PlacementContext, PlacementDimensions, PlacementEffect, PlacementJournal, PlacementSelection, HeapPlacementPlan } from "./placementModels";
 import { formatLambdaSignature } from "./lambdaSignature";
 import { resolveArrayOrientation } from "./arrayOrientation";
 import { applyTheme, paint } from "./theme";
@@ -649,6 +650,7 @@ export class ExecutionVisualizer {
       this.dataViz.selectivelyHideVarsAndFields(
         this.params.hideVars || [],
         this.params.hideFields || [],
+        true /* configure initial options before selecting/materializing a step */,
       );
     }
 
@@ -1385,6 +1387,9 @@ class DataVisualizer {
   curTraceLayouts: any[]; // initialized in precomputeCurTraceLayouts
 
   private stackLabelLayout: StackLabelLayout;
+  private stackLabelRevision = -1;
+  private placementSelection?: PlacementSelection;
+  private legacyHeapMargins = new Map<HTMLElement, string>();
 
   jsPlumbInstance: any;
   jsPlumbManager: any;
@@ -1495,6 +1500,7 @@ class DataVisualizer {
       ],
       HoverPaintStyle: { lineWidth: 1, strokeStyle: connectorHighlightColor },
     });
+    this.jsPlumbInstance.layoutCoordinator.configurePreparation(() => this.preparePlacement());
   }
 
   height() {
@@ -1804,430 +1810,426 @@ class DataVisualizer {
   // (also call this function whenever the user chooses to selectively
   //  hide/show variables/objects, since we want to get the latest layout)
   precomputeCurTraceLayouts() {
-    //console.log('precomputeCurTraceLayouts');
-    // curTraceLayouts is a list of top-level heap layout "objects" with the
-    // same length as curTrace after it's been fully initialized. Each
-    // element of curTraceLayouts is computed from the contents of its
-    // immediate predecessor, thus ensuring that objects don't "jiggle
-    // around" between consecutive execution points.
-    //
-    // Each top-level heap layout "object" is itself a LIST of LISTS of
-    // object IDs, where each element of the outer list represents a row,
-    // and each element of the inner list represents columns within a
-    // particular row. Each row can have a different number of columns. Most
-    // rows have exactly ONE column (representing ONE object ID), but rows
-    // containing 1-D linked data structures have multiple columns. Each
-    // inner list element looks something like ['row1', 3, 2, 1] where the
-    // first element is a unique row ID tag, which is used as a key for d3 to
-    // preserve "object constancy" for updates, transitions, etc. The row ID
-    // is derived from the FIRST object ID inserted into the row. Since all
-    // object IDs are unique, all row IDs will also be unique.
+    this.jsPlumbInstance.layoutCoordinator.placement.invalidate();
+    this.selectPlacement(this.owner.curInstr);
+  }
 
-    /* This is a good, simple example to test whether objects "jiggle"
+  private placementOptions() {
+    const heapOffsets = Object.fromEntries(this.draggedHeapObjectCSS.entries().map(({ key, value }) =>
+      [key.replace(/^v\d+__heap_object_/, ""), value]));
+    this.domRoot.find(".heapObject[data-object-id]").each((_index, element: HTMLElement) => {
+      const saved = $(element).data("draggedCSS");
+      if (saved) heapOffsets[element.dataset.objectId] = saved;
+    });
+    return { ...this.params, layoutTypes: [...this.owner.layoutTypes],
+      hideVars: this.hideVarsSet?.keys() ?? [], hideFields: this.hideFieldsSet?.keys() ?? [],
+      explicitHeapOffsets: Object.freeze(heapOffsets) };
+  }
 
-    x = [1, [2, [3, None]]]
-    y = [4, [5, [6, None]]]
+  private selectPlacement(index: number): PlacementSelection {
+    const placement = this.jsPlumbInstance.layoutCoordinator.placement;
+    const selection = placement.select(this.curTrace, index, this.placementOptions(),
+      context => this.legacyHeapPlan(context));
+    if (this.stackLabelRevision !== selection.context.canonical.revision) {
+      this.stackLabelLayout = new StackLabelLayout(this.curTrace, this.owner.layoutTypes,
+        type => this.trimTypePrefix(type));
+      this.stackLabelRevision = selection.context.canonical.revision;
+    }
+    this.curTraceLayouts = placement.plans().map(plan => plan.heap);
+    return selection;
+  }
 
-    x[1][1] = y[1]
+  // Private adapter preserves root traversal, structural hooks, linked-row
+  // splicing, reachability pruning, and canonical predecessor rows.
+  private legacyHeapPlan(context: PlacementContext & { readonly predecessor?: HeapPlacementPlan }): HeapPlacementPlan {
+    var myViz = this;
+    var curEntry = context.state;
+    var prevLayout = context.predecessor ?? [];
 
-    */
-    this.curTraceLayouts = [];
-    this.curTraceLayouts.push([]); // pre-seed with an empty sentinel to simplify the code
+    // make a DEEP COPY of prevLayout to use as the basis for curLine
+    var curLayout = $.extend(true /* deep copy */, [], prevLayout);
 
-    var myViz = this; // to prevent confusion of 'this' inside of nested functions
+    // initialize with all IDs from curLayout
+    var idsToRemove = d3Map();
+    $.each(curLayout, function (i, row) {
+      for (var j = 1 /* ignore row ID tag */; j < row.length; j++) {
+        idsToRemove.set(row[j], 1);
+      }
+    });
 
-    assert(this.curTrace && this.curTrace.length > 0);
-    $.each(this.curTrace, function (i, curEntry) {
-      var prevLayout = myViz.curTraceLayouts[myViz.curTraceLayouts.length - 1];
+    var idsAlreadyLaidOut = d3Map(); // to prevent infinite recursion
 
-      // make a DEEP COPY of prevLayout to use as the basis for curLine
-      var curLayout = $.extend(true /* deep copy */, [], prevLayout);
-
-      // initialize with all IDs from curLayout
-      var idsToRemove = d3Map();
-      $.each(curLayout, function (i, row) {
-        for (var j = 1 /* ignore row ID tag */; j < row.length; j++) {
-          idsToRemove.set(row[j], 1);
+    function curLayoutIndexOf(id) {
+      for (var i = 0; i < curLayout.length; i++) {
+        var row = curLayout[i];
+        var index = row.indexOf(id);
+        if (index > 0) {
+          // index of 0 is impossible since it's the row ID tag
+          return { row: row, index: index };
         }
+      }
+      return null;
+    }
+
+    function isLinearObj(heapObj) {
+      var hook_result = myViz.owner.try_hook("isLinearObj", {
+        heapObj: heapObj,
       });
+      if (hook_result[0]) return hook_result[1];
 
-      var idsAlreadyLaidOut = d3Map(); // to prevent infinite recursion
+      return (
+        heapObj[0] == "LIST" || heapObj[0] == "TUPLE" || heapObj[0] == "SET"
+      );
+    }
 
-      function curLayoutIndexOf(id) {
-        for (var i = 0; i < curLayout.length; i++) {
-          var row = curLayout[i];
-          var index = row.indexOf(id);
-          if (index > 0) {
-            // index of 0 is impossible since it's the row ID tag
-            return { row: row, index: index };
-          }
+    function recurseIntoObject(id, curRow, newRow) {
+      // heuristic for laying out 1-D linked data structures: check for enclosing elements
+      // that are structurallyEquivalent() and then lay them out as siblings in the same "row"
+      var heapObj = curEntry.heap[id];
+
+      if (myViz.isCppMode()) {
+        // soften this assumption since C-style pointers might not point
+        // to the heap; they can point to any piece of data!
+        if (!heapObj) {
+          return;
         }
-        return null;
+      } else {
+        assert(heapObj);
       }
 
-      function isLinearObj(heapObj) {
-        var hook_result = myViz.owner.try_hook("isLinearObj", {
-          heapObj: heapObj,
+      if (isLinearObj(heapObj)) {
+        $.each(heapObj, function (ind, child) {
+          if (parseInt(ind) < 1) return; // skip type tag
+
+          if (!myViz.isPrimitiveType(child)) {
+            var childID = getRefID(child);
+            if (
+              myViz.structurallyEquivalent(heapObj, curEntry.heap[childID])
+            ) {
+              updateCurLayout(childID, curRow, newRow);
+            } else if (
+              !myViz.owner.shouldNestObject(curEntry.heap[childID])
+            ) {
+              updateCurLayout(childID, [], []);
+            }
+          }
         });
-        if (hook_result[0]) return hook_result[1];
+      } else if (heapObj[0] == "DICT") {
+        $.each(heapObj, function (ind, child) {
+          if (parseInt(ind) < 1) return; // skip type tag
 
-        return (
-          heapObj[0] == "LIST" || heapObj[0] == "TUPLE" || heapObj[0] == "SET"
-        );
-      }
-
-      function recurseIntoObject(id, curRow, newRow) {
-        // heuristic for laying out 1-D linked data structures: check for enclosing elements
-        // that are structurallyEquivalent() and then lay them out as siblings in the same "row"
-        var heapObj = curEntry.heap[id];
-
-        if (myViz.isCppMode()) {
-          // soften this assumption since C-style pointers might not point
-          // to the heap; they can point to any piece of data!
-          if (!heapObj) {
-            return;
+          var dictKey = child[0];
+          if (!myViz.isPrimitiveType(dictKey)) {
+            var keyChildID = getRefID(dictKey);
+            if (!myViz.owner.shouldNestObject(curEntry.heap[keyChildID])) {
+              updateCurLayout(keyChildID, [], []);
+            }
           }
-        } else {
-          assert(heapObj);
+
+          var dictVal = child[1];
+          if (!myViz.isPrimitiveType(dictVal)) {
+            var childID = getRefID(dictVal);
+            if (
+              myViz.structurallyEquivalent(heapObj, curEntry.heap[childID])
+            ) {
+              updateCurLayout(childID, curRow, newRow);
+            } else if (
+              !myViz.owner.shouldNestObject(curEntry.heap[childID])
+            ) {
+              updateCurLayout(childID, [], []);
+            }
+          }
+        });
+      } else if (
+        heapObj[0] == "INSTANCE" ||
+        heapObj[0] == "INSTANCE_PPRINT" ||
+        heapObj[0] == "CLASS"
+      ) {
+        let [className, headerLength] =
+          DataVisualizer.getClassInstanceMetadata(heapObj);
+        jQuery.each(heapObj, function (ind, child) {
+          if (ind < headerLength) return;
+
+          var instKey = child[0];
+          if (myViz.inHideFieldsSet(className, instKey)) {
+            //console.log('precompute HIDING', className, instKey);
+            return; // get out!
+          }
+          if (!myViz.isPrimitiveType(instKey)) {
+            var keyChildID = getRefID(instKey);
+            if (!myViz.owner.shouldNestObject(curEntry.heap[keyChildID])) {
+              updateCurLayout(keyChildID, [], []);
+            }
+          }
+
+          var instVal = child[1];
+          if (!myViz.isPrimitiveType(instVal)) {
+            var childID = getRefID(instVal);
+            if (
+              myViz.structurallyEquivalent(heapObj, curEntry.heap[childID])
+            ) {
+              updateCurLayout(childID, curRow, newRow);
+            } else if (
+              !myViz.owner.shouldNestObject(curEntry.heap[childID])
+            ) {
+              updateCurLayout(childID, [], []);
+            }
+          }
+        });
+      } else if (heapObj[0] == "FUNCTION" || heapObj[0] == "JS_FUNCTION") {
+        // a Python function object has an optional element at index=3
+        // (zero-indexed) that represents default arg names/values
+        //
+        // a JavaScript function object has funcProperties that we should
+        // recurse into in order to precompute their layouts
+        var funcProperties = null;
+        // traverse into default argument values to precompute their
+        // layouts, if applicable
+        if (heapObj[0] == "FUNCTION" && heapObj.length > 3) {
+          funcProperties = heapObj[3];
+        }
+        if (heapObj[0] == "JS_FUNCTION") {
+          assert(heapObj.length == 5);
+          funcProperties = heapObj[3];
         }
 
-        if (isLinearObj(heapObj)) {
-          $.each(heapObj, function (ind, child) {
-            if (parseInt(ind) < 1) return; // skip type tag
-
-            if (!myViz.isPrimitiveType(child)) {
-              var childID = getRefID(child);
-              if (
-                myViz.structurallyEquivalent(heapObj, curEntry.heap[childID])
-              ) {
-                updateCurLayout(childID, curRow, newRow);
-              } else if (
-                !myViz.owner.shouldNestObject(curEntry.heap[childID])
-              ) {
-                updateCurLayout(childID, [], []);
-              }
-            }
-          });
-        } else if (heapObj[0] == "DICT") {
-          $.each(heapObj, function (ind, child) {
-            if (parseInt(ind) < 1) return; // skip type tag
-
-            var dictKey = child[0];
-            if (!myViz.isPrimitiveType(dictKey)) {
-              var keyChildID = getRefID(dictKey);
-              if (!myViz.owner.shouldNestObject(curEntry.heap[keyChildID])) {
-                updateCurLayout(keyChildID, [], []);
-              }
-            }
-
-            var dictVal = child[1];
-            if (!myViz.isPrimitiveType(dictVal)) {
-              var childID = getRefID(dictVal);
-              if (
-                myViz.structurallyEquivalent(heapObj, curEntry.heap[childID])
-              ) {
-                updateCurLayout(childID, curRow, newRow);
-              } else if (
-                !myViz.owner.shouldNestObject(curEntry.heap[childID])
-              ) {
-                updateCurLayout(childID, [], []);
-              }
-            }
-          });
-        } else if (
-          heapObj[0] == "INSTANCE" ||
-          heapObj[0] == "INSTANCE_PPRINT" ||
-          heapObj[0] == "CLASS"
-        ) {
-          let [className, headerLength] =
-            DataVisualizer.getClassInstanceMetadata(heapObj);
-          jQuery.each(heapObj, function (ind, child) {
-            if (ind < headerLength) return;
-
-            var instKey = child[0];
-            if (myViz.inHideFieldsSet(className, instKey)) {
-              //console.log('precompute HIDING', className, instKey);
-              return; // get out!
-            }
-            if (!myViz.isPrimitiveType(instKey)) {
-              var keyChildID = getRefID(instKey);
-              if (!myViz.owner.shouldNestObject(curEntry.heap[keyChildID])) {
-                updateCurLayout(keyChildID, [], []);
-              }
-            }
-
-            var instVal = child[1];
-            if (!myViz.isPrimitiveType(instVal)) {
-              var childID = getRefID(instVal);
-              if (
-                myViz.structurallyEquivalent(heapObj, curEntry.heap[childID])
-              ) {
-                updateCurLayout(childID, curRow, newRow);
-              } else if (
-                !myViz.owner.shouldNestObject(curEntry.heap[childID])
-              ) {
-                updateCurLayout(childID, [], []);
-              }
-            }
-          });
-        } else if (heapObj[0] == "FUNCTION" || heapObj[0] == "JS_FUNCTION") {
-          // a Python function object has an optional element at index=3
-          // (zero-indexed) that represents default arg names/values
-          //
-          // a JavaScript function object has funcProperties that we should
-          // recurse into in order to precompute their layouts
-          var funcProperties = null;
-          // traverse into default argument values to precompute their
-          // layouts, if applicable
-          if (heapObj[0] == "FUNCTION" && heapObj.length > 3) {
-            funcProperties = heapObj[3];
-          }
-          if (heapObj[0] == "JS_FUNCTION") {
-            assert(heapObj.length == 5);
-            funcProperties = heapObj[3];
-          }
-
-          if (funcProperties) {
-            assert(funcProperties.length > 0);
-            let funcName = heapObj[1];
-            $.each(funcProperties, function (ind, kvPair) {
-              // only check this for JS_FUNCTION! we're overloading
-              // funcProperties to use for both FUNCTION and
-              // JS_FUNCTION, which might be confusing ...
-              if (heapObj[0] == "JS_FUNCTION") {
-                let instKey = kvPair[0];
-                if (myViz.inHideFieldsSet(funcName, instKey)) {
-                  //console.log('precompute HIDING', funcName, instKey);
-                  return; // get out!
-                }
-              }
-
-              // copy/paste from INSTANCE/CLASS code above
-              var instVal = kvPair[1];
-              if (!myViz.isPrimitiveType(instVal)) {
-                var childID = getRefID(instVal);
-                if (!myViz.owner.shouldNestObject(curEntry.heap[childID])) {
-                  updateCurLayout(childID, [], []);
-                }
-              }
-            });
-          }
-        } else if (
-          heapObj[0] == "C_ARRAY" ||
-          heapObj[0] == "C_MULTIDIMENSIONAL_ARRAY" ||
-          heapObj[0] == "C_STRUCT"
-        ) {
-          updateCurLayoutAndRecurse(heapObj);
-        }
-      }
-
-      // a krazy function!
-      // id     - the new object ID to be inserted somewhere in curLayout
-      //          (if it's not already in there)
-      // curRow - a row within curLayout where new linked list
-      //          elements can be appended onto (might be null)
-      // newRow - a new row that might be spliced into curRow or appended
-      //          as a new row in curLayout
-      function updateCurLayout(id, curRow, newRow) {
-        if (idsAlreadyLaidOut.has(id)) {
-          return; // PUNT!
-        }
-
-        var curLayoutLoc = curLayoutIndexOf(id);
-
-        var alreadyLaidOut = idsAlreadyLaidOut.has(id);
-        idsAlreadyLaidOut.set(id, 1); // unconditionally set now
-
-        // if id is already in curLayout ...
-        if (curLayoutLoc) {
-          var foundRow = curLayoutLoc.row;
-          var foundIndex = curLayoutLoc.index;
-
-          idsToRemove.remove(id); // this id is already accounted for!
-
-          // very subtle ... if id hasn't already been handled in
-          // this iteration, then splice newRow into foundRow. otherwise
-          // (later) append newRow onto curLayout as a truly new row
-          if (!alreadyLaidOut) {
-            // splice the contents of newRow right BEFORE foundIndex.
-            // (Think about when you're trying to insert in id=3 into ['row1', 2, 1]
-            //  to represent a linked list 3->2->1. You want to splice the 3
-            //  entry right before the 2 to form ['row1', 3, 2, 1])
-            if (newRow.length > 1) {
-              var args = [foundIndex, 0];
-              for (var i = 1; i < newRow.length; i++) {
-                // ignore row ID tag
-                args.push(newRow[i]);
-                idsToRemove.remove(newRow[i]);
-              }
-              foundRow.splice.apply(foundRow, args);
-
-              // remove ALL elements from newRow since they've all been accounted for
-              // (but don't reassign it away to an empty list, since the
-              // CALLER checks its value. TODO: how to get rid of this gross hack?!?)
-              newRow.splice(0, newRow.length);
-            }
-          }
-
-          // recurse to find more top-level linked entries to append onto foundRow
-          recurseIntoObject(id, foundRow, []);
-        } else {
-          // push id into newRow ...
-          if (newRow.length == 0) {
-            newRow.push("row" + id); // unique row ID (since IDs are unique)
-          }
-          newRow.push(id);
-
-          // recurse to find more top-level linked entries ...
-          recurseIntoObject(id, curRow, newRow);
-
-          // if newRow hasn't been spliced into an existing row yet during
-          // a child recursive call ...
-          if (newRow.length > 0) {
-            if (curRow && curRow.length > 0) {
-              // append onto the END of curRow if it exists
-              for (var i = 1; i < newRow.length; i++) {
-                // ignore row ID tag
-                curRow.push(newRow[i]);
-              }
-            } else {
-              // otherwise push to curLayout as a new row
-              //
-              // TODO: this might not always look the best, since we might
-              // sometimes want to splice newRow in the MIDDLE of
-              // curLayout. Consider this example:
-              //
-              // x = [1,2,3]
-              // y = [4,5,6]
-              // x = [7,8,9]
-              //
-              // when the third line is executed, the arrows for x and y
-              // will be crossed (ugly!) since the new row for the [7,8,9]
-              // object is pushed to the end (bottom) of curLayout. The
-              // proper behavior is to push it to the beginning of
-              // curLayout where the old row for 'x' used to be.
-              curLayout.push($.extend(true /* make a deep copy */, [], newRow));
-            }
-
-            // regardless, newRow is now accounted for, so clear it
-            for (var i = 1; i < newRow.length; i++) {
-              // ignore row ID tag
-              idsToRemove.remove(newRow[i]);
-            }
-            newRow.splice(0, newRow.length); // kill it!
-          }
-        }
-      }
-
-      function updateCurLayoutAndRecurse(elt) {
-        if (!elt) return; // early bail out
-
-        if (isHeapRef(elt, curEntry.heap)) {
-          var id = getRefID(elt);
-          updateCurLayout(id, null, []);
-        }
-        recurseIntoCStructArray(elt);
-      }
-
-      // traverse inside of C structs and arrays to find whether they
-      // (recursively) contain any references to heap objects within
-      // themselves. be able to handle arbitrary nesting!
-      function recurseIntoCStructArray(val) {
-        if (val[0] === "C_ARRAY") {
-          $.each(val, function (ind, elt) {
-            if (parseInt(ind) < 2) return; // these have 2 header fields
-            updateCurLayoutAndRecurse(elt);
-          });
-        } else if (
-          val[0] === "C_MULTIDIMENSIONAL_ARRAY" ||
-          val[0] === "C_STRUCT"
-        ) {
-          $.each(val, function (ind, kvPair) {
-            if (parseInt(ind) < 3) return; // these have 3 header fields
-
-            if (val[0] === "C_STRUCT") {
-              let structName = val[2] ? val[2] : DataVisualizer.UNNAMED_PREFIX;
-              let fieldName = kvPair[0];
-              if (myViz.inHideFieldsSet(structName, fieldName)) {
-                //console.log('precompute HIDING', structName, fieldName);
+        if (funcProperties) {
+          assert(funcProperties.length > 0);
+          let funcName = heapObj[1];
+          $.each(funcProperties, function (ind, kvPair) {
+            // only check this for JS_FUNCTION! we're overloading
+            // funcProperties to use for both FUNCTION and
+            // JS_FUNCTION, which might be confusing ...
+            if (heapObj[0] == "JS_FUNCTION") {
+              let instKey = kvPair[0];
+              if (myViz.inHideFieldsSet(funcName, instKey)) {
+                //console.log('precompute HIDING', funcName, instKey);
                 return; // get out!
               }
             }
 
-            updateCurLayoutAndRecurse(kvPair[1]);
+            // copy/paste from INSTANCE/CLASS code above
+            var instVal = kvPair[1];
+            if (!myViz.isPrimitiveType(instVal)) {
+              var childID = getRefID(instVal);
+              if (!myViz.owner.shouldNestObject(curEntry.heap[childID])) {
+                updateCurLayout(childID, [], []);
+              }
+            }
           });
         }
+      } else if (
+        heapObj[0] == "C_ARRAY" ||
+        heapObj[0] == "C_MULTIDIMENSIONAL_ARRAY" ||
+        heapObj[0] == "C_STRUCT"
+      ) {
+        updateCurLayoutAndRecurse(heapObj);
+      }
+    }
+
+    // a krazy function!
+    // id     - the new object ID to be inserted somewhere in curLayout
+    //          (if it's not already in there)
+    // curRow - a row within curLayout where new linked list
+    //          elements can be appended onto (might be null)
+    // newRow - a new row that might be spliced into curRow or appended
+    //          as a new row in curLayout
+    function updateCurLayout(id, curRow, newRow) {
+      if (idsAlreadyLaidOut.has(id)) {
+        return; // PUNT!
       }
 
-      // iterate through all globals and ordered stack frames and call updateCurLayout
-      $.each(curEntry.ordered_globals, function (i, varname) {
-        if (myViz.inHideVarsSet(DataVisualizer.GLOBAL_PREFIX, varname)) {
-          //console.log('precompute HIDING', DataVisualizer.GLOBAL_PREFIX, varname);
+      var curLayoutLoc = curLayoutIndexOf(id);
+
+      var alreadyLaidOut = idsAlreadyLaidOut.has(id);
+      idsAlreadyLaidOut.set(id, 1); // unconditionally set now
+
+      // if id is already in curLayout ...
+      if (curLayoutLoc) {
+        var foundRow = curLayoutLoc.row;
+        var foundIndex = curLayoutLoc.index;
+
+        idsToRemove.remove(id); // this id is already accounted for!
+
+        // very subtle ... if id hasn't already been handled in
+        // this iteration, then splice newRow into foundRow. otherwise
+        // (later) append newRow onto curLayout as a truly new row
+        if (!alreadyLaidOut) {
+          // splice the contents of newRow right BEFORE foundIndex.
+          // (Think about when you're trying to insert in id=3 into ['row1', 2, 1]
+          //  to represent a linked list 3->2->1. You want to splice the 3
+          //  entry right before the 2 to form ['row1', 3, 2, 1])
+          if (newRow.length > 1) {
+            var args = [foundIndex, 0];
+            for (var i = 1; i < newRow.length; i++) {
+              // ignore row ID tag
+              args.push(newRow[i]);
+              idsToRemove.remove(newRow[i]);
+            }
+            foundRow.splice.apply(foundRow, args);
+
+            // remove ALL elements from newRow since they've all been accounted for
+            // (but don't reassign it away to an empty list, since the
+            // CALLER checks its value. TODO: how to get rid of this gross hack?!?)
+            newRow.splice(0, newRow.length);
+          }
+        }
+
+        // recurse to find more top-level linked entries to append onto foundRow
+        recurseIntoObject(id, foundRow, []);
+      } else {
+        // push id into newRow ...
+        if (newRow.length == 0) {
+          newRow.push("row" + id); // unique row ID (since IDs are unique)
+        }
+        newRow.push(id);
+
+        // recurse to find more top-level linked entries ...
+        recurseIntoObject(id, curRow, newRow);
+
+        // if newRow hasn't been spliced into an existing row yet during
+        // a child recursive call ...
+        if (newRow.length > 0) {
+          if (curRow && curRow.length > 0) {
+            // append onto the END of curRow if it exists
+            for (var i = 1; i < newRow.length; i++) {
+              // ignore row ID tag
+              curRow.push(newRow[i]);
+            }
+          } else {
+            // otherwise push to curLayout as a new row
+            //
+            // TODO: this might not always look the best, since we might
+            // sometimes want to splice newRow in the MIDDLE of
+            // curLayout. Consider this example:
+            //
+            // x = [1,2,3]
+            // y = [4,5,6]
+            // x = [7,8,9]
+            //
+            // when the third line is executed, the arrows for x and y
+            // will be crossed (ugly!) since the new row for the [7,8,9]
+            // object is pushed to the end (bottom) of curLayout. The
+            // proper behavior is to push it to the beginning of
+            // curLayout where the old row for 'x' used to be.
+            curLayout.push($.extend(true /* make a deep copy */, [], newRow));
+          }
+
+          // regardless, newRow is now accounted for, so clear it
+          for (var i = 1; i < newRow.length; i++) {
+            // ignore row ID tag
+            idsToRemove.remove(newRow[i]);
+          }
+          newRow.splice(0, newRow.length); // kill it!
+        }
+      }
+    }
+
+    function updateCurLayoutAndRecurse(elt) {
+      if (!elt) return; // early bail out
+
+      if (isHeapRef(elt, curEntry.heap)) {
+        var id = getRefID(elt);
+        updateCurLayout(id, null, []);
+      }
+      recurseIntoCStructArray(elt);
+    }
+
+    // traverse inside of C structs and arrays to find whether they
+    // (recursively) contain any references to heap objects within
+    // themselves. be able to handle arbitrary nesting!
+    function recurseIntoCStructArray(val) {
+      if (val[0] === "C_ARRAY") {
+        $.each(val, function (ind, elt) {
+          if (parseInt(ind) < 2) return; // these have 2 header fields
+          updateCurLayoutAndRecurse(elt);
+        });
+      } else if (
+        val[0] === "C_MULTIDIMENSIONAL_ARRAY" ||
+        val[0] === "C_STRUCT"
+      ) {
+        $.each(val, function (ind, kvPair) {
+          if (parseInt(ind) < 3) return; // these have 3 header fields
+
+          if (val[0] === "C_STRUCT") {
+            let structName = val[2] ? val[2] : DataVisualizer.UNNAMED_PREFIX;
+            let fieldName = kvPair[0];
+            if (myViz.inHideFieldsSet(structName, fieldName)) {
+              //console.log('precompute HIDING', structName, fieldName);
+              return; // get out!
+            }
+          }
+
+          updateCurLayoutAndRecurse(kvPair[1]);
+        });
+      }
+    }
+
+    // iterate through all globals and ordered stack frames and call updateCurLayout
+    $.each(curEntry.ordered_globals, function (i, varname) {
+      if (myViz.inHideVarsSet(DataVisualizer.GLOBAL_PREFIX, varname)) {
+        //console.log('precompute HIDING', DataVisualizer.GLOBAL_PREFIX, varname);
+        return; // get out!
+      }
+
+      var val = curEntry.globals[varname];
+      if (val !== undefined) {
+        // might not be defined at this line, which is OKAY!
+        // TODO: try to unify this behavior between C/C++ and other languages:
+        if (myViz.isCppMode()) {
+          updateCurLayoutAndRecurse(val);
+        } else {
+          if (!myViz.isPrimitiveType(val)) {
+            var id = getRefID(val);
+            updateCurLayout(id, null, []);
+          }
+        }
+      }
+    });
+
+    $.each(curEntry.stack_to_render, function (i, frame) {
+      // some functions are unnamed, so use a placeholder:
+      let func_prefix = frame.func_name
+        ? frame.func_name
+        : DataVisualizer.UNNAMED_PREFIX;
+
+      $.each(frame.ordered_varnames, function (xxx, varname) {
+        if (myViz.inHideVarsSet(func_prefix, varname)) {
+          //console.log('precompute HIDING', func_prefix, varname);
           return; // get out!
         }
 
-        var val = curEntry.globals[varname];
-        if (val !== undefined) {
-          // might not be defined at this line, which is OKAY!
-          // TODO: try to unify this behavior between C/C++ and other languages:
-          if (myViz.isCppMode()) {
-            updateCurLayoutAndRecurse(val);
-          } else {
-            if (!myViz.isPrimitiveType(val)) {
-              var id = getRefID(val);
-              updateCurLayout(id, null, []);
-            }
+        var val = frame.encoded_locals[varname];
+        // TODO: try to unify this behavior between C/C++ and other languages:
+        if (myViz.isCppMode()) {
+          updateCurLayoutAndRecurse(val);
+        } else {
+          if (!myViz.isPrimitiveType(val)) {
+            var id = getRefID(val);
+            updateCurLayout(id, null, []);
           }
         }
       });
-
-      $.each(curEntry.stack_to_render, function (i, frame) {
-        // some functions are unnamed, so use a placeholder:
-        let func_prefix = frame.func_name
-          ? frame.func_name
-          : DataVisualizer.UNNAMED_PREFIX;
-
-        $.each(frame.ordered_varnames, function (xxx, varname) {
-          if (myViz.inHideVarsSet(func_prefix, varname)) {
-            //console.log('precompute HIDING', func_prefix, varname);
-            return; // get out!
-          }
-
-          var val = frame.encoded_locals[varname];
-          // TODO: try to unify this behavior between C/C++ and other languages:
-          if (myViz.isCppMode()) {
-            updateCurLayoutAndRecurse(val);
-          } else {
-            if (!myViz.isPrimitiveType(val)) {
-              var id = getRefID(val);
-              updateCurLayout(id, null, []);
-            }
-          }
-        });
-      });
-
-      // iterate through remaining elements of idsToRemove and REMOVE them from curLayout
-      idsToRemove.forEach(function (id, xxx) {
-        var idInt = Number(id); // keys are stored as strings, so convert!!!
-        $.each(curLayout, function (rownum, row) {
-          var ind = row.indexOf(idInt);
-          if (ind > 0) {
-            // remember that index 0 of the row is the row ID tag
-            row.splice(ind, 1);
-          }
-        });
-      });
-
-      // now remove empty rows (i.e., those with only a row ID tag) from curLayout
-      curLayout = curLayout.filter(function (row) {
-        return row.length > 1;
-      });
-
-      myViz.curTraceLayouts.push(curLayout);
     });
 
-    this.curTraceLayouts.splice(0, 1); // remove seeded empty sentinel element
-    assert(this.curTrace.length == this.curTraceLayouts.length);
+    // iterate through remaining elements of idsToRemove and REMOVE them from curLayout
+    idsToRemove.forEach(function (id, xxx) {
+      var idInt = Number(id); // keys are stored as strings, so convert!!!
+      $.each(curLayout, function (rownum, row) {
+        var ind = row.indexOf(idInt);
+        if (ind > 0) {
+          // remember that index 0 of the row is the row ID tag
+          row.splice(ind, 1);
+        }
+      });
+    });
+
+    // now remove empty rows (i.e., those with only a row ID tag) from curLayout
+    curLayout = curLayout.filter(function (row) {
+      return row.length > 1;
+    });
+
+    return curLayout;
   }
 
   // is this visualizer in C or C++ mode? the eventual goal is to remove
@@ -2344,11 +2346,20 @@ class DataVisualizer {
     //console.log('renderDataStructures', curInstr);
     var myViz = this; // to prevent confusion of 'this' inside of nested functions
 
-    var curEntry = this.curTrace[curInstr];
-    var curToplevelLayout = this.curTraceLayouts[curInstr];
+    // Restore the old state's writes before reusing keyed frames or removing
+    // heap DOM. Do not run a replacement model against the previous state's DOM.
+    this.placementSelection = undefined;
+    myViz.jsPlumbInstance.prepareLayout();
 
     myViz.resetJsPlumbManager(); // very important!!!
     myViz.jsPlumbInstance.beginBatch();
+    let materialized = false;
+    try {
+    this.placementSelection = this.selectPlacement(curInstr);
+    this.legacyHeapMargins.clear();
+    var curEntry = this.curTrace[curInstr];
+    var curToplevelLayout = this.placementSelection.heap;
+    var stackGlobalsPlan = this.placementSelection.stackGlobals;
 
     // for simplicity (but sacrificing some performance), delete all
     // connectors and redraw them from scratch. doing so avoids mysterious
@@ -2515,7 +2526,7 @@ class DataVisualizer {
     // (Sometimes entries in curEntry.ordered_globals are undefined,
     // so filter those out.)
     var realGlobalsLst = [];
-    $.each(curEntry.ordered_globals, function (i, varname) {
+    $.each(stackGlobalsPlan.globals, function (i, varname) {
       if (myViz.inHideVarsSet(DataVisualizer.GLOBAL_PREFIX, varname)) {
         console.log("render HIDING", DataVisualizer.GLOBAL_PREFIX, varname);
         myViz.varsHidden.push(DataVisualizer.GLOBAL_PREFIX + ":" + varname);
@@ -2556,7 +2567,7 @@ class DataVisualizer {
         return myViz.owner.generateID(varnameToCssID("global__" + d + "_tr")); // make globally unique (within the page)
       });
 
-    var globalVarTableMerged = globalVarTableEnter.merge(globalVarTable as any);
+    var globalVarTableMerged = globalVarTableEnter.merge(globalVarTable as any).order();
 
     var globalVarTableCells = globalVarTableMerged
       .selectAll("td.stackFrameVar,td.stackFrameValue")
@@ -2681,7 +2692,7 @@ class DataVisualizer {
       .remove();
 
     // for aesthetics, hide globals if there aren't any globals to display
-    if (curEntry.ordered_globals.length == 0) {
+    if (!stackGlobalsPlan.showGlobals) {
       this.domRoot.find("#" + globalsID).hide();
     } else {
       this.domRoot.find("#" + globalsID).show();
@@ -2694,7 +2705,7 @@ class DataVisualizer {
     // VERY IMPORTANT for selectAll selector to be SUPER specific here!
     var stackFrameDiv = stackDiv
       .selectAll("div.stackFrame,div.zombieStackFrame")
-      .data(curEntry.stack_to_render, function (frame) {
+      .data(stackGlobalsPlan.frames, function (frame) {
         // VERY VERY VERY IMPORTANT for properly handling closures and nested functions
         // (see the backend code for more details)
         return frame.unique_hash;
@@ -2707,9 +2718,12 @@ class DataVisualizer {
         return d.is_zombie ? "zombieStackFrame" : "stackFrame";
       })
       .attr("id", function (d, i) {
-        return d.is_zombie
-          ? myViz.owner.generateID("zombie_stack" + i)
-          : myViz.owner.generateID("stack" + i);
+        const prefix = d.is_zombie ? "zombie_stack" : "stack";
+        let frameDomID = i;
+        // Keep the legacy index where available, without renaming survivors.
+        // Prepending and replacing frames must also avoid still-exiting nodes.
+        while (myViz.domRoot.find("#" + myViz.owner.generateID(prefix + frameDomID)).length) frameDomID++;
+        return myViz.owner.generateID(prefix + frameDomID);
       })
       // HTML5 custom data attributes
       .attr("data-frame_id", function (frame, i) {
@@ -2756,7 +2770,7 @@ class DataVisualizer {
           // render a parent pointer to the global frame
           //console.log('connect', my_CSS_id, globalsID);
           // only do this if there are actually some global variables to display ...
-          if (curEntry.ordered_globals.length > 0) {
+          if (stackGlobalsPlan.showGlobals) {
             myViz.jsPlumbManager.parentPointerConnectionEndpointIDs.set(
               my_CSS_id,
               globalsID,
@@ -3035,146 +3049,10 @@ class DataVisualizer {
       })
       .remove();
 
-    // Rightward nudge hack to make tree-like structures look more sane
-    // without any sophisticated graph rendering code. Thanks to John
-    // DeNero for this suggestion in Fall 2012.
-    //
-    // This hack tries to ensure that all pointers that span different
-    // rows point RIGHTWARD (as much as possible), which makes tree-like
-    // structures look decent. e.g.,:
-    //
-    // t = [[['a', 'b'], ['c', 'd']], [[1,2], [3,4]]]
-    //
-    // Do it here since all of the divs have been rendered by now, but no
-    // jsPlumb arrows have been rendered yet.
-    if (rightwardNudgeHack) {
-      // Basic idea: keep a set of all nudged ROWS for each nudger row, so
-      // that when you get nudged, you can, in turn, nudge all of the rows
-      // that you've nudged. this algorithm nicely takes care of the fact
-      // that there might not be cycles in objects that you've nudged, but
-      // there are cycles in entire rows.
-      //
-      // Key:   ID of .heapRow object that did the nudging
-      // Value: set of .heapRow ID that were (transitively) nudged by this element
-      //        (represented as a d3.map)
-      var nudger_to_nudged_rows = {};
-
-      // VERY IMPORTANT to sort these connector IDs in ascending order,
-      // since I think they're rendered left-to-right, top-to-bottom in ID
-      // order, so we want to run the nudging algorithm in that same order.
-      var srcHeapConnectorIDs =
-        myViz.jsPlumbManager.heapConnectionEndpointIDs.keys();
-      srcHeapConnectorIDs.sort();
-
-      $.each(srcHeapConnectorIDs, function (i, srcID) {
-        var dstID = myViz.jsPlumbManager.heapConnectionEndpointIDs.get(srcID);
-
-        var srcAnchorObject = myViz.domRoot.find("#" + srcID);
-        var srcHeapObject = srcAnchorObject.closest(".heapObject");
-        var dstAnchorObject = myViz.domRoot.find("#" + dstID);
-        var dstHeapObject = dstAnchorObject.closest(".heapObject");
-
-        var srcHeapRow = srcHeapObject.closest(".heapRow");
-        var dstHeapRow = dstHeapObject.closest(".heapRow");
-
-        var srcRowID = srcHeapRow.attr("id");
-        var dstRowID = dstHeapRow.attr("id");
-
-        // only consider nudging if srcID and dstID are on different rows
-        if (srcRowID != dstRowID) {
-          var srcAnchorLeft = srcAnchorObject.offset().left;
-          var dstHeapObjectLeft = dstHeapObject.offset().left;
-
-          // if srcAnchorObject is to the RIGHT of dstHeapObject, then nudge
-          // dstHeapObject to the right
-          if (srcAnchorLeft > dstHeapObjectLeft) {
-            // an extra nudge of 32px matches up pretty well with the
-            // current CSS padding around .toplevelHeapObject
-            var delta = srcAnchorLeft - dstHeapObjectLeft + 96;
-
-            // set margin rather than padding so that arrows tips still end
-            // at the left edge of the element.
-            // whoa, set relative CSS using +=, nice!
-            //
-            // TODO: tried looking into setting 'left' directly instead of
-            // 'margin-left', but somehow the results look different
-            dstHeapObject.css("margin-left", "+=" + delta);
-
-            console.log(srcRowID, 'nudged', dstRowID, 'by', delta);
-
-            var cur_nudgee_set = nudger_to_nudged_rows[srcRowID];
-            if (cur_nudgee_set === undefined) {
-              cur_nudgee_set = d3Map();
-              nudger_to_nudged_rows[srcRowID] = cur_nudgee_set;
-            }
-            cur_nudgee_set.set(dstRowID, 1 /* useless value */);
-
-            // now if dstRowID itself nudged some other nodes, then nudge
-            // all of its nudgees by delta as well
-            var dst_nudgee_set = nudger_to_nudged_rows[dstRowID];
-            if (dst_nudgee_set) {
-              dst_nudgee_set.forEach(function (k, v) {
-                // don't nudge if it's yourself, to make cycles look
-                // somewhat reasonable (although still not ideal). e.g.,:
-                //   x = [1,2]
-                //   y = [3,x]
-                //   x[1] = y
-                if (k != srcRowID) {
-                  // nudge this entire ROW by delta as well
-
-                  // 2020-02-05: OK instead of nudging the .heapRow
-                  // object, we will traverse inside of it and nudge all
-                  // of its .heapObject children that reside directly
-                  // within .heapRow > .toplevelHeapObject > .heapObject
-                  //
-                  // why are we doing this? because we want it to
-                  // interact well with draggedHeapObjectCSS ... if an
-                  // element is dragged, we want to restore its
-                  // cached position from draggedHeapObjectCSS, which
-                  // will override all nudges. if we had nudged .heapRow
-                  // like we used to do, then .heapRow may itself be
-                  // nudged, which would kind of override
-                  // draggedHeapObjectCSS, which is applied to .heapObject
-                  //
-                  // old code: nudge .heapRow itself ...
-                  //myViz.domRoot.find('#' + k).css('margin-left', '+=' + delta);
-                  // new code: nudge all .heapObject children of .heapRow
-                  // (which is separated by an intermediary .toplevelHeapObject)
-                  myViz.domRoot
-                    .find("#" + k)
-                    .children(".toplevelHeapObject")
-                    .children(".heapObject")
-                    .css("margin-left", "+=" + delta);
-                  // NB: why don't we just use .find() to directly get
-                  // all .heapObject elements? because there are
-                  // sometimes .heapObject that are nested *within*
-                  // other .heapObject, and we don't want to unnecessarily
-                  // nudge those ... thus, we stick to .toplevelHeapObject
-
-                  // then transitively add to entry for srcRowID
-                  cur_nudgee_set.set(k, 1 /* useless value */);
-                }
-              });
-            }
-          }
-        }
-      });
-    }
-
-    // NB: ugh, I'm not very happy about this hack, but it seems necessary
-    // for embedding within sophisticated webpages such as IPython Notebook
-
-    // delete all connectors. do this AS LATE AS POSSIBLE so that
-    // (presumably) the calls to $(this).empty() earlier in this function
-    // will properly garbage collect the connectors
-    //
-    // WARNING: for environment parent pointers, garbage collection doesn't seem to
-    // be working as intended :(
-    //
-    // I suspect that this is due to the fact that parent pointers are SIBLINGS
-    // of stackFrame divs and not children, so when stackFrame divs get destroyed,
-    // their associated parent pointers do NOT.)
+    // Reset before model placement so its journal survives connector creation.
     myViz.jsPlumbInstance.reset();
+    myViz.jsPlumbInstance.layoutCoordinator.placement.prepareHeap(this.placementSelection,
+      journal => this.prepareLegacyHeapNudges(journal));
 
     // use jsPlumb scopes to keep the different kinds of pointers separated
     function renderVarValueConnector(varID, valueID) {
@@ -3249,8 +3127,6 @@ class DataVisualizer {
       label.textContent = `${myViz.trimTypePrefix(type)}@${id}${count}`;
     });
     myViz.jsPlumbInstance.prepareLayout();
-    myViz.stackLabelLayout.apply(myViz.domRoot[0]);
-    layoutValueBoxes(myViz.domRoot[0]);
     if (!myViz.params.textualMemoryLabels) {
       // re-render existing connectors and then ...
       //
@@ -3329,9 +3205,9 @@ class DataVisualizer {
 
     // highlight the top-most non-zombie stack frame or, if not available, globals
     var frame_already_highlighted = false;
-    $.each(curEntry.stack_to_render, function (i, e) {
-      if (e.is_highlighted) {
-        highlight_frame(myViz.owner.generateID("stack" + i));
+    stackFrameDivMerged.each(function (frame) {
+      if (frame.is_highlighted) {
+        highlight_frame(this.id);
         frame_already_highlighted = true;
       }
     });
@@ -3363,17 +3239,6 @@ class DataVisualizer {
       // actually in the outer one, but i don't see who would actually do that!
       if ($(e).parents(".heapObject").length) {
         return;
-      }
-
-      // set a custom position if one was found in draggedHeapObjectCSS ...
-      // make sure to do this after applying rightwardNudgeHack so that
-      // we override the positions of any nudged elements with ones from
-      // draggedHeapObjectCSS
-      let savedDraggedCSS = myViz.draggedHeapObjectCSS.get($(e).attr("id"));
-      if (savedDraggedCSS) {
-        $(e).attr("style", savedDraggedCSS);
-        //console.log('GOT POSITION FROM CACHE!', $(e).attr('id'));
-        needToRedrawConnectors = true;
       }
 
       // 2020-02-06: only make draggable() if customizeVizOptionsShown
@@ -3448,11 +3313,23 @@ class DataVisualizer {
     if (needToRedrawConnectors) {
       myViz.redrawConnectors();
     }
-    myViz.jsPlumbInstance.endBatch();
-
+    // Language hooks finish intrinsic content (for example, hiding Java's
+    // synthetic String field labels) before the coordinator measures and paints.
+    // Running these after endBatch leaves routes for geometry no longer on screen.
     myViz.owner.try_hook("end_renderDataStructures", {
       myViz: myViz.owner /* tricky! use owner to be safe */,
     });
+    materialized = true;
+    myViz.jsPlumbInstance.endBatch();
+    } catch (error) {
+      // A settle failure already restores to the model-placed baseline. Only
+      // abort an incomplete semantic render, and retain its original exception.
+      if (!materialized) {
+        try { myViz.jsPlumbInstance.cancelBatch(); } catch { /* retain original failure */ }
+      }
+      throw error;
+    }
+
   }
 
   // rendering functions, which all take a d3 dom element to anchor the
@@ -4351,10 +4228,197 @@ class DataVisualizer {
     }
   }
 
-  redrawConnectors() {
-    this.jsPlumbInstance.prepareLayout();
+  private prepareLegacyHeapNudges(journal: PlacementJournal): void {
+    const myViz = this;
+    const nudge = (elements, delta: number) => {
+      elements.each((_index, element: HTMLElement) => {
+        const value = `${(parseFloat($(element).css("margin-left")) || 0) + delta}px`;
+        journal.style(element, "margin-left", value);
+        this.legacyHeapMargins.set(element, element.style.marginLeft);
+      });
+    };
+    // Rightward nudge hack to make tree-like structures look more sane
+    // without any sophisticated graph rendering code. Thanks to John
+    // DeNero for this suggestion in Fall 2012.
+    //
+    // This hack tries to ensure that all pointers that span different
+    // rows point RIGHTWARD (as much as possible), which makes tree-like
+    // structures look decent. e.g.,:
+    //
+    // t = [[['a', 'b'], ['c', 'd']], [[1,2], [3,4]]]
+    //
+    // Do it here since all of the divs have been rendered by now, but no
+    // jsPlumb arrows have been rendered yet.
+    if (rightwardNudgeHack) {
+      // Basic idea: keep a set of all nudged ROWS for each nudger row, so
+      // that when you get nudged, you can, in turn, nudge all of the rows
+      // that you've nudged. this algorithm nicely takes care of the fact
+      // that there might not be cycles in objects that you've nudged, but
+      // there are cycles in entire rows.
+      //
+      // Key:   ID of .heapRow object that did the nudging
+      // Value: set of .heapRow ID that were (transitively) nudged by this element
+      //        (represented as a d3.map)
+      var nudger_to_nudged_rows = {};
+
+      // VERY IMPORTANT to sort these connector IDs in ascending order,
+      // since I think they're rendered left-to-right, top-to-bottom in ID
+      // order, so we want to run the nudging algorithm in that same order.
+      var srcHeapConnectorIDs =
+        myViz.jsPlumbManager.heapConnectionEndpointIDs.keys();
+      srcHeapConnectorIDs.sort();
+
+      $.each(srcHeapConnectorIDs, function (i, srcID) {
+        var dstID = myViz.jsPlumbManager.heapConnectionEndpointIDs.get(srcID);
+
+        var srcAnchorObject = myViz.domRoot.find("#" + srcID);
+        var srcHeapObject = srcAnchorObject.closest(".heapObject");
+        var dstAnchorObject = myViz.domRoot.find("#" + dstID);
+        var dstHeapObject = dstAnchorObject.closest(".heapObject");
+
+        var srcHeapRow = srcHeapObject.closest(".heapRow");
+        var dstHeapRow = dstHeapObject.closest(".heapRow");
+
+        var srcRowID = srcHeapRow.attr("id");
+        var dstRowID = dstHeapRow.attr("id");
+
+        // only consider nudging if srcID and dstID are on different rows
+        if (srcRowID != dstRowID) {
+          var srcAnchorLeft = srcAnchorObject.offset().left;
+          var dstHeapObjectLeft = dstHeapObject.offset().left;
+
+          // if srcAnchorObject is to the RIGHT of dstHeapObject, then nudge
+          // dstHeapObject to the right
+          if (srcAnchorLeft > dstHeapObjectLeft) {
+            // an extra nudge of 96px matches up pretty well with the
+            // current CSS padding around .toplevelHeapObject
+            var delta = srcAnchorLeft - dstHeapObjectLeft + 96;
+
+            // set margin rather than padding so that arrows tips still end
+            // at the left edge of the element.
+            // whoa, set relative CSS using +=, nice!
+            //
+            // TODO: tried looking into setting 'left' directly instead of
+            // 'margin-left', but somehow the results look different
+            nudge(dstHeapObject, delta);
+
+            console.log(srcRowID, 'nudged', dstRowID, 'by', delta);
+
+            var cur_nudgee_set = nudger_to_nudged_rows[srcRowID];
+            if (cur_nudgee_set === undefined) {
+              cur_nudgee_set = d3Map();
+              nudger_to_nudged_rows[srcRowID] = cur_nudgee_set;
+            }
+            cur_nudgee_set.set(dstRowID, 1 /* useless value */);
+
+            // now if dstRowID itself nudged some other nodes, then nudge
+            // all of its nudgees by delta as well
+            var dst_nudgee_set = nudger_to_nudged_rows[dstRowID];
+            if (dst_nudgee_set) {
+              dst_nudgee_set.forEach(function (k, v) {
+                // don't nudge if it's yourself, to make cycles look
+                // somewhat reasonable (although still not ideal). e.g.,:
+                //   x = [1,2]
+                //   y = [3,x]
+                //   x[1] = y
+                if (k != srcRowID) {
+                  // nudge this entire ROW by delta as well
+
+                  // 2020-02-05: OK instead of nudging the .heapRow
+                  // object, we will traverse inside of it and nudge all
+                  // of its .heapObject children that reside directly
+                  // within .heapRow > .toplevelHeapObject > .heapObject
+                  //
+                  // why are we doing this? because we want it to
+                  // interact well with draggedHeapObjectCSS ... if an
+                  // element is dragged, we want to restore its
+                  // cached position from draggedHeapObjectCSS, which
+                  // will override all nudges. if we had nudged .heapRow
+                  // like we used to do, then .heapRow may itself be
+                  // nudged, which would kind of override
+                  // draggedHeapObjectCSS, which is applied to .heapObject
+                  //
+                  // old code: nudge .heapRow itself ...
+                  //myViz.domRoot.find('#' + k).css('margin-left', '+=' + delta);
+                  // new code: nudge all .heapObject children of .heapRow
+                  // (which is separated by an intermediary .toplevelHeapObject)
+                  nudge(myViz.domRoot.find("#" + k)
+                    .children(".toplevelHeapObject").children(".heapObject"), delta);
+                  // NB: why don't we just use .find() to directly get
+                  // all .heapObject elements? because there are
+                  // sometimes .heapObject that are nested *within*
+                  // other .heapObject, and we don't want to unnecessarily
+                  // nudge those ... thus, we stick to .toplevelHeapObject
+
+                  // then transitively add to entry for srcRowID
+                  cur_nudgee_set.set(k, 1 /* useless value */);
+                }
+              });
+            }
+          }
+        }
+      });
+    }
+
+  }
+
+  private preparePlacement(): void {
+    if (!this.placementSelection) return;
     this.stackLabelLayout.apply(this.domRoot[0]);
     layoutValueBoxes(this.domRoot[0]);
+    const { dimensions, elements } = this.measurePlacement();
+    this.jsPlumbInstance.layoutCoordinator.placement.place(this.placementSelection, {
+      dimensions, options: this.placementOptions(),
+      apply: (region, effects: readonly PlacementEffect[], journal: PlacementJournal) => {
+        for (const effect of effects) {
+          const element = elements[region].get(effect.key);
+          if (!element) throw new Error(`Unknown ${region} placement key: ${effect.key}`);
+          for (const [property, value] of Object.entries(effect.styles)) journal.style(element, property, value);
+        }
+      },
+      legacyHeap: (journal: PlacementJournal) => {
+        // Reapply the intrinsic nudge baseline; redraw never compounds nudges.
+        for (const [element, margin] of this.legacyHeapMargins) {
+          if (!element.classList.contains("ui-draggable-dragging")) journal.style(element, "margin-left", margin);
+        }
+        this.domRoot.find(".heapObject").each((_index, element: HTMLElement) => {
+          if ($(element).parents(".heapObject").length || $(element).hasClass("ui-draggable-dragging")) return;
+          const saved = $(element).data("draggedCSS") ?? this.draggedHeapObjectCSS.get(element.id);
+          if (saved) journal.attribute(element, "style", saved);
+        });
+      },
+    });
+  }
+
+  private measurePlacement() {
+    const elements = { stackGlobals: new Map<string, HTMLElement>(), heap: new Map<string, HTMLElement>() };
+    const root = this.domRoot[0] as HTMLElement;
+    const add = (region: "stackGlobals" | "heap", key: string, element: HTMLElement | null) => {
+      if (element) elements[region].set(key, element);
+    };
+    add("stackGlobals", "stack", root.querySelector("#stack"));
+    add("stackGlobals", "globals", root.querySelector("#globals_area"));
+    root.querySelectorAll<HTMLElement>("#stack > .stackFrame, #stack > .zombieStackFrame").forEach(element =>
+      add("stackGlobals", `frame:${(element as any).__data__.unique_hash}`, element));
+    add("heap", "heap", root.querySelector("#heap"));
+    root.querySelectorAll<HTMLElement>("#heap > .heapRow").forEach(element =>
+      add("heap", `row:${(element as any).__data__[0]}`, element));
+    root.querySelectorAll<HTMLElement>(".heapObject[data-object-id]").forEach(element =>
+      add("heap", `object:${element.dataset.objectId}`, element));
+    const origin = root.getBoundingClientRect();
+    const boxes = (region: "stackGlobals" | "heap") => [...elements[region]].map(([key, element]) => {
+      const bounds = element.getBoundingClientRect();
+      return Object.freeze({ key, left: bounds.left - origin.left, top: bounds.top - origin.top,
+        width: bounds.width, height: bounds.height });
+    });
+    const dimensions: PlacementDimensions = Object.freeze({
+      stackGlobals: Object.freeze(boxes("stackGlobals")), heap: Object.freeze(boxes("heap")),
+    });
+    return { dimensions, elements };
+  }
+
+  redrawConnectors() {
+    // The coordinator invokes preparation for every settle, including batch end.
     this.jsPlumbInstance.repaintEverything();
   }
 
@@ -4370,7 +4434,7 @@ class DataVisualizer {
   // ... but consider the case where there are NO COLONS in the string,
   // which indicates a variable/field name that should be matched
   // regardless of what function/object it belongs to
-  selectivelyHideVarsAndFields(hideVarsLst, hideFieldsLst) {
+  selectivelyHideVarsAndFields(hideVarsLst, hideFieldsLst, deferInitialMaterialization = false) {
     if (hideVarsLst.length > 0) {
       this.hideVarsSet = d3Map();
       hideVarsLst.forEach((e) => this.hideVarsSet.set(e, true));
@@ -4385,10 +4449,12 @@ class DataVisualizer {
       this.hideFieldsSet = null; // reset
     }
 
-    // now that this.hideVarsSet and this.hideFieldsSet have been updated ...
-    this.precomputeCurTraceLayouts(); // recompute layouts to account for hidden vars/objects
-    this.renderDataStructures(this.owner.curInstr); // render current step again
-    //this.owner.updateOutput(); // alternatively, try this
+    // Only constructor option configuration is deferred. Ordinary setter calls
+    // also apply synchronously during the initial render's height callback.
+    if (!deferInitialMaterialization) {
+      this.precomputeCurTraceLayouts();
+      this.renderDataStructures(this.owner.curInstr);
+    }
   }
 
   // precondition: obj[0] is in {'INSTANCE', 'INSTANCE_PPRINT', 'CLASS'}

@@ -6,7 +6,6 @@ on:
     tags:
       - '*'
   pull_request:
-    branches: [ "main" ]
 
 permissions:
   contents: write
@@ -94,6 +93,17 @@ jobs:
       - name: Run Java example integration tests
         if: matrix.java-version == '25'
         run: make test-examples
+      - name: Generate native layout coordination review package
+        id: layout-review
+        if: matrix.java-version == '25'
+        run: uv run python -m scripts.review_layout_coordinator --out .scratch/layout-coordinator-review
+      - name: Upload native layout coordination review package
+        if: always() && matrix.java-version == '25' && (steps.layout-review.outcome == 'success' || steps.layout-review.outcome == 'failure')
+        uses: actions/upload-artifact@v7
+        with:
+          name: layout-coordinator-review
+          path: .scratch/layout-coordinator-review/
+          if-no-files-found: error
       - name: Build Python Distribution
         run: uv build
       - name: Check installed wheel installer commands
