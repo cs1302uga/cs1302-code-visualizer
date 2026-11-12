@@ -39,49 +39,51 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 def _terminate_process_tree(proc: subprocess.Popen[str]) -> None:
     """Safely terminate a subprocess and all processes in its process group."""
-    if proc.stdin is not None:
-        try:
-            proc.stdin.close()
-        except OSError:
-            logger.debug("Failed to close batch tracer stdin", exc_info=True)
-
-    pgid: int | None = None
-    if (
-        hasattr(os, "getpgid")
-        and hasattr(os, "killpg")
-        and isinstance(getattr(proc, "pid", None), int)
-    ):
-        try:
-            pgid = os.getpgid(proc.pid)
-        except OSError:
-            pgid = None
-
-    if pgid is not None:
-        try:
-            os.killpg(pgid, signal.SIGTERM)
-        except OSError:
-            logger.debug("Failed to send SIGTERM to process group %d", pgid, exc_info=True)
-
     try:
-        proc.terminate()
-    except OSError:
-        logger.debug("Failed to terminate batch tracer process", exc_info=True)
+        pgid: int | None = None
+        if (
+            hasattr(os, "getpgid")
+            and hasattr(os, "killpg")
+            and isinstance(getattr(proc, "pid", None), int)
+        ):
+            try:
+                pgid = os.getpgid(proc.pid)
+            except OSError:
+                pgid = None
 
-    try:
-        proc.wait(timeout=2)
-    except subprocess.TimeoutExpired:
         if pgid is not None:
             try:
-                os.killpg(pgid, signal.SIGKILL)
+                os.killpg(pgid, signal.SIGTERM)
             except OSError:
-                logger.debug("Failed to send SIGKILL to process group %d", pgid, exc_info=True)
+                logger.debug("Failed to send SIGTERM to process group %d", pgid, exc_info=True)
+
         try:
-            proc.kill()
-            proc.wait(timeout=1)
-        except (subprocess.TimeoutExpired, OSError):
-            logger.debug("Failed to kill batch tracer process", exc_info=True)
-    except OSError:
-        logger.debug("Failed waiting for batch tracer process termination", exc_info=True)
+            proc.terminate()
+        except OSError:
+            logger.debug("Failed to terminate batch tracer process", exc_info=True)
+
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            if pgid is not None:
+                try:
+                    os.killpg(pgid, signal.SIGKILL)
+                except OSError:
+                    logger.debug("Failed to send SIGKILL to process group %d", pgid, exc_info=True)
+            try:
+                proc.kill()
+                proc.wait(timeout=1)
+            except (subprocess.TimeoutExpired, OSError):
+                logger.debug("Failed to kill batch tracer process", exc_info=True)
+        except OSError:
+            logger.debug("Failed waiting for batch tracer process termination", exc_info=True)
+    finally:
+        for stream in (proc.stdin, proc.stdout, proc.stderr):
+            if stream is not None:
+                try:
+                    stream.close()
+                except OSError:
+                    logger.debug("Failed to close batch tracer pipe", exc_info=True)
 
 
 @dataclass(frozen=True)
@@ -268,49 +270,56 @@ class BatchTracerClient:
         if proc.stdout is None:
             return
 
-        for line in iter(proc.stdout.readline, ""):
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                resp: dict[str, Any] = json.loads(stripped)
-            except json.JSONDecodeError as jde:
-                logger.warning("Failed to decode NDJSON line from tracer: %s", jde)
-                continue
+        try:
+            for line in iter(proc.stdout.readline, ""):
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    resp: dict[str, Any] = json.loads(stripped)
+                except json.JSONDecodeError as jde:
+                    logger.warning("Failed to decode NDJSON line from tracer: %s", jde)
+                    continue
 
-            job_id: str | None = resp.get("id")
-            if not job_id:
-                continue
+                job_id: str | None = resp.get("id")
+                if not job_id:
+                    continue
 
+                with self._lock:
+                    entry = self._pending.pop(job_id, None)
+
+                if entry is None:
+                    continue
+
+                future, job = entry
+                self._handle_response(future, job, resp)
+
+            # EOF reached on stdout (worker died or closed)
             with self._lock:
-                entry = self._pending.pop(job_id, None)
+                orphans = list(self._pending.values())
+                self._pending.clear()
+                if self._process is proc:
+                    self._process = None
 
-            if entry is None:
-                continue
-
-            future, job = entry
-            self._handle_response(future, job, resp)
-
-        # EOF reached on stdout (worker died or closed)
-        with self._lock:
-            orphans = list(self._pending.values())
-            self._pending.clear()
-            if self._process is proc:
-                self._process = None
-
-            if orphans and not self._closed:
-                stderr_text = "\n".join(self._stderr_lines)
-                exit_status = proc.poll()
-                for future, job in orphans:
-                    if not future.done():
-                        err = CodeVisTraceGeneratorError(
-                            source_code=job.source,
-                            cli_args=["batch-trace"],
-                            stdout="",
-                            stderr=stderr_text or "Tracer batch worker terminated unexpectedly.",
-                            exit_status=exit_status if exit_status is not None else -1,
-                        ).with_property_notes()
-                        future.set_exception(err)
+                if orphans and not self._closed:
+                    stderr_text = "\n".join(self._stderr_lines)
+                    exit_status = proc.poll()
+                    for future, job in orphans:
+                        if not future.done():
+                            err = CodeVisTraceGeneratorError(
+                                source_code=job.source,
+                                cli_args=["batch-trace"],
+                                stdout="",
+                                stderr=stderr_text
+                                or "Tracer batch worker terminated unexpectedly.",
+                                exit_status=exit_status if exit_status is not None else -1,
+                            ).with_property_notes()
+                            future.set_exception(err)
+        finally:
+            try:
+                proc.stdout.close()
+            except OSError:
+                logger.debug("Failed to close batch tracer stdout", exc_info=True)
 
     def _handle_response(
         self,
@@ -338,7 +347,30 @@ class BatchTracerClient:
                 enum_globals = get_enum_globals(trace_obj, enum_types)
                 delete_globals(trace_obj, enum_globals)
 
-        if status != "completed":
+        guest_exception = (
+            status == "failed"
+            and result.get("stopReason") == "guest_exception"
+            and isinstance(trace_obj, dict)
+        )
+        if guest_exception:
+            raw_diagnostics = result.get("diagnostics")
+            failure = {
+                "status": "failed",
+                "stop_reason": "guest_exception",
+                "diagnostics": [
+                    item.strip()
+                    for item in raw_diagnostics
+                    if isinstance(item, str) and item.strip()
+                ]
+                if isinstance(raw_diagnostics, list)
+                else [],
+            }
+            trace_obj["codevis_failure"] = failure
+            steps = trace_obj.get("trace")
+            if isinstance(steps, list) and steps and isinstance(steps[-1], dict):
+                steps[-1]["codevis_failure"] = failure
+
+        if status != "completed" and not guest_exception:
             diagnostics = result.get("diagnostics", [])
             phase = result.get("phase", "unknown")
             diag_text = (

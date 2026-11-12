@@ -315,7 +315,8 @@ def test_batch_tracer_client_stdin_error(mock_tracer_env, monkeypatch):
     client.close()
 
 
-def test_batch_tracer_client_post_processing():
+@pytest.mark.parametrize("guest_exception", [False, True])
+def test_batch_tracer_client_post_processing(guest_exception):
     client = BatchTracerClient()
     job = BatchTraceJob(id="norm-job", source="", include_enum_static_fields=False)
     fut = concurrent.futures.Future()
@@ -350,6 +351,8 @@ def test_batch_tracer_client_post_processing():
             ],
         },
     }
+    if guest_exception:
+        result.update(status="failed", stopReason="guest_exception")
     client._handle_response(fut, job, {"result": result})
     processed = fut.result()
     heap = processed["trace"][0]["heap"]
@@ -620,7 +623,7 @@ def test_batch_tracer_serialization_failure_does_not_register_request():
         start.assert_not_called()
 
 
-@pytest.mark.parametrize("trace", [None, [], {"trace": []}])
+@pytest.mark.parametrize("trace", [None, []])
 def test_failed_result_preserves_metadata_and_guest_stderr(mock_tracer_env, trace):
     client = BatchTracerClient()
     future = concurrent.futures.Future()
@@ -668,3 +671,73 @@ def test_failed_partial_trace_uses_success_normalization():
     assert trace["trace"][0]["heap"]["1"] == ["INSTANCE", "Integer", ["value", 42]]
     assert "Batch trace job failed during phase: unknown" in caught.value.__notes__
     client.close()
+
+
+@pytest.mark.parametrize("wait_error", [None, OSError("wait"), RuntimeError("unexpected")])
+def test_termination_closes_every_pipe_after_wait(wait_error):
+    proc = Mock(pid=None)
+    events = []
+    proc.wait.side_effect = lambda **kwargs: events.append("wait")
+    if wait_error is not None:
+        proc.wait.side_effect = wait_error
+    for name in ("stdin", "stdout", "stderr"):
+        getattr(proc, name).close.side_effect = lambda name=name: events.append(name)
+    proc.stdout.close.side_effect = OSError("close")
+    if isinstance(wait_error, RuntimeError):
+        with pytest.raises(RuntimeError, match="unexpected"):
+            _terminate_process_tree(proc)
+    else:
+        _terminate_process_tree(proc)
+    assert events[-2:] == ["stdin", "stderr"]
+    for name in ("stdin", "stdout", "stderr"):
+        getattr(proc, name).close.assert_called_once()
+    if wait_error is None:
+        assert events[0] == "wait"
+
+
+@pytest.mark.parametrize("read_error", [None, OSError("read")])
+@pytest.mark.parametrize("close_error", [None, OSError("close")])
+def test_reader_closes_stdout_on_exit(read_error, close_error):
+    proc = Mock()
+    proc.stdout.readline.return_value = ""
+    proc.stdout.readline.side_effect = read_error
+    proc.stdout.close.side_effect = close_error
+    with BatchTracerClient() as client:
+        if read_error:
+            with pytest.raises(OSError, match="read"):
+                client._reader_loop(proc)
+        else:
+            client._reader_loop(proc)
+    proc.stdout.close.assert_called_once()
+
+
+@pytest.mark.parametrize("steps", [None, [], [{"heap": {"1": 42}}]])
+@pytest.mark.parametrize("diagnostics", [None, ["  exception  ", "", 42]])
+def test_guest_exception_returns_partial_trace_with_failure(steps, diagnostics):
+    trace = {"trace": steps, "stdout": "before", "stderr": "guest stderr"}
+    future = concurrent.futures.Future()
+    with BatchTracerClient() as client:
+        client._handle_response(
+            future,
+            BatchTraceJob(source=""),
+            {
+                "result": {
+                    "status": "failed",
+                    "stopReason": "guest_exception",
+                    "trace": trace,
+                    "diagnostics": diagnostics,
+                }
+            },
+        )
+    assert future.result() is trace
+    failure = {
+        "status": "failed",
+        "stop_reason": "guest_exception",
+        "diagnostics": ["exception"] if diagnostics else [],
+    }
+    assert trace["codevis_failure"] == failure
+    assert trace["stdout"] == "before"
+    assert trace["stderr"] == "guest stderr"
+    if steps and isinstance(steps[-1], dict):
+        assert steps[-1]["codevis_failure"] == failure
+        assert steps[-1]["heap"]["1"] == ["INSTANCE", "Integer", ["value", 42]]
