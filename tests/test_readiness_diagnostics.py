@@ -1,5 +1,8 @@
 """Bounded evidence and classified recovery without hidden attempts."""
 
+import hashlib
+import json
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -48,6 +51,78 @@ def test_optional_evidence(markers):
     assert evidence.lease_id is None
     assert evidence.console_errors == ()
     assert evidence.ready == (True if markers == [True, "error"] else None)
+
+
+@pytest.mark.parametrize("severe_count", [1, 12])
+def test_severe_console_tail_survives_warning_noise(severe_count):
+    driver = MagicMock()
+    messages = [f"failure {index}" for index in range(severe_count)]
+    driver.get_log.return_value = [
+        {"level": "SEVERE", "message": message} for message in messages
+    ] + [{"level": "WARNING", "message": "noise"}] * 9
+    with pytest.raises(ReadinessTimeout) as caught, diagnostic_scope(driver, "p", None, "render"):
+        raise ReadinessTimeout("expired")
+    evidence = render_diagnostic(caught.value)
+    assert evidence is not None
+    assert evidence.console_errors == tuple(messages[-8:])
+
+
+def test_replacement_preparation_identifies_next_payload_without_previous_markers():
+    driver = MagicMock(session_id="lease")
+    driver.execute_script.return_value = [True, "previous document"]
+    payloads = [json.dumps({"code": name, "trace": []}) for name in ("first", "second")]
+    attempt = RenderAttempt("batch", "lesson:2", "attempt-1")
+    failure = InvalidSessionIdException("lost preparing replacement")
+
+    @contextmanager
+    def frontend(trace, **_kwargs):
+        with diagnostic_scope(driver, trace, attempt, "render"):
+            yield {"driver": driver, "dataViz": MagicMock()}
+
+    with (
+        patch.object(browser_driver, "online_python_tutor_frontend", frontend),
+        patch.object(browser_driver, "_capture_viz", return_value=b"first") as capture,
+        patch.object(browser_driver, "_prepare_session_viewport", side_effect=failure),
+        pytest.raises(BrowserTransportError) as caught,
+    ):
+        browser_driver.generate_snapshot_images(payloads, attempt=attempt)
+    assert caught.value.__cause__ is failure
+    evidence = render_diagnostic(caught.value)
+    assert evidence is not None
+    assert evidence.payload_sha256 == hashlib.sha256(payloads[1].encode()).hexdigest()
+    assert evidence.stage == "snapshot-preparation"
+    assert evidence.request_id == "batch" and evidence.attempt_id == "attempt-1"
+    assert evidence.ready is None and evidence.frontend_error is None
+    capture.assert_called_once()
+    driver.execute_script.assert_not_called()
+
+
+@pytest.mark.parametrize("phase", ["entry", "switch", "cleanup"])
+def test_snapshot_host_markers_are_not_attributed_to_replacement(phase):
+    driver = MagicMock(session_id="lease")
+    driver.execute_script.return_value = [True, "host marker"]
+    failure = InvalidSessionIdException(f"lost during {phase}")
+    if phase == "entry":
+        driver.execute_script.side_effect = [failure, [True, "host marker"]]
+    elif phase == "switch":
+        driver.switch_to.frame.side_effect = failure
+    else:
+        driver.switch_to.default_content.side_effect = failure
+    with (
+        patch.object(browser_driver, "_wait_for_screenshot_ready"),
+        pytest.raises(BrowserTransportError) as caught,
+        browser_driver._snapshot_frame(driver, "replacement", "file:///render.html"),
+    ):
+        assert phase == "cleanup"
+    evidence = render_diagnostic(caught.value)
+    assert evidence is not None
+    assert caught.value.__cause__ is failure
+    assert evidence.payload_sha256 == hashlib.sha256(b"replacement").hexdigest()
+    assert evidence.ready is None and evidence.frontend_error is None
+    assert not any(
+        "screenshotReadyIndicator" in str(call.args[0])
+        for call in driver.execute_script.call_args_list
+    )
 
 
 def test_diagnostic_failure_preserves_original():

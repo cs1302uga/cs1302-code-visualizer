@@ -891,7 +891,7 @@ def _snapshot_frame(
     element coordinates match a top-level document during virtual viewport fitting.
     """
     with (
-        diagnostic_scope(driver, payload, attempt, "snapshot-render"),
+        diagnostic_scope(driver, payload, attempt, "snapshot-render", observe_markers=False),
         NamedTemporaryFile(mode="w", encoding="utf-8") as trace_file,
     ):
         trace_file.write(payload)
@@ -1040,12 +1040,16 @@ def generate_snapshot_images(
         driver = frontend["driver"]
         frontend_uri = driver.current_url
         for index, payload in enumerate(payloads):
+            payload_text = json.dumps(payload)
             if index:
                 # Each document starts with the same un-fitted viewport as an
                 # individual request, including when no session was supplied.
-                _prepare_session_viewport(driver)
+                with diagnostic_scope(
+                    driver, payload_text, attempt, "snapshot-preparation", observe_markers=False
+                ):
+                    _prepare_session_viewport(driver)
             context = (
-                _snapshot_frame(driver, json.dumps(payload), frontend_uri, attempt)
+                _snapshot_frame(driver, payload_text, frontend_uri, attempt)
                 if index
                 else nullcontext(frontend["dataViz"])
             )

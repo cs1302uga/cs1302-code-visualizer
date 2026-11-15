@@ -74,26 +74,32 @@ def _bounded(value: str | None) -> str | None:
 
 
 def _capture(
-    driver: WebDriver, payload: str, attempt: RenderAttempt, stage: str, started: float
+    driver: WebDriver,
+    payload: str,
+    attempt: RenderAttempt,
+    stage: str,
+    started: float,
+    observe_markers: bool,
 ) -> RenderDiagnostic:
     """Collect independently optional browser evidence without masking failure."""
     ready = None
     frontend_error = None
     console = None
-    with suppress(Exception):
-        markers: object = driver.execute_script(
-            "return [!!document.getElementById('screenshotReadyIndicator'),"
-            "document.getElementById('screenshotError')?.textContent?.slice(0,512) ?? ''];"
-        )
-        if isinstance(markers, list) and len(markers) == 2:
-            ready = markers[0] if isinstance(markers[0], bool) else None
-            frontend_error = markers[1] if isinstance(markers[1], str) else None
+    if observe_markers:
+        with suppress(Exception):
+            markers: object = driver.execute_script(
+                "return [!!document.getElementById('screenshotReadyIndicator'),"
+                "document.getElementById('screenshotError')?.textContent?.slice(0,512) ?? ''];"
+            )
+            if isinstance(markers, list) and len(markers) == 2:
+                ready = markers[0] if isinstance(markers[0], bool) else None
+                frontend_error = markers[1] if isinstance(markers[1], str) else None
     with suppress(Exception):
         console = tuple(
             str(entry.get("message", ""))[:512]
-            for entry in driver.get_log("browser")[-8:]
+            for entry in driver.get_log("browser")
             if entry.get("level") == "SEVERE"
-        )
+        )[-8:]
     lease: object = driver.session_id
     return RenderDiagnostic(
         _bounded(attempt.request_id),
@@ -111,12 +117,18 @@ def _capture(
 
 @contextmanager
 def diagnostic_scope(
-    driver: WebDriver, payload: str, attempt: RenderAttempt | None, stage: str
+    driver: WebDriver,
+    payload: str,
+    attempt: RenderAttempt | None,
+    stage: str,
+    *,
+    observe_markers: bool = True,
 ) -> Generator[None]:
     """Annotate failures once, classifying only concrete lost-session errors.
 
     Cancellation propagates untouched. Diagnostic collection is best effort;
     even an unexpected diagnostic failure preserves the original exception.
+    Disable marker observation until the current document belongs to the payload.
     """
     started = time.monotonic()
     try:
@@ -128,7 +140,9 @@ def diagnostic_scope(
         if render_diagnostic(original) is None:
             diagnosed = False
             with suppress(Exception):
-                evidence = _capture(driver, payload, attempt or RenderAttempt(), stage, started)
+                evidence = _capture(
+                    driver, payload, attempt or RenderAttempt(), stage, started, observe_markers
+                )
                 cast(_DiagnosticError, error).render_diagnostic = evidence
                 diagnosed = True
             if not diagnosed:

@@ -251,6 +251,12 @@ the original exception, so callers must not assume every failure is classified.
 `readiness.render_diagnostic(exception)` returns immutable bounded evidence when
 available. Marker and console values of `None` mean observation was unavailable;
 `False`, an empty error string, and an empty console tuple mean observed absence.
+Replacement preparation identifies the next resolved snapshot, but its markers
+remain unknown until the driver enters that snapshot's document. Frame entry or
+cleanup failures likewise leave markers unknown when their document ownership
+is uncertain. More specific evidence captured inside the frame is retained.
+Console messages describe the browser log, which can span documents; capture
+retains the last eight severe records after filtering other severity levels.
 Caller identifiers, error markers, and each of at most eight console messages are
 limited to 512 characters. No payload, environment, or trace contents are dumped.
 The browser session ID identifies the lease's browser across requests; the caller
