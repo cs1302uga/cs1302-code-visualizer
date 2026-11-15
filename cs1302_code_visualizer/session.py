@@ -132,8 +132,12 @@ class RenderingSession:
             batch_tracer.close()
 
     @contextmanager
-    def browser(self, dpi: int, factory: Any, *, configuration: Any = None) -> Any:
-        """Lease an exclusive browser, replacing incompatible or failed instances."""
+    def browser(self, dpi: int, factory: Any, *, configuration: Any = None, fresh: bool = False) -> Any:
+        """Lease an exclusive browser, replacing incompatible or failed instances.
+
+        ``fresh=True`` skips idle instances and evicts only an idle instance
+        when needed for capacity. Active leases remain exclusively owned.
+        """
         key = (dpi, configuration)
         driver = None
         with self._condition:
@@ -142,7 +146,7 @@ class RenderingSession:
             if self._closed:
                 raise RuntimeError("Rendering session is closed")
             for index, (settings, candidate) in enumerate(self._idle):
-                if settings == key:
+                if settings == key and not fresh:
                     driver = candidate
                     self._idle.pop(index)
                     break

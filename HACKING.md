@@ -226,3 +226,46 @@ Tracer v3.2.2 resolves generic method stack labels from source invocation bindin
 Explicit wider type arguments retain their declared types, and ambiguous or
 unsupported inference keeps unresolved type variables. Regenerate cached traces
 and images after updating the pin; the visualizer renders the supplied type labels.
+
+## Readiness failure and recovery contract
+
+The low-level `browser_driver.generate_image`, `generate_step_images`,
+`generate_snapshot_images`, and `online_python_tutor_frontend` APIs accept an
+optional `attempt` from `cs1302_code_visualizer.readiness.RenderAttempt`.
+Supply a request/image identifier, source location, and attempt identifier from
+one caller-owned budget. For a batch, the request identifier describes the batch;
+the diagnostic payload SHA-256 distinguishes the failing resolved snapshot.
+The hash covers the JSON actually submitted, including snapshot layout metadata.
+These observational identities never change image/cache identities or labels.
+
+Catch `readiness.ReadinessTimeout` for expiry of the unchanged four-second
+readiness deadline. It remains a Selenium `NoSuchElementException` for existing
+callers. Catch `readiness.BrowserTransportError` for concrete Selenium
+`InvalidSessionIdException` or `NoSuchWindowException`; its cause retains the
+original error. Other WebDriver errors remain unclassified, including script,
+configuration and unknown transport errors. Explicit frontend, layout and export
+failures remain `ValueError`; malformed JSON, publication errors, programmer
+errors and cancellation retain their original types. Diagnosis failure preserves
+the original exception, so callers must not assume every failure is classified.
+
+`readiness.render_diagnostic(exception)` returns immutable bounded evidence when
+available. Marker and console values of `None` mean observation was unavailable;
+`False`, an empty error string, and an empty console tuple mean observed absence.
+Caller identifiers, error markers, and each of at most eight console messages are
+limited to 512 characters. No payload, environment, or trace contents are dumped.
+The browser session ID identifies the lease's browser across requests; the caller
+attempt ID distinguishes individual borrows. Timings describe the failing scope,
+including work before its error. More specific nested evidence is preserved.
+
+There are no renderer retries. The downstream owner must count snapshot attempts
+and individual fallback attempts against the same image budget, retain successful
+siblings, retry only classified failures, and propagate cancellation immediately.
+It can set `RenderAttempt(fresh_browser=True)` for recovery through an existing
+`RenderingSession`. This avoids every idle lease, evicts only an idle browser if
+capacity requires it, waits for active capacity, and never resets the pool or
+closes unrelated active browsers. `session.browser(..., fresh=True)` exposes the
+same primitive. Failed leases are discarded; session closure wakes waiters and
+active browsers close on return. Retry frozen payloads through the render APIs;
+this performs no tracing. Batch APIs return no partial list on failure. Render
+APIs return bytes and leave atomic publication and aggregate failure reporting to
+the caller. This prerequisite does not implement the Book's shared retry budget.

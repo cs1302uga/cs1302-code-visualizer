@@ -86,7 +86,16 @@ document.addEventListener("DOMContentLoaded", () => {
           document.body.appendChild(screenshotReadyIndicator);
         };
 
-        setTimeout(notifyReady, 50);
+        return new Promise<void>((resolve, reject) => {
+          setTimeout(() => {
+            try {
+              notifyReady();
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          }, 50);
+        });
       }
     }).catch(error => {
       const message = document.createElement("div");

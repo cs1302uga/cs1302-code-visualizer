@@ -219,7 +219,13 @@ def test_snapshot_frame_failure_restores_context_and_removes_temporary_payload(s
     trace_path = Path(parse_qs(urlsplit(frame_url).query)["tracePath"][0])
     assert not trace_path.exists()
     driver.switch_to.default_content.assert_called_once()
-    assert driver.execute_script.call_args.args == (
+    cleanup_calls = [
+        call
+        for call in driver.execute_script.call_args_list
+        if call.args[0] == "arguments[0].remove();"
+    ]
+    assert len(cleanup_calls) == 1
+    assert cleanup_calls[0].args == (
         "arguments[0].remove();",
         driver.execute_script.return_value,
     )

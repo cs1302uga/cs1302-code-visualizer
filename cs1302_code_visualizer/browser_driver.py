@@ -50,6 +50,7 @@ from .array_options import (
     validate_array_options,
 )
 from .errors import CodeVisRenderError
+from .readiness import ReadinessTimeout, RenderAttempt, diagnostic_scope
 from .string_options import (
     StringStyle,
     add_string_argument,
@@ -215,11 +216,16 @@ def _fit_session_viewport(driver: webdriver.Chrome, element: WebElement, dpi: in
 
 
 @contextmanager
-def _browser_scope(dpi: int, session: RenderingSession | None):
+def _browser_scope(
+    dpi: int, session: RenderingSession | None, attempt: RenderAttempt | None = None
+):
     """Lease a session browser or own a standalone browser for this request."""
     if session is not None:
         with session.browser(
-            dpi, get_webdriver, configuration=(is_headless_enabled(), DEBUG_MODE)
+            dpi,
+            get_webdriver,
+            configuration=(is_headless_enabled(), DEBUG_MODE),
+            fresh=attempt.fresh_browser if attempt is not None else False,
         ) as driver:
             yield driver
     else:
@@ -227,7 +233,12 @@ def _browser_scope(dpi: int, session: RenderingSession | None):
         try:
             yield driver
         finally:
-            driver.quit()
+            active_error = sys.exc_info()[0] is not None
+            try:
+                driver.quit()
+            except Exception:
+                if not active_error:
+                    raise
 
 
 def _wait_for_screenshot_ready(driver: webdriver.Chrome) -> WebElement:
@@ -240,7 +251,7 @@ def _wait_for_screenshot_ready(driver: webdriver.Chrome) -> WebElement:
         The readiness indicator inserted by the frontend.
 
     Raises:
-        NoSuchElementException: If the indicator is absent after four seconds.
+        ReadinessTimeout: If the indicator is absent after four seconds.
     """
     result: object = driver.execute_async_script(
         """
@@ -270,7 +281,7 @@ def _wait_for_screenshot_ready(driver: webdriver.Chrome) -> WebElement:
     if isinstance(result, dict) and "error" in result:
         raise ValueError(f"Unable to render trace: {result['error']}")
     if not isinstance(result, WebElement):
-        raise NoSuchElementException("screenshotReadyIndicator was not found within four seconds")
+        raise ReadinessTimeout("screenshotReadyIndicator was not found within four seconds")
     return result
 
 
@@ -289,6 +300,7 @@ def online_python_tutor_frontend(
     array_orientations: dict[str, ArrayOrientation] | None = None,
     visualizer: str = "pytutor",
     session: RenderingSession | None = None,
+    attempt: RenderAttempt | None = None,
 ):
     """Context manager for interacting with the OnlinePythonTutor frontend in Chrome."""
     resolve_string_style(string_style)
@@ -297,7 +309,8 @@ def online_python_tutor_frontend(
     prefixes = list(strip_type_prefixes) if strip_type_prefixes is not None else []
     frontend_path = (this_files_dir / "frontend" / "render-trace.html").as_uri()
     with (
-        _browser_scope(dpi, session) as driver,
+        _browser_scope(dpi, session, attempt) as driver,
+        diagnostic_scope(driver, trace, attempt, "render"),
         NamedTemporaryFile(mode="w", encoding="utf-8") as trace_file,
     ):
         if session is not None:
@@ -325,9 +338,9 @@ def online_python_tutor_frontend(
 
         frontend_uri: str = frontend_path + "?" + urlencode(frontend_query)
 
-        driver.get(frontend_uri)
-
-        _ = _wait_for_screenshot_ready(driver)
+        with diagnostic_scope(driver, trace, attempt, "initial-readiness"):
+            driver.get(frontend_uri)
+            _ = _wait_for_screenshot_ready(driver)
         vizDiv = driver.find_element(By.ID, "visualizerDiv")
         if visualizer == "json-pre":
             try:
@@ -574,6 +587,7 @@ def generate_image(
     breakpoint: int | tuple[int, int] | None = -1,
     visualizer: str = "pytutor",
     session: RenderingSession | None = None,
+    attempt: RenderAttempt | None = None,
 ) -> bytes:
     """Generate an image of the final state of an execution trace file.
 
@@ -592,6 +606,7 @@ def generate_image(
         alternate_array_orientations: Flip orientation for each additional dimension.
         array_orientations: Per-heap-object orientation overrides, taking precedence over the base.
         breakpoint: Breakpoint line to visualize.
+        attempt: Optional caller identity and fresh-browser request; no retries are performed.
         session: Optional build-scoped browser owner.
         visualizer: The visualizer implementation to use ('pytutor' or 'json-pre').
 
@@ -615,7 +630,11 @@ def generate_image(
         alternate_array_orientations=alternate_array_orientations,
         array_orientations=array_orientations,
         visualizer=visualizer,
-        **{**theme_options(theme), **({"session": session} if session is not None else {})},
+        **{
+            **theme_options(theme),
+            **({"session": session} if session is not None else {}),
+            **({"attempt": attempt} if attempt is not None else {}),
+        },
     ) as frontend:
         driver: webdriver.Chrome = frontend["driver"]
         viz: WebElement = frontend["dataViz"]
@@ -751,6 +770,7 @@ def generate_step_images(
     breakpoint: int | tuple[int, int] | None = None,
     visualizer: str = "pytutor",
     session: RenderingSession | None = None,
+    attempt: RenderAttempt | None = None,
 ) -> list[bytes]:
     """Generate images for every step of an execution trace file.
 
@@ -768,6 +788,7 @@ def generate_step_images(
         array_orientations: Per-heap-object orientation overrides, taking precedence over the base.
         breakpoint: Breakpoint line to visualize.
         visualizer: The visualizer implementation to use ('pytutor' or 'json-pre').
+        attempt: Optional caller identity and fresh-browser request; no retries are performed.
         session: Optional build-scoped browser owner.
 
     Returns:
@@ -791,6 +812,7 @@ def generate_step_images(
                 breakpoint=breakpoint,
                 visualizer=visualizer,
                 session=session,
+                **({"attempt": attempt} if attempt is not None else {}),
             )
         ]
 
@@ -808,7 +830,11 @@ def generate_step_images(
         alternate_array_orientations=alternate_array_orientations,
         array_orientations=array_orientations,
         visualizer=visualizer,
-        **{**theme_options(theme), **({"session": session} if session is not None else {})},
+        **{
+            **theme_options(theme),
+            **({"session": session} if session is not None else {}),
+            **({"attempt": attempt} if attempt is not None else {}),
+        },
     ) as frontend:
         driver = frontend["driver"]
         viz = frontend["dataViz"]
@@ -855,7 +881,7 @@ def generate_step_images(
 
 @contextmanager
 def _snapshot_frame(
-    driver: webdriver.Chrome, payload: str, frontend_uri: str
+    driver: webdriver.Chrome, payload: str, frontend_uri: str, attempt: RenderAttempt | None = None
 ) -> Generator[WebElement]:
     """Load one independent document while retaining the surrounding browser host.
 
@@ -864,7 +890,10 @@ def _snapshot_frame(
     change its heap spacing. The borderless frame occupies the full viewport, so
     element coordinates match a top-level document during virtual viewport fitting.
     """
-    with NamedTemporaryFile(mode="w", encoding="utf-8") as trace_file:
+    with (
+        diagnostic_scope(driver, payload, attempt, "snapshot-render"),
+        NamedTemporaryFile(mode="w", encoding="utf-8") as trace_file,
+    ):
         trace_file.write(payload)
         trace_file.flush()
         address = urlsplit(frontend_uri)
@@ -880,11 +909,17 @@ def _snapshot_frame(
         )
         try:
             driver.switch_to.frame(frame)
-            _ = _wait_for_screenshot_ready(driver)
-            yield driver.find_element(By.ID, "dataViz")
+            with diagnostic_scope(driver, payload, attempt, "snapshot-render"):
+                _ = _wait_for_screenshot_ready(driver)
+                yield driver.find_element(By.ID, "dataViz")
         finally:
-            driver.switch_to.default_content()
-            driver.execute_script("arguments[0].remove();", frame)
+            active_error = sys.exc_info()[0] is not None
+            try:
+                driver.switch_to.default_content()
+                driver.execute_script("arguments[0].remove();", frame)
+            except Exception:
+                if not active_error:
+                    raise
 
 
 def _layout_types(value: Any) -> set[str]:
@@ -925,6 +960,7 @@ def generate_snapshot_images(
     breakpoint: int | tuple[int, int] | None = -1,
     visualizer: str = "pytutor",
     session: RenderingSession | None = None,
+    attempt: RenderAttempt | None = None,
 ) -> list[bytes]:
     """Render independent payloads in order while retaining one browser host.
 
@@ -947,6 +983,7 @@ def generate_snapshot_images(
         array_orientations: Per-object orientation overrides.
         breakpoint: Breakpoint selection applied independently to each payload.
         visualizer: Visualizer implementation, either pytutor or json-pre.
+        attempt: Optional caller identity and fresh-browser request; no retries are performed.
         session: Optional build-scoped browser owner.
 
     Returns:
@@ -973,6 +1010,7 @@ def generate_snapshot_images(
                 visualizer=visualizer,
                 **theme_options(theme),
                 session=session,
+                **({"attempt": attempt} if attempt is not None else {}),
             )
             for trace in traces
         ]
@@ -993,7 +1031,11 @@ def generate_snapshot_images(
         alternate_array_orientations=alternate_array_orientations,
         array_orientations=array_orientations,
         visualizer=visualizer,
-        **{**theme_options(theme), **({"session": session} if session is not None else {})},
+        **{
+            **theme_options(theme),
+            **({"session": session} if session is not None else {}),
+            **({"attempt": attempt} if attempt is not None else {}),
+        },
     ) as frontend:
         driver = frontend["driver"]
         frontend_uri = driver.current_url
@@ -1003,7 +1045,7 @@ def generate_snapshot_images(
                 # individual request, including when no session was supplied.
                 _prepare_session_viewport(driver)
             context = (
-                _snapshot_frame(driver, json.dumps(payload), frontend_uri)
+                _snapshot_frame(driver, json.dumps(payload), frontend_uri, attempt)
                 if index
                 else nullcontext(frontend["dataViz"])
             )
