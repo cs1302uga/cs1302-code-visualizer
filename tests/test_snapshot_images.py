@@ -27,6 +27,7 @@ def test_empty_snapshots_do_not_open_browser():
 @pytest.mark.parametrize("format", ["PNG", "SVG"])
 def test_snapshot_batch_preserves_order_options_and_resets_viewport(session, format):
     driver = MagicMock()
+    driver.timeouts.script = 30
     driver.execute_async_script.return_value = MagicMock(spec=WebElement)
     driver.get_window_size.return_value = {"width": 800, "height": 600}
     driver.current_url = (
@@ -85,6 +86,7 @@ def test_snapshot_json_text_falls_back_to_individual_requests():
 
 def test_snapshot_frontend_failure_never_returns_partial_results():
     driver = MagicMock()
+    driver.timeouts.script = 30
     driver.execute_async_script.return_value = MagicMock(spec=WebElement)
     driver.current_url = "file:///frontend/render-trace.html?tracePath=old"
     with (
@@ -201,6 +203,7 @@ def test_real_snapshot_without_session_matches_fresh_browser_images(format):
 @pytest.mark.parametrize("stage", ["switch", "ready", "lookup"])
 def test_snapshot_frame_failure_restores_context_and_removes_temporary_payload(stage):
     driver = MagicMock()
+    driver.timeouts.script = 30
     driver.execute_async_script.return_value = MagicMock(spec=WebElement)
     if stage == "switch":
         driver.switch_to.frame.side_effect = RuntimeError(stage)

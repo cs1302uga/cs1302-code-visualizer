@@ -312,6 +312,7 @@ def test_snapshot_cleanup_never_masks_original(active):
     from selenium.webdriver.remote.webelement import WebElement
 
     driver = MagicMock()
+    driver.timeouts.script = 30
     driver.execute_async_script.return_value = MagicMock(spec=WebElement)
     driver.switch_to.default_content.side_effect = OSError("cleanup")
     if active:

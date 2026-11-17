@@ -73,6 +73,13 @@ document.addEventListener("DOMContentLoaded", () => {
           frontendOptions
         );
 
+        // Construction can occupy the browser thread beyond an already-queued
+        // readiness timer. Give the existing deferred redraw its own bounded
+        // settling window; this milestone is not permission to capture.
+        document.documentElement.setAttribute(
+          "data-codevis-construction-complete", "true"
+        );
+
         const notifyReady = () => {
           if (myViz && typeof (myViz as any).redrawConnectors === "function") {
             (myViz as any).redrawConnectors();

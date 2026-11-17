@@ -200,6 +200,7 @@ def test_online_python_tutor_frontend_json_pre_fallback(monkeypatch, sample_trac
     mock_driver = MagicMock()
     mock_elem = MagicMock()
     mock_driver.execute_async_script.return_value = MagicMock(spec=browser_driver.WebElement)
+    mock_driver.timeouts.script = 30
     mock_viz_div = MagicMock()
     mock_viz_div.find_element.side_effect = NoSuchElementException("No pre tag")
 

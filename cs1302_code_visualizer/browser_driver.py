@@ -36,7 +36,7 @@ from weakref import WeakKeyDictionary
 
 from PIL import Image
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -241,8 +241,26 @@ def _browser_scope(
                     raise
 
 
+@contextmanager
+def _readiness_watchdog(driver: webdriver.Chrome) -> Generator[None]:
+    """Bound this readiness command without extending a caller's shorter timeout."""
+    previous = driver.timeouts.script
+    driver.set_script_timeout(min(previous, 8.0))
+    try:
+        yield
+    except TimeoutException as error:
+        raise ReadinessTimeout("readiness script exceeded its bounded wait") from error
+    finally:
+        active_error = sys.exc_info()[0] is not None
+        try:
+            driver.set_script_timeout(previous)
+        except Exception:
+            if not active_error:
+                raise
+
+
 def _wait_for_screenshot_ready(driver: webdriver.Chrome) -> WebElement:
-    """Wait for the frontend's existing readiness signal without polling.
+    """Wait for final readiness with one construction-to-settling handoff.
 
     Args:
         driver: Browser currently displaying the frontend document.
@@ -251,38 +269,67 @@ def _wait_for_screenshot_ready(driver: webdriver.Chrome) -> WebElement:
         The readiness indicator inserted by the frontend.
 
     Raises:
-        ReadinessTimeout: If the indicator is absent after four seconds.
+        ReadinessTimeout: If four seconds elapse without readiness or the one
+            construction milestone, or the eight-second readiness ceiling expires.
     """
-    result: object = driver.execute_async_script(
-        """
+    with _readiness_watchdog(driver):
+        result: object = driver.execute_async_script(
+            """
         const done = arguments[arguments.length - 1];
         const failure = document.getElementById('screenshotError');
         if (failure) { done({error: failure.textContent}); return; }
         const existing = document.getElementById('screenshotReadyIndicator');
         if (existing) { done(existing); return; }
         let finished = false;
-        const observer = new MutationObserver(() => {
+        const constructed = () => document.documentElement.getAttribute(
+            'data-codevis-construction-complete') === 'true';
+        let constructionSeen = constructed();
+        const ceiling = performance.now() + 8000;
+        const observer = new MutationObserver(inspect);
+        let timer = setTimeout(expire, 4000);
+        const watchdog = setTimeout(() => { inspect(); finish(null); }, 8000);
+        function inspect() {
+            if (finished) return false;
             const failure = document.getElementById('screenshotError');
-            if (failure) { finish({error: failure.textContent}); return; }
+            if (failure) { finish({error: failure.textContent}); return false; }
+            if (performance.now() >= ceiling) { finish(null); return false; }
             const element = document.getElementById('screenshotReadyIndicator');
-            if (element) finish(element);
-        });
-        const timer = setTimeout(() => finish(null), 4000);
+            if (element) { finish(element); return false; }
+            if (!constructionSeen && constructed()) {
+                constructionSeen = true;
+                clearTimeout(timer);
+                timer = setTimeout(expire, Math.min(4000, ceiling - performance.now()));
+                return true;
+            }
+            return false;
+        }
+        function expire() {
+            // Construction may have occupied the main thread while this timer
+            // became due. Observe its completion before rejecting the redraw.
+            if (!inspect()) finish(null);
+        }
         function finish(element) {
             if (finished) return;
             finished = true;
             observer.disconnect();
             clearTimeout(timer);
+            clearTimeout(watchdog);
             done(element);
         }
-        observer.observe(document, {childList: true, subtree: true});
+        observer.observe(document, {
+            childList: true, subtree: true, attributes: true,
+            attributeFilter: ['data-codevis-construction-complete']
+        });
         """
-    )
-    if isinstance(result, dict) and "error" in result:
-        raise ValueError(f"Unable to render trace: {result['error']}")
-    if not isinstance(result, WebElement):
-        raise ReadinessTimeout("screenshotReadyIndicator was not found within four seconds")
-    return result
+        )
+        if isinstance(result, dict) and "error" in result:
+            raise ValueError(f"Unable to render trace: {result['error']}")
+        if not isinstance(result, WebElement):
+            raise ReadinessTimeout(
+                "screenshotReadyIndicator was not found within four seconds of inactivity "
+                "or the eight-second readiness ceiling"
+            )
+        return result
 
 
 @contextmanager

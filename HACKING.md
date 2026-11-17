@@ -238,8 +238,24 @@ the diagnostic payload SHA-256 distinguishes the failing resolved snapshot.
 The hash covers the JSON actually submitted, including snapshot layout metadata.
 These observational identities never change image/cache identities or labels.
 
-Catch `readiness.ReadinessTimeout` for expiry of the unchanged four-second
-readiness deadline. It remains a Selenium `NoSuchElementException` for existing
+Catch `readiness.ReadinessTimeout` for expiry of the readiness wait. A responsive
+document has a four-second observation window. Completion of visualizer
+construction renews that window once so the existing deferred connector redraw
+can finish. An already-constructed document starts in its settling window;
+duplicate milestones and unrelated DOM changes grant no additional time. Only
+the final ready marker permits capture, and explicit frontend errors take priority.
+
+The readiness command has an eight-second ceiling from waiter entry, enforced
+by the document and a remote script watchdog. A caller's shorter script timeout
+is preserved; the previous setting is restored afterward. Expiry of this specific
+remote script command becomes `ReadinessTimeout` with its Selenium cause retained.
+This is not a deadline for navigation, export, diagnostics, or cleanup. JavaScript
+timers cannot interrupt blocked rendering, and a hung browser transport still
+requires the caller's cancellation/ownership mechanism. Initial and replacement
+documents use the same document-local contract. No constructor, redraw, layout,
+or image-capture work is skipped.
+
+`ReadinessTimeout` remains a Selenium `NoSuchElementException` for existing
 callers. Catch `readiness.BrowserTransportError` for concrete Selenium
 `InvalidSessionIdException` or `NoSuchWindowException`; its cause retains the
 original error. Other WebDriver errors remain unclassified, including script,
