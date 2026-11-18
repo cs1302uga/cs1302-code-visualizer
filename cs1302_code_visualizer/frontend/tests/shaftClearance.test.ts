@@ -8,6 +8,31 @@ const other={left:400,top:0,right:440,bottom:40};
 const route=(segments:Segment[], destination=other,width=1):Route=>
   ({segments,head:[[400,20],[394,17],[394,23]],kind:"test",target:destination,width});
 describe("shaft separation",()=>{
+  it("rechecks changed coordinates and keeps cached decisions within their routing context",()=>{
+    const occupied=route([[[0,0],[100,0]]]);
+    const clearance=new ShaftClearance([occupied],target,1);
+    const segment:Segment=[[20,6],[80,6]];
+    expect(clearance.clearSegment(segment)).toBe(false);
+    expect(clearance.clearSegment([[20,6],[80,6]])).toBe(false);
+    segment[0][1]=segment[1][1]=7;
+    expect(clearance.clearSegment(segment)).toBe(true);
+    expect(clearance.clearSegment([[20,7],[80,7]])).toBe(true);
+    expect(new ShaftClearance([occupied],target,3).clearSegment(segment)).toBe(false);
+    expect(new ShaftClearance([],target,1).clearSegment([[20,6],[80,6]])).toBe(true);
+    const alias=route([[[395,20],[399,20]]],other);
+    expect(new ShaftClearance([alias],other,1).clear(alias)).toBe(true);
+    expect(new ShaftClearance([alias],target,1).clear(alias)).toBe(false);
+  });
+  it("keeps control points and subpixel boundary coordinates in cache keys",()=>{
+    const clearance=new ShaftClearance([route([[[0,0],[100,0]]])],target,1);
+    expect(clearance.clearSegment([[20,8],[80,8]])).toBe(true);
+    const curve:Segment=[[20,8],[40,0],[60,0],[80,8]];
+    expect(clearance.clearSegment(curve)).toBe(false);
+    expect(clearance.clearSegment(curve.map(p=>[...p]))).toBe(false);
+    const edge=7-1e-7;
+    expect(clearance.clearSegment([[20,edge-1e-12],[80,edge-1e-12]])).toBe(false);
+    expect(clearance.clearSegment([[20,edge+1e-12],[80,edge+1e-12]])).toBe(true);
+  });
   it("separates horizontal aliases away from the target, regardless of segment subdivision",()=>{
     const occupied=route([[[0,60],[410,60]]],other);
     const clearance=new ShaftClearance([occupied],other,1);

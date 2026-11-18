@@ -59,6 +59,10 @@ const same=(a:Rect|undefined,b:Rect)=>a&&a.left===b.left&&a.right===b.right&&a.t
 export class ShaftClearance {
   readonly channels: Rect[];
   private occupied: Line[];
+  // Each instance fixes the occupied shafts, arrival corridor and stroke width.
+  // Search and candidate validation revisit the same coordinates with fresh arrays.
+  // Keep exact coordinate keys local to this context; never round painted geometry.
+  private segmentResults = new Map<string, boolean>();
   constructor(routes: Route[],target: Rect,private width: number,targetKey?: string) {
     const arrival=expand(target,16);
     const outsideArrival=(line:Line):Line[]=>{
@@ -102,8 +106,13 @@ export class ShaftClearance {
   }
   clearSegment(segment: Segment): boolean {
     if(!this.occupied.length)return true;
+    const key=segment.map(p=>`${p[0]},${p[1]}`).join(";");
+    const previous=this.segmentResults.get(key);
+    if(previous!==undefined)return previous;
     const candidate:Line[]=[];flatten(segment,this.width,candidate);
-    return candidate.every(a=>this.occupied.every(b=>!conflict(a,b)));
+    const result=candidate.every(a=>this.occupied.every(b=>!conflict(a,b)));
+    this.segmentResults.set(key,result);
+    return result;
   }
   clear(route: Route): boolean { return route.segments.every(s=>this.clearSegment(s)); }
 }
